@@ -1,12 +1,12 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: kalygo3-fastapi-service
+  name: kalygo-fastapi
 spec:
   template:
     spec:
       containers:
-        - image: us-central1-docker.pkg.dev/kalygo-v3/kalygo3-fastapi/kalygo3-fastapi
+        - image: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
