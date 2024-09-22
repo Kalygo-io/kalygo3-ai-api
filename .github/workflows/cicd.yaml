@@ -38,6 +38,9 @@ jobs:
 
       # END - Docker auth and build
 
+      - name: Replace Cloud Run Service
+        run: gcloud run services replace service.yaml --region $SERVICE_REGION
+
       - name: Deploy to Cloud Run
         run: |
           echo SERVICE_NAME $SERVICE_NAME
