@@ -18,3 +18,6 @@ Documenting steps of moving Postgres DB from Render.com
 
 - Run another Cloud Run service dedicated to Kalygo
   - right now `kalygo-v3` is running the SWARMS PLAYGROUND application
+  - rename `kalygo-v3` to be called `swarms-playground`
+  - create new project called `kalygo`
+

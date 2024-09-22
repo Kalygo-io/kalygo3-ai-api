@@ -5,11 +5,11 @@ on:
     branches: ["main"]
 
 env:
-  PROJECT_ID: kalygo-v3 # Google Cloud project id
+  PROJECT_ID: kalygo-436411 # Google Cloud project id
   GAR_LOCATION: us-central1 # Artifact Registry location
-  SERVICE_NAME: kalygo3-fastapi-service # Cloud Run service name
+  SERVICE_NAME: kalygo-fastapi-service # Cloud Run service name
   SERVICE_REGION: us-east1 # Cloud Run service region
-  ARTIFACTORY_URL: us-central1-docker.pkg.dev/kalygo-v3/kalygo3-fastapi/kalygo3-fastapi
+  ARTIFACTORY_URL: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
 
 jobs:
   deploy:
