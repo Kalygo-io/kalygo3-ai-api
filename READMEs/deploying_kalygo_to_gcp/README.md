@@ -90,4 +90,28 @@ gcloud artifacts repositories create kalygo-nextjs \
 
 ## BACKEND
 
-...hence transitioning this documentation over there
+### Updating the GitHub action to use the new project `kalygo-436411`
+
+### Create Artifact Registry for api
+
+- Create artifact in Artifact Registry
+``` template
+gcloud artifacts repositories create REPOSITORY \
+  --repository-format=docker \
+  --location=LOCATION \
+  --description="DESCRIPTION" \
+  --immutable-tags \
+  --async
+```
+``` ie:
+gcloud artifacts repositories create kalygo-fastapi \
+  --repository-format=docker \
+  --location=us-central1 \
+  --description="Docker repository for Kalygo FastAPI" \
+  --immutable-tags \
+  --async
+```
+
+### Testing CICD deployment
+
+- 
