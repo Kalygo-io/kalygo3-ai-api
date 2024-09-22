@@ -8,97 +8,98 @@ spec:
       containers:
         - image: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
           env:
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ANTHROPIC_API_KEY
-                  key: latest
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: OPENAI_API_KEY
-                  key: latest
-            - name: AUTH_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: AUTH_SECRET_KEY
-                  key: latest
-            - name: AUTH_ALGORITHM
-              valueFrom:
-                secretKeyRef:
-                  name: AUTH_ALGORITHM
-                  key: latest
             - name: POSTGRES_URL
               valueFrom:
                 secretKeyRef:
                   name: POSTGRES_URL
                   key: latest
-            - name: LANGCHAIN_ENDPOINT
-              valueFrom:
-                secretKeyRef:
-                  name: LANGCHAIN_ENDPOINT
-                  key: latest
-            - name: LANGCHAIN_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: LANGCHAIN_API_KEY
-                  key: latest
+                  
+            # - name: ANTHROPIC_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: ANTHROPIC_API_KEY
+            #       key: latest
+            # - name: OPENAI_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: OPENAI_API_KEY
+            #       key: latest
+            # - name: AUTH_SECRET_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: AUTH_SECRET_KEY
+            #       key: latest
+            # - name: AUTH_ALGORITHM
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: AUTH_ALGORITHM
+            #       key: latest
+            # - name: LANGCHAIN_ENDPOINT
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: LANGCHAIN_ENDPOINT
+            #       key: latest
+            # - name: LANGCHAIN_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: LANGCHAIN_API_KEY
+            #       key: latest
             
-            - name: COOKIE_DOMAIN
-              valueFrom:
-                secretKeyRef:
-                  name: COOKIE_DOMAIN
-                  key: latest
+            # - name: COOKIE_DOMAIN
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: COOKIE_DOMAIN
+            #       key: latest
 
-            - name: PINECONE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: PINECONE_API_KEY
-                  key: latest      
+            # - name: PINECONE_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: PINECONE_API_KEY
+            #       key: latest      
 
-            - name: WORKSPACE_DIR
-              valueFrom:
-                secretKeyRef:
-                  name: WORKSPACE_DIR
-                  key: latest      
+            # - name: WORKSPACE_DIR
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: WORKSPACE_DIR
+            #       key: latest      
 
             # AWS
 
-            - name: AWS_REGION
-              valueFrom:
-                secretKeyRef:
-                  name: AWS_REGION
-                  key: latest      
+            # - name: AWS_REGION
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: AWS_REGION
+            #       key: latest      
 
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: AWS_ACCESS_KEY_ID
-                  key: latest
+            # - name: AWS_ACCESS_KEY_ID
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: AWS_ACCESS_KEY_ID
+            #       key: latest
 
-            - name: AWS_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: AWS_SECRET_KEY
-                  key: latest
+            # - name: AWS_SECRET_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: AWS_SECRET_KEY
+            #       key: latest
 
-            - name: ENVIRONMENT
-              valueFrom:
-                secretKeyRef:
-                  name: ENVIRONMENT
-                  key: latest
+            # - name: ENVIRONMENT
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: ENVIRONMENT
+            #       key: latest
 
-            - name: GCS_SA
-              valueFrom:
-                secretKeyRef:
-                  name: GCS_SA
-                  key: latest
+            # - name: GCS_SA
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: GCS_SA
+            #       key: latest
 
-            - name: API_HOSTNAME
-              valueFrom:
-                secretKeyRef:
-                  name: API_HOSTNAME
-                  key: latest
+            # - name: API_HOSTNAME
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: API_HOSTNAME
+            #       key: latest
 
             # - name: SERPER_API_KEY
             #   valueFrom:
