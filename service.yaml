@@ -1,7 +1,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: kalygo-fastapi
+  name: kalygo-fastapi-service
 spec:
   template:
     spec:
