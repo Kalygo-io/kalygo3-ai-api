@@ -21,3 +21,7 @@ Documenting steps of moving Postgres DB from Render.com
   - rename `kalygo-v3` to be called `swarms-playground`
   - create new project called `kalygo`
 
+## Phase 4
+
+- Run the FRONTEND Next.js web app in the `kalygo-436411` project
+- Run the BACKEND FastAPI application in the `kalygo-436411` project

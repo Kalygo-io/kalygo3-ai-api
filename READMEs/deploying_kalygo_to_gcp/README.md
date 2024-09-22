@@ -112,6 +112,8 @@ gcloud artifacts repositories create kalygo-fastapi \
   --async
 ```
 
-### Testing CICD deployment
+### Populate Google Secrets with Environment variables
 
-- 
+- `gcloud services list --enabled`
+- `gcloud services enable secretmanager.googleapis.com`
+
