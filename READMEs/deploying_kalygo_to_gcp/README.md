@@ -114,6 +114,18 @@ gcloud artifacts repositories create kalygo-fastapi \
 
 ### Populate Google Secrets with Environment variables
 
+```
+## Granting Cloud Run the permissions to access secrets
+
+- gcloud secrets add-iam-policy-binding SECRET_NAME \
+  --member="serviceAccount:YOUR_PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
 - `gcloud services list --enabled`
 - `gcloud services enable secretmanager.googleapis.com`
 
+- ie: `echo -n "render.com url" | gcloud secrets create POSTGRES_URL --data-file=-`
+  - gcloud secrets add-iam-policy-binding POSTGRES_URL \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
