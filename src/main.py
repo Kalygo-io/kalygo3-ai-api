@@ -23,11 +23,12 @@ app = FastAPI(docs_url=None, redoc_url=None)
 Base.metadata.create_all(bind=engine)
 
 origins = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-    "https://wishbliss.link",
-    "https://demo.swarms.world",
-    "https://fullstack-rag-nextjs-service-esw7hvt5nq-ue.a.run.app",
+    "https://kalygo-nextjs-service-830723611668.us-east1.run.app"
+    # "http://localhost:3000",
+    # "https://localhost:3000",
+    # "https://wishbliss.link",
+    # "https://demo.swarms.world",
+    # "https://fullstack-rag-nextjs-service-esw7hvt5nq-ue.a.run.app",
 ]
 
 app.add_middleware(
