@@ -129,3 +129,10 @@ gcloud artifacts repositories create kalygo-fastapi \
   - gcloud secrets add-iam-policy-binding POSTGRES_URL \
   --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
+
+
+### IMPORTANT!
+
+- I needed to manually build an image tagged as latest with Cloudbuild
+- `gcloud builds submit --region=us-central1 --config cloudbuild.yaml`
+- 

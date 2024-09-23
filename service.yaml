@@ -13,7 +13,13 @@ spec:
                 secretKeyRef:
                   name: POSTGRES_URL
                   key: latest
-                  
+
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: PINECONE_API_KEY
+                  key: latest      
+
             # - name: ANTHROPIC_API_KEY
             #   valueFrom:
             #     secretKeyRef:
@@ -50,12 +56,6 @@ spec:
             #     secretKeyRef:
             #       name: COOKIE_DOMAIN
             #       key: latest
-
-            # - name: PINECONE_API_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: PINECONE_API_KEY
-            #       key: latest      
 
             # - name: WORKSPACE_DIR
             #   valueFrom:
