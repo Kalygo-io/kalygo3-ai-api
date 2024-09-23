@@ -130,9 +130,13 @@ gcloud artifacts repositories create kalygo-fastapi \
   --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
+- ie: `echo -n "pinecone key" | gcloud secrets create PINECONE_API_KEY --data-file=-`
+  - gcloud secrets add-iam-policy-binding PINECONE_API_KEY \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
 
 ### IMPORTANT!
 
 - I needed to manually build an image tagged as latest with Cloudbuild
 - `gcloud builds submit --region=us-central1 --config cloudbuild.yaml`
-- 
+- After deploying manually the service.yaml works in the CICD pipeline <!-- TODO: Make this more elegant -->
