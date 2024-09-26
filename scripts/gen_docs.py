@@ -56,8 +56,8 @@ def main():
 
     files = [
         {
-            "path": "src/routers/designAndRunSwarm/stream.py",
-            "name": "Stream outputs from DesignAndRun swarms"
+            "path": "src/routers/designAndRunSwarm/stream.py", # path to file
+            "name": "Stream outputs from DesignAndRun swarms" # name of generated markdown documentation file 
         },
         {
             "path": "src/routers/spreadsheetSwarm/router.py",
