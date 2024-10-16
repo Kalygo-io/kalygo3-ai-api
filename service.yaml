@@ -20,16 +20,18 @@ spec:
                   name: PINECONE_API_KEY
                   key: latest      
 
-            # - name: ANTHROPIC_API_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: ANTHROPIC_API_KEY
-            #       key: latest
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ANTHROPIC_API_KEY
+                  key: latest
+
             # - name: OPENAI_API_KEY
             #   valueFrom:
             #     secretKeyRef:
             #       name: OPENAI_API_KEY
             #       key: latest
+            
             - name: AUTH_SECRET_KEY
               valueFrom:
                 secretKeyRef:

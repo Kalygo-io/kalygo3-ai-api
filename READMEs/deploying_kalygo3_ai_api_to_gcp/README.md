@@ -71,7 +71,7 @@ Documenting process of deploying Kalygo 3.0 A.I. API to GCP
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding ANTHROPIC_API_KEY \
-  --member="serviceAccount:137963986378-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding OPENAI_API_KEY \
