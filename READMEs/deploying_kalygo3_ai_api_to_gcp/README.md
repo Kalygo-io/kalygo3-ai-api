@@ -85,7 +85,7 @@ Documenting process of deploying Kalygo 3.0 A.I. API to GCP
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding LANGCHAIN_ENDPOINT \
-  --member="serviceAccount:137963986378-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding LANGCHAIN_API_KEY \

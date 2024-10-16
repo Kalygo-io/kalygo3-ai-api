@@ -23,9 +23,9 @@ app = FastAPI(docs_url=None, redoc_url=None)
 Base.metadata.create_all(bind=engine)
 
 origins = [
+    "https://kalygo.io",
     "http://localhost:3000",
     "https://kalygo-nextjs-service-830723611668.us-east1.run.app"
-    "https://kalygo.io",
     "https://localhost:3000",
 ]
 
