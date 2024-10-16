@@ -47,6 +47,12 @@ Documenting process of deploying Kalygo 3.0 A.I. API to GCP
 
   - ie: `echo -n "https://demo.swarms.world" | gcloud secrets create API_HOSTNAME --data-file=-`
 
+  <!-- -->
+  - ie: `echo -n "us-east-1" | gcloud secrets create AWS_REGION --data-file=-`
+  - ie: `echo -n "" | gcloud secrets create AWS_ACCESS_KEY_ID --data-file=-`
+  - ie: `echo -n "" | gcloud secrets create AWS_SECRET_KEY --data-file=-`
+  <!-- -->
+
   <!-- v NOT NEEDED? v --->
   - ie: `echo -n "embedding api url" | gcloud secrets create EMBEDDING_API_URL --data-file=-`
   - ie: `echo -n "REPLICATE_API_TOKEN" | gcloud secrets create REPLICATE_API_TOKEN --data-file=-`
@@ -72,12 +78,28 @@ Documenting process of deploying Kalygo 3.0 A.I. API to GCP
   --member="serviceAccount:137963986378-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
+<!-- -->
+
+- gcloud secrets add-iam-policy-binding AWS_REGION \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+- gcloud secrets add-iam-policy-binding AWS_ACCESS_KEY_ID \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+- gcloud secrets add-iam-policy-binding AWS_SECRET_KEY \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+<!-- -->
+
 - gcloud secrets add-iam-policy-binding AUTH_SECRET_KEY \
-  --member="serviceAccount:137963986378-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding AUTH_ALGORITHM \
-  --member="serviceAccount:137963986378-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 - gcloud secrets add-iam-policy-binding POSTGRES_URL \

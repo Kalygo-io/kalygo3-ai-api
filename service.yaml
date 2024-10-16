@@ -65,23 +65,23 @@ spec:
 
             # AWS
 
-            # - name: AWS_REGION
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: AWS_REGION
-            #       key: latest      
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: AWS_REGION
+                  key: latest      
 
-            # - name: AWS_ACCESS_KEY_ID
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: AWS_ACCESS_KEY_ID
-            #       key: latest
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: AWS_ACCESS_KEY_ID
+                  key: latest
 
-            # - name: AWS_SECRET_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: AWS_SECRET_KEY
-            #       key: latest
+            - name: AWS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: AWS_SECRET_KEY
+                  key: latest
 
             # - name: ENVIRONMENT
             #   valueFrom:
