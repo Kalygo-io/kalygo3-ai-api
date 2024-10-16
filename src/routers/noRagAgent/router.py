@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.callbacks import LangChainTracer
+from langsmith import Client
 import psycopg
 from src.deps import jwt_dependency
 
@@ -27,19 +28,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 callbacks = [
-#   LangChainTracer(
-#     project_name="streaming-with-memory-agent",
-#     client=Client(
-#       api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-#       api_key=os.getenv("LANGCHAIN_API_KEY")
-#     )
-#   )
+  LangChainTracer(
+    project_name="streaming-with-memory-agent",
+    client=Client(
+      api_url=os.getenv("LANGCHAIN_ENDPOINT"),
+      api_key=os.getenv("LANGCHAIN_API_KEY")
+    )
+  )
 ]
 
 router = APIRouter()
-
-# conn_info = os.getenv("POSTGRES_URL")
-# sync_connection = psycopg.connect(conn_info)
 
 async def generator(sessionId: str, prompt: str):
     
