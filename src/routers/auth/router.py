@@ -44,6 +44,8 @@ class Token(BaseModel):
     token_type: str
 
 def authenticate(email: str, password: str, db):
+    print("authenticate...")
+
     account = db.query(Account).filter(Account.email == email).first()
     if not account:
         return False
@@ -77,10 +79,14 @@ async def create_account(db: db_dependency, create_account_request: AccountCreat
 @router.post('/log-in')
 @limiter.limit("5/minute")
 async def login_for_access_token(body: LoginRequestBody, db: db_dependency, request: Request, background_tasks: BackgroundTasks):
+    print('calling authenticate()...')
+
     account = authenticate(body.email, body.password, db)
     if not account:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate user")
     
+    print("1")
+
     print('Record the login in the background')
     ip_address = request.client.host
     background_tasks.add_task(record_login, account.id, account.email, ip_address, db)
@@ -97,7 +103,7 @@ async def login_for_access_token(body: LoginRequestBody, db: db_dependency, requ
         value=token,
         httponly=True,
 
-        expires=60*30*2,
+        expires=60*30*24,
         secure=True,
         samesite="None",
         domain=os.getenv("COOKIE_DOMAIN"),

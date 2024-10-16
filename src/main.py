@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
-from .routers import noRagAgent, healthcheck, auth, recommendations, logins, multimodal, rearrangeSwarm, spreadsheetSwarm, designAndRunSwarm, waitlist
+from .routers import noRagAgent, ragAgent, healthcheck, auth, recommendations, logins, multimodal, waitlist, rawLLM
 
 from src.db.database import Base, engine
 
@@ -23,12 +23,10 @@ app = FastAPI(docs_url=None, redoc_url=None)
 Base.metadata.create_all(bind=engine)
 
 origins = [
+    "http://localhost:3000",
     "https://kalygo-nextjs-service-830723611668.us-east1.run.app"
-    # "http://localhost:3000",
-    # "https://localhost:3000",
-    # "https://wishbliss.link",
-    # "https://demo.swarms.world",
-    # "https://fullstack-rag-nextjs-service-esw7hvt5nq-ue.a.run.app",
+    "https://kalygo.io",
+    "https://localhost:3000",
 ]
 
 app.add_middleware(
@@ -49,15 +47,20 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(healthcheck.router, prefix="")
 
-# app.include_router(
-#     noRagAgent.router,
-#     prefix="/api/no-rag-agent",
-# )
+app.include_router(
+    rawLLM.router,
+    prefix="/api/raw-llm",
+)
 
-# app.include_router(
-#     ragAgent.router,
-#     prefix="/rag-agent",
-# )
+app.include_router(
+    noRagAgent.router,
+    prefix="/api/no-rag-agent",
+)
+
+app.include_router(
+    ragAgent.router,
+    prefix="/api/rag-agent",
+)
 
 # app.include_router(
 #     reActAgent.router,
@@ -92,22 +95,4 @@ app.include_router(
     multimodal.router,
     prefix="/api/multi-modal",
     tags=['multimodal'],
-)
-
-app.include_router(
-    rearrangeSwarm.router,
-    prefix="/api/rearrange-swarm",
-    tags=['Sequential Swarm'],
-)
-
-app.include_router(
-    spreadsheetSwarm.router,
-    prefix="/api/spreadsheet-swarm",
-    tags=['Spreadsheet Swarm'],
-)
-
-app.include_router(
-    designAndRunSwarm.router,
-    prefix="/api/design-and-run-swarm",
-    tags=['Swarm Designer'],
 )

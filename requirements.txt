@@ -39,7 +39,7 @@ uvicorn==0.30.5
 pinecone-client>=5.0.1,<6.0
 python-dotenv==1.0.1
 redis>=5.0.8,<6.0
-langchain-postgres==0.0.9,<1.0
+langchain-postgres>=0.0.9,<1.0
 SQLAlchemy>=2.0.31,<3.0
 python-jose>=3.3.0,<4.0
 psycopg2-binary>=2.9.9,<3.0
