@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from langchain_openai import ChatOpenAI
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
+from src.core.schemas.Prompt import Prompt
 import json
 import os
 from fastapi.responses import StreamingResponse
@@ -61,5 +61,5 @@ async def generator(prompt: str):
 
 @router.post("/completion")
 @limiter.limit("10/minute")
-def prompt(prompt: ChatSessionPrompt, jwt: jwt_dependency, request: Request):
-    return StreamingResponse(generator(prompt.sessionId, prompt.content), media_type='text/event-stream')
+def prompt(prompt: Prompt, jwt: jwt_dependency, request: Request):
+    return StreamingResponse(generator(prompt.prompt), media_type='text/event-stream')
