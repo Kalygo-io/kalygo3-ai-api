@@ -30,16 +30,16 @@ spec:
             #     secretKeyRef:
             #       name: OPENAI_API_KEY
             #       key: latest
-            # - name: AUTH_SECRET_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: AUTH_SECRET_KEY
-            #       key: latest
-            # - name: AUTH_ALGORITHM
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: AUTH_ALGORITHM
-            #       key: latest
+            - name: AUTH_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: AUTH_SECRET_KEY
+                  key: latest
+            - name: AUTH_ALGORITHM
+              valueFrom:
+                secretKeyRef:
+                  name: AUTH_ALGORITHM
+                  key: latest
             - name: LANGCHAIN_ENDPOINT
               valueFrom:
                 secretKeyRef:
