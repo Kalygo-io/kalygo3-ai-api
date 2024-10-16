@@ -1,18 +1,14 @@
 from fastapi import APIRouter, Request
 from langchain_openai import ChatOpenAI
-
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
-
 import json
 import os
-
 from fastapi.responses import StreamingResponse
-
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.callbacks import LangChainTracer
+from langsmith import Client
 from src.deps import jwt_dependency
 
 limiter = Limiter(key_func=get_remote_address)
@@ -22,19 +18,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 callbacks = [
-#   LangChainTracer(
-#     project_name="streaming-with-memory-agent",
-#     client=Client(
-#       api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-#       api_key=os.getenv("LANGCHAIN_API_KEY")
-#     )
-#   )
+  LangChainTracer(
+    project_name="raw-llm",
+    client=Client(
+      api_url=os.getenv("LANGCHAIN_ENDPOINT"),
+      api_key=os.getenv("LANGCHAIN_API_KEY")
+    )
+  )
 ]
 
 router = APIRouter()
 
-async def generator(sessionId: str, prompt: str):
-    
+async def generator(prompt: str):
     model: str = "gpt-4o-mini"
     llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
 
