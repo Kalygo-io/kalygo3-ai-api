@@ -40,16 +40,16 @@ spec:
             #     secretKeyRef:
             #       name: AUTH_ALGORITHM
             #       key: latest
-            # - name: LANGCHAIN_ENDPOINT
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: LANGCHAIN_ENDPOINT
-            #       key: latest
-            # - name: LANGCHAIN_API_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: LANGCHAIN_API_KEY
-            #       key: latest
+            - name: LANGCHAIN_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: LANGCHAIN_ENDPOINT
+                  key: latest
+            - name: LANGCHAIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: LANGCHAIN_API_KEY
+                  key: latest
             
             # - name: COOKIE_DOMAIN
             #   valueFrom:
