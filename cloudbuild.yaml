@@ -1,14 +1,4 @@
 steps:
-  # - name: 'gcr.io/cloud-builders/gcloud'
-  #   entrypoint: 'bash'
-  #   args:
-  #     - '-c'
-  #     - 'ls -l'
-  # - name: 'gcr.io/cloud-builders/gcloud'
-  #   entrypoint: 'bash'
-  #   args:
-  #     - '-c'
-  #     - 'cat src/routers/noRagAgent/router.py'
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-f', 'Dockerfile.prod', '-t', 'us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi:latest', '.']
   - name: 'gcr.io/cloud-builders/docker'
