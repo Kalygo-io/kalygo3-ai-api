@@ -19,8 +19,6 @@ from langsmith import Client
 import psycopg
 from src.deps import jwt_dependency
 
-# from src.clients.psycopg_client import sync_connection
-
 limiter = Limiter(key_func=get_remote_address)
 
 from dotenv import load_dotenv
