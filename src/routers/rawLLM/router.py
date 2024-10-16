@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from src.core.schemas.Prompt import Prompt
@@ -30,8 +31,11 @@ callbacks = [
 router = APIRouter()
 
 async def generator(prompt: str):
-    model: str = "gpt-4o-mini"
-    llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # model: str = "gpt-4o-mini"
+    # llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
+    model: str = "claude-3-5-sonnet-20240620"
+    llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
 
     promptTemplate = ChatPromptTemplate.from_messages(
         [

@@ -42,11 +42,11 @@ router = APIRouter()
 # sync_connection = psycopg.connect(conn_info)
 
 async def generator(sessionId: str, prompt: str):
-    # model: str = "claude-3-5-sonnet-20240620"
-    # llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
-
-    model: str = "gpt-4o-mini"
-    llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # model: str = "gpt-4o-mini"
+    # llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
+    model: str = "claude-3-5-sonnet-20240620"
+    llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
 
     conn_info = os.getenv("POSTGRES_URL")
     with psycopg.connect(conn_info) as sync_connection:
