@@ -7,7 +7,19 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
-from .routers import noRagAgent, ragAgent, healthcheck, auth, recommendations, logins, multimodal, waitlist, rawLLM
+from .routers import (
+  noRagAgent,
+  ragAgent,
+  healthcheck,
+  auth,
+  recommendations,
+  logins,
+  multimodal,
+  waitlist,
+  rawLLM,
+  spreadsheetSwarm,
+  designAndRunSwarm
+)
 
 from src.db.database import Base, engine
 
@@ -95,4 +107,16 @@ app.include_router(
     multimodal.router,
     prefix="/api/multi-modal",
     tags=['multimodal'],
+)
+
+app.include_router(
+    spreadsheetSwarm.router,
+    prefix="/api/spreadsheet-swarm",
+    tags=['Spreadsheet Swarm'],
+)
+
+app.include_router(
+    designAndRunSwarm.router,
+    prefix="/api/design-and-run-swarm",
+    tags=['Swarm Designer'],
 )
