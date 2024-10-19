@@ -53,11 +53,11 @@ spec:
                   name: LANGCHAIN_API_KEY
                   key: latest
             
-            # - name: COOKIE_DOMAIN
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: COOKIE_DOMAIN
-            #       key: latest
+            - name: COOKIE_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: COOKIE_DOMAIN
+                  key: latest
 
             # - name: WORKSPACE_DIR
             #   valueFrom:
