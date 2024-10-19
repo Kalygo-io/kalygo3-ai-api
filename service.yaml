@@ -109,11 +109,11 @@ spec:
             #       name: SERPER_API_KEY
             #       key: latest
             
-            # - name: EMBEDDING_API_URL
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: EMBEDDING_API_URL
-            #       key: latest
+            - name: EMBEDDINGS_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: EMBEDDINGS_API_URL
+                  key: latest
             
             # - name: PINECONE_API_KEY
             #   valueFrom:

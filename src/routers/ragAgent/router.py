@@ -40,7 +40,7 @@ callbacks = [
 
 router = APIRouter()
 
-async def generator(sessionId: str, prompt: str):
+async def generator(jwt: str, sessionId: str, prompt: str):
 
     print("---> generator called <---")
 
@@ -56,7 +56,7 @@ async def generator(sessionId: str, prompt: str):
             sync_connection=sync_connection
         )
 
-        embedding = await fetch_embedding(prompt) # fetch embedding from embedding service
+        embedding = await fetch_embedding(jwt, prompt) # fetch embedding from embedding service
 
         index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
 
@@ -102,5 +102,8 @@ async def generator(sessionId: str, prompt: str):
 
 @router.post("/completion")
 @limiter.limit("10/minute")
-def prompt(prompt: ChatSessionPrompt, jwt: jwt_dependency, request: Request):
-    return StreamingResponse(generator(prompt.sessionId, prompt.content), media_type='text/event-stream')
+def prompt(prompt: ChatSessionPrompt, decoded_jwt: jwt_dependency, request: Request):
+
+    jwt = request.cookies.get("jwt")
+
+    return StreamingResponse(generator(jwt, prompt.sessionId, prompt.content), media_type='text/event-stream')
