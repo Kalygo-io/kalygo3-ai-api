@@ -121,11 +121,11 @@ spec:
             #       name: PINECONE_API_KEY
             #       key: latest
             
-            # - name: PINECONE_ALL_MINILM_L6_V2_INDEX
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: PINECONE_ALL_MINILM_L6_V2_INDEX
-            #       key: latest
+            - name: PINECONE_ALL_MINILM_L6_V2_INDEX
+              valueFrom:
+                secretKeyRef:
+                  name: PINECONE_ALL_MINILM_L6_V2_INDEX
+                  key: latest
 
             # - name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
             #   valueFrom:

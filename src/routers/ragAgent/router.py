@@ -104,8 +104,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
     except Exception as e:
         # Yield an error event
         yield json.dumps({
-            "event": "error",
-            "message": str(e)
+            "event": "event_stream_error",
+            "data": str(e)
         }, separators=(',', ':'))
 
 @router.post("/completion")
