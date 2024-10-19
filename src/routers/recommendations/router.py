@@ -21,7 +21,7 @@ def workouts(jwt: jwt_dependency, query: Query, request: Request):
     index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
     
     resp = requests.post(
-        url=f"{os.getenv("EMBEDDING_API_URL")}/huggingface/embedding",
+        url=f"{os.getenv("EMBEDDINGS_API_URL")}/huggingface/embedding",
         json={
             'input': query.text
         }

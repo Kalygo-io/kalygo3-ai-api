@@ -12,7 +12,7 @@ async def record_login(account_id: int, account_email: str, ip_address: str, db)
     log = f"{ip_address} {created_at}"
     # log = f"192.168.100.200 2023-03-01T05:22:45.123456-05:00"
     
-    embedding = await fetch_embedding(log) # fetch embedding from EMBEDDING_API_URL
+    embedding = await fetch_embedding(log) # fetch embedding from EMBEDDINGS_API_URL
 
     print('embedding', len(embedding))
 

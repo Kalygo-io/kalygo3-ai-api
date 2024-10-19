@@ -12,9 +12,9 @@ async def search_the_index(query: str) -> Dict:
 
     embedding = {}
     async with aiohttp.ClientSession() as session:
-        print("EMBEDDING_API_URL")
-        print(os.getenv("EMBEDDING_API_URL"))
-        url = f"{os.getenv("EMBEDDING_API_URL")}/huggingface/embedding"
+        print("EMBEDDINGS_API_URL")
+        print(os.getenv("EMBEDDINGS_API_URL"))
+        url = f"{os.getenv("EMBEDDINGS_API_URL")}/huggingface/embedding"
         payload = {
             "input": query
         }

@@ -17,7 +17,7 @@
 
 - ie: `echo -n "cookie domain" | gcloud secrets create COOKIE_DOMAIN --data-file=-`
 
-- ie: `echo -n "embedding api url" | gcloud secrets create EMBEDDING_API_URL --data-file=-`
+- ie: `echo -n "embedding api url" | gcloud secrets create EMBEDDINGS_API_URL --data-file=-`
 - ie: `echo -n "pinecone api key" | gcloud secrets create PINECONE_API_KEY --data-file=-`
 - ie: `echo -n "REPLICATE_API_TOKEN" | gcloud secrets create REPLICATE_API_TOKEN --data-file=-`
 - ie: `echo -n "all-minilm-l6-v2-384-dims" | gcloud secrets create PINECONE_ALL_MINILM_L6_V2_INDEX --data-file=-`
@@ -61,7 +61,7 @@
   --member="serviceAccount:370967482684-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
-- gcloud secrets add-iam-policy-binding EMBEDDING_API_URL \
+- gcloud secrets add-iam-policy-binding EMBEDDINGS_API_URL \
   --member="serviceAccount:370967482684-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
