@@ -54,7 +54,7 @@ Documenting process of deploying Kalygo 3.0 A.I. API to GCP
   <!-- -->
 
   <!-- v NOT NEEDED? v --->
-  - ie: `echo -n "embedding api url" | gcloud secrets create EMBEDDING_API_URL --data-file=-`
+  - ie: `echo -n "embedding api url" | gcloud secrets create EMBEDDINGS_API_URL --data-file=-`
   - ie: `echo -n "REPLICATE_API_TOKEN" | gcloud secrets create REPLICATE_API_TOKEN --data-file=-`
   - ie: `echo -n "all-minilm-l6-v2-384-dims" | gcloud secrets create PINECONE_ALL_MINILM_L6_V2_INDEX --data-file=-`
   - ie: `echo -n "imagebind-1024-dims" | gcloud secrets create PINECONE_IMAGEBIND_1024_DIMS_INDEX --data-file=-`
