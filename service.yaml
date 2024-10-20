@@ -59,12 +59,6 @@ spec:
                   name: COOKIE_DOMAIN
                   key: latest
 
-            # - name: WORKSPACE_DIR
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: WORKSPACE_DIR
-            #       key: latest      
-
             # AWS
 
             - name: AWS_REGION

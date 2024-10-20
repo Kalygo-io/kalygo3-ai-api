@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-class SwarmDesignerPrompt(BaseModel):
+class RunSwarmPrompt(BaseModel):
     content: str
     sessionId: str
     agentsConfig: list
