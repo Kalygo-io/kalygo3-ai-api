@@ -2,11 +2,6 @@ from pydantic import BaseModel, Field
 
 
 class AgentInfo(BaseModel):
-    name: str = Field(
-        ...,
-        title="Agent name",
-        description="The name of the agent.",
-    )
     role: str = Field(
         ...,
         description="Defines the agent’s function within the crew. It determines the kind of tasks the agent is best suited for.",

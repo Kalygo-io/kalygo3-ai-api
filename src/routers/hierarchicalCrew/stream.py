@@ -8,7 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.core.classes.agent import Agent
-from src.core.schemas.DesignAndRunSwarm.SwarmDesignerPrompt import SwarmDesignerPrompt
+from src.core.schemas.DesignAndRunSwarm.RunSwarmPrompt import RunCrewPrompt
 
 import json
 import os
@@ -181,5 +181,5 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict, flowConfig:
 
 @router.post("/stream")
 @limiter.limit("10/minute")
-def streamHierarchical(prompt: HierarchicalCrewDesignerPrompt, jwt: jwt_dependency, request: Request):
+def streamHierarchical(prompt: RunCrewPrompt, jwt: jwt_dependency, request: Request):
     return StreamingResponse(generator(prompt.sessionId, prompt.content, prompt.agentsConfig, prompt.flow), media_type='text/event-stream')
