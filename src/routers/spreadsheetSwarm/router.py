@@ -73,28 +73,10 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict):
 
     print('--- generator ---')
 
-    # llm = Anthropic(anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), streaming=True)
-    # llm = OpenAIChatLLM(model='gpt-4o-mini', api_key=os.getenv("OPENAI_API_KEY"))
-
-    llm = ChatOpenAI(model='gpt-4o-mini', api_key=os.getenv("OPENAI_API_KEY"))
-
     # model: str = "claude-3-5-sonnet-20240620"
+    # llm = Anthropic(anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"), streaming=True)
     # llm = ChatAnthropic(model_name=model, temperature=0.1, max_tokens=1024)
-    # conn_info = os.getenv("POSTGRES_URL")
-    # sync_connection = psycopg.connect(conn_info)
-    # history = PostgresChatMessageHistory(
-    #     'chat_history', # table name
-    #     sessionId,
-    #     sync_connection=sync_connection
-    # )
-    # promptTemplate = ChatPromptTemplate.from_messages(
-    #     [
-    #         ("system", "You're an assistant. Bold key terms in your responses."),
-    #         MessagesPlaceholder(variable_name="history"),
-    #         ("human", "{input}"),
-    #     ]
-    # )
-    # messages = promptTemplate.format_messages(input=prompt, history=history.messages)
+    llm = ChatOpenAI(model='gpt-4o-mini', api_key=os.getenv("OPENAI_API_KEY"))
 
     # vvv SEQUENTIAL SWARM vvv
 
