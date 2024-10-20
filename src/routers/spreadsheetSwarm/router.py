@@ -99,18 +99,12 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict):
     # vvv SEQUENTIAL SWARM vvv
 
     agents = []
-    
-    agentsConfigKeys = agentsConfig.keys()
-
-    for agentConfigKey in agentsConfigKeys:
+    for agent in agentsConfig:
         agents.append(Agent(
-            agent_name=agentsConfig[agentConfigKey]['name'],
-            system_prompt=agentsConfig[agentConfigKey]['system_prompt'],
+            agent_name=agent['name'],
+            system_prompt=agent['system_prompt'],
             llm=llm,
         ))
-
-    # agents = {agent.name: agent for agent in agents}
-    # current_task = prompt
 
     print(prompt)
     loop_count = 0
