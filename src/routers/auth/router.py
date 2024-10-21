@@ -102,7 +102,6 @@ async def login_for_access_token(body: LoginRequestBody, db: db_dependency, requ
         key="jwt",
         value=token,
         httponly=True,
-
         expires=60*30*24,
         secure=True,
         samesite="None",

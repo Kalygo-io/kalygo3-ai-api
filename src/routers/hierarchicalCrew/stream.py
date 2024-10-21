@@ -32,8 +32,6 @@ callbacks = []
 router = APIRouter()
 
 async def generator(sessionId: str, prompt: str, crewConfig: dict):
-
-    llm = ChatOpenAI(model='gpt-4o-mini', api_key=os.getenv("OPENAI_API_KEY"))
     # model = ChatAnthropic(model="claude-3-5-sonnet-20240620", anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     # print()

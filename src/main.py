@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -37,9 +37,11 @@ Base.metadata.create_all(bind=engine)
 
 origins = [
     "https://kalygo.io",
+    "http://127.0.0.1:3000",
     "http://localhost:3000",
-    "https://kalygo-nextjs-service-830723611668.us-east1.run.app"
+    "https://kalygo-nextjs-service-830723611668.us-east1.run.app",
     "https://localhost:3000",
+    "http://localhost:5000",  # Second FastAPI
 ]
 
 app.add_middleware(
@@ -96,12 +98,6 @@ app.include_router(
 #     recommendations.router,
 #     prefix="/api/recommendations",
 #     tags=['recommendations'],
-# )
-
-# app.include_router(
-#     hierarchicalCrew.router,
-#     prefix="/api/hierarchical-crew",
-#     tags=['hierarchical-crew'],
 # )
 
 app.include_router(
