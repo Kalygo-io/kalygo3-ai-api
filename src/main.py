@@ -98,11 +98,11 @@ app.include_router(
 #     tags=['recommendations'],
 # )
 
-app.include_router(
-    hierarchicalCrew.router,
-    prefix="/api/hierarchical-crew",
-    tags=['hierarchical-crew'],
-)
+# app.include_router(
+#     hierarchicalCrew.router,
+#     prefix="/api/hierarchical-crew",
+#     tags=['hierarchical-crew'],
+# )
 
 app.include_router(
     logins.router,
