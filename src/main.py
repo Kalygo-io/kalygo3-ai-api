@@ -18,7 +18,8 @@ from .routers import (
   waitlist,
   rawLLM,
   spreadsheetSwarm,
-  designAndRunSwarm
+  designAndRunSwarm,
+  hierarchicalCrew,
 )
 
 from src.db.database import Base, engine
@@ -95,6 +96,12 @@ app.include_router(
 #     recommendations.router,
 #     prefix="/api/recommendations",
 #     tags=['recommendations'],
+# )
+
+# app.include_router(
+#     hierarchicalCrew.router,
+#     prefix="/api/hierarchical-crew",
+#     tags=['hierarchical-crew'],
 # )
 
 app.include_router(
