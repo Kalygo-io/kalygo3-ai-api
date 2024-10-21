@@ -182,4 +182,7 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict, flowConfig:
 @router.post("/stream")
 @limiter.limit("10/minute")
 def streamHierarchical(prompt: RunCrewPrompt, jwt: jwt_dependency, request: Request):
+    
+    print('streamHierarchical')
+
     return StreamingResponse(generator(prompt.sessionId, prompt.content, prompt.agentsConfig, prompt.flow), media_type='text/event-stream')
