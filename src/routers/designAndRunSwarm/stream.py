@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.core.classes.agent import Agent
+from src.core.helpers.filter_problematic_characters import filter_problematic_characters
 from src.core.schemas.DesignAndRunSwarm.RunSwarmPrompt import RunSwarmPrompt
 
 import json
@@ -97,16 +98,22 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict, flowConfig:
                             }, separators=(',', ':'))
 
                         elif evt["event"] == "on_chat_model_stream":
+                            # Filter the chunk before yielding
+                            sanitized_chunk = filter_problematic_characters(evt["data"]['chunk'].content)
+                            
                             yield json.dumps({
                                 "parallel_group_id": parallel_group_id,
                                 "event": "on_chat_model_stream",
                                 "run_id": evt['run_id'],
                                 "agent_name": agent.name,
-                                "data": evt["data"]['chunk'].content
+                                "data": sanitized_chunk
                             }, separators=(',', ':'))
 
                         elif evt["event"] == "on_chat_model_end":
-                            result = evt["data"]["output"].content
+                            # result = evt["data"]["output"].content
+                            # Filter the chunk before yielding
+                            result = filter_problematic_characters(evt["data"]['chunk'].content)
+
                             print(agent.name, "result", result)
                             yield json.dumps({
                                 "event": "on_chat_model_end",
@@ -156,15 +163,19 @@ async def generator(sessionId: str, prompt: str, agentsConfig: dict, flowConfig:
                         }, separators=(',', ':'))
 
                     elif evt["event"] == "on_chat_model_stream":
-                        print('on_chat_model_stream', evt["data"]['chunk'].content)
+                        # print('on_chat_model_stream', evt["data"]['chunk'].content)
+                        # Filter the chunk before yielding
+                        sanitized_chunk = filter_problematic_characters(evt["data"]['chunk'].content)
+
                         yield json.dumps({
                             "event": "on_chat_model_stream",
-                            "data": evt["data"]['chunk'].content,
+                            "data": sanitized_chunk,
                             "run_id": evt['run_id']
                         }, separators=(',', ':'))
 
                     elif evt["event"] == "on_chat_model_end":
-                        result = evt["data"]["output"].content
+                        # result = evt["data"]["output"].content
+                        result = filter_problematic_characters(evt["data"]["output"].content)
                         # print(agent.name, "result", result)
                         yield json.dumps({
                             "event": "on_chat_model_end",
