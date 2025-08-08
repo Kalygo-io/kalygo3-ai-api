@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import os
 
-from core.clients import pc
+from src.core.clients import pc
 
 async def search_the_index(query: str) -> Dict:
 

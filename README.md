@@ -2,10 +2,16 @@
 
 Kalygo 3.0 A.I. API (powered by FastAPI)
 
+## Initial setup
+
+- `docker network ls`
+- `docker network create agent-network`
+- In Cursor or VSCode (SHIFT + CMD + P -> `Build and Open in Container`)
+
 ## How to run the FastAPI
 
-- pip install -r requirements.txt
-- uvicorn src.main:app --host 0.0.0.0 --port 4000 --proxy-headers --reload
+- `pip install -r requirements.txt`
+- `uvicorn src.main:app --host 0.0.0.0 --port 4000 --proxy-headers --reload`
 
 ## How to save versions of top-level packages
 

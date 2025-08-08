@@ -10,6 +10,7 @@ from slowapi.util import get_remote_address
 from .routers import (
   noRagAgent,
   ragAgent,
+  reActAgent,
   healthcheck,
   auth,
   recommendations,
@@ -77,10 +78,10 @@ app.include_router(
     prefix="/api/rag-agent",
 )
 
-# app.include_router(
-#     reActAgent.router,
-#     prefix="/react-agent",
-# )
+app.include_router(
+    reActAgent.router,
+    prefix="/api/react-agent",
+)
 
 app.include_router(
     auth.router,

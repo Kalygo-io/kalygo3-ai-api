@@ -47,6 +47,7 @@ jobs:
           gcloud run deploy $SERVICE_NAME \
             --image ${{ env.ARTIFACTORY_URL }}:${{ github.sha }} \
             --platform managed \
+            --max-retries 5 \
             --region $SERVICE_REGION \
             --allow-unauthenticated
 

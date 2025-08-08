@@ -26,13 +26,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 callbacks = [
-  LangChainTracer(
-    project_name="streaming-with-memory-agent",
-    client=Client(
-      api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-      api_key=os.getenv("LANGCHAIN_API_KEY")
-    )
-  )
+#   LangChainTracer(
+#     project_name="streaming-with-memory-agent",
+#     client=Client(
+#       api_url=os.getenv("LANGCHAIN_ENDPOINT"),
+#       api_key=os.getenv("LANGCHAIN_API_KEY")
+#     )
+#   )
 ]
 
 router = APIRouter()

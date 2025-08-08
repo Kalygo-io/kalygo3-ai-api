@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Request
 
 from .tools import serp_tool, gptuesday_tool, tad_tool
-from core.schemas.ChatSessionPrompt import ChatSessionPrompt
+from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -31,13 +31,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 callbacks = [
-  LangChainTracer(
-    project_name="react-agent",
-    client=Client(
-      api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-      api_key=os.getenv("LANGCHAIN_API_KEY")
-    )
-  )
+#   LangChainTracer(
+#     project_name="react-agent",
+#     client=Client(
+#       api_url=os.getenv("LANGCHAIN_ENDPOINT"),
+#       api_key=os.getenv("LANGCHAIN_API_KEY")
+#     )
+#   )
 ]
 
 router = APIRouter()
