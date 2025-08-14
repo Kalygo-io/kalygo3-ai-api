@@ -8,7 +8,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
 from .routers import (
-  noRagAgent,
+  basicMemory,
   ragAgent,
   reActAgent,
   healthcheck,
@@ -20,7 +20,6 @@ from .routers import (
   rawLLM,
   spreadsheetSwarm,
   designAndRunSwarm,
-  #   hierarchicalCrew,
 )
 
 from src.db.database import Base, engine
@@ -69,13 +68,13 @@ app.include_router(
 )
 
 app.include_router(
-    noRagAgent.router,
-    prefix="/api/no-rag-agent",
+    basicMemory.router,
+    prefix="/api/basic-memory",
 )
 
 app.include_router(
     ragAgent.router,
-    prefix="/api/rag-agent",
+    prefix="/api/naive-rag-chat",
 )
 
 app.include_router(
@@ -95,11 +94,11 @@ app.include_router(
     tags=['waitlist'],
 )
 
-# app.include_router(
-#     recommendations.router,
-#     prefix="/api/recommendations",
-#     tags=['recommendations'],
-# )
+app.include_router(
+    recommendations.router,
+    prefix="/api/recommendations",
+    tags=['recommendations'],
+)
 
 app.include_router(
     logins.router,

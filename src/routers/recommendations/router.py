@@ -16,14 +16,19 @@ class Query(BaseModel):
     text: str
 
 @router.post("/workouts")
-@limiter.limit("10/minute")
+@limiter.limit("100/minute")
 def workouts(jwt: jwt_dependency, query: Query, request: Request):
     index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
     
+    jwt_as_str = request.cookies.get("jwt")
+
     resp = requests.post(
         url=f"{os.getenv("EMBEDDINGS_API_URL")}/huggingface/embedding",
         json={
             'input': query.text
+        },
+        cookies={
+            "jwt": jwt_as_str
         }
     )
 
