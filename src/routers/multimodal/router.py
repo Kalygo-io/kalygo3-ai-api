@@ -29,7 +29,7 @@ def media_library(request: Request, response: Response, jwt: jwt_dependency, que
             # ^^^ ^^^ ^^^
         }
     )
-    print(f"Replicate output: {output}")
+    # print(f"Replicate output: {output}")
 
     index_name = os.getenv("PINECONE_IMAGEBIND_1024_DIMS_INDEX")
     print(f"Using Pinecone index: {index_name}")
