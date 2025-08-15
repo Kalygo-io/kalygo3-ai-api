@@ -29,13 +29,13 @@ limiter = Limiter(key_func=get_remote_address)
 load_dotenv()
 
 callbacks = [
-    #   LangChainTracer(
-    #     project_name="rag-agent",
-    #     client=Client(
-    #       api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-    #       api_key=os.getenv("LANGCHAIN_API_KEY"),
-    #     )
-    #   )
+    LangChainTracer(
+    project_name="naive-rag-chat",
+    client=Client(
+        api_url=os.getenv("LANGCHAIN_ENDPOINT"),
+        api_key=os.getenv("LANGCHAIN_API_KEY"),
+    )
+    )
 ]
 
 router = APIRouter()
@@ -67,7 +67,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 top_k=3,
                 include_values=False,
                 include_metadata=True,
-                namespace='aisalon_miami'
+                namespace='tad'
             )
 
             promptTemplate = ChatPromptTemplate.from_messages(
@@ -111,7 +111,5 @@ async def generator(jwt: str, sessionId: str, prompt: str):
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(prompt: ChatSessionPrompt, decoded_jwt: jwt_dependency, request: Request):
-
     jwt = request.cookies.get("jwt")
-
     return StreamingResponse(generator(jwt, prompt.sessionId, prompt.content), media_type='text/event-stream')
