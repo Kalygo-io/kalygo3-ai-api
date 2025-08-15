@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Request
 
-from .tools import serp_tool, gptuesday_tool, tad_tool
+from .tools import gptuesday_tool, tad_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
