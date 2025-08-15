@@ -44,31 +44,19 @@ spec:
                   key: latest
             
             # Langchain/Langsmith
-            
-            - name: LANGCHAIN_ENDPOINT
-              valueFrom:
-                secretKeyRef:
-                  name: LANGCHAIN_ENDPOINT
-                  key: latest
-            
-            - name: LANGCHAIN_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: LANGCHAIN_API_KEY
-                  key: latest
 
             - name: LANGSMITH_ENDPOINT
               valueFrom:
                 secretKeyRef:
                   name: LANGSMITH_ENDPOINT
                   key: latest
-            
+
             - name: LANGSMITH_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: LANGSMITH_API_KEY
                   key: latest
-            
+
             # CORS rule
 
             - name: COOKIE_DOMAIN

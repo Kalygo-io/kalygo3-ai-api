@@ -32,8 +32,8 @@ callbacks = [
     LangChainTracer(
     project_name="naive-rag-chat",
     client=Client(
-        api_url=os.getenv("LANGCHAIN_ENDPOINT"),
-        api_key=os.getenv("LANGCHAIN_API_KEY"),
+        api_url=os.getenv("LANGSMITH_ENDPOINT"),
+        api_key=os.getenv("LANGSMITH_API_KEY"),
     )
     )
 ]

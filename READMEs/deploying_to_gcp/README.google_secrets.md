@@ -12,8 +12,8 @@
 
 - ie: `echo -n "render.com url" | gcloud secrets create POSTGRES_URL --data-file=-`
 
-- ie: `echo -n "langsmith endpoint" | gcloud secrets create LANGCHAIN_ENDPOINT --data-file=-`
-- ie: `echo -n "langsmith API keys" | gcloud secrets create LANGCHAIN_API_KEY --data-file=-`
+- ie: `echo -n "langsmith endpoint" | gcloud secrets create LANGSMITH_ENDPOINT --data-file=-`
+- ie: `echo -n "langsmith API keys" | gcloud secrets create LANGSMITH_API_KEY --data-file=-`
 
 - ie: `echo -n "cookie domain" | gcloud secrets create COOKIE_DOMAIN --data-file=-`
 
@@ -53,11 +53,11 @@
   --member="serviceAccount:370967482684-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
-- gcloud secrets add-iam-policy-binding LANGCHAIN_ENDPOINT \   
+- gcloud secrets add-iam-policy-binding LANGSMITH_ENDPOINT \   
   --member="serviceAccount:370967482684-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
-- gcloud secrets add-iam-policy-binding LANGCHAIN_API_KEY \   
+- gcloud secrets add-iam-policy-binding LANGSMITH_API_KEY \   
   --member="serviceAccount:370967482684-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
