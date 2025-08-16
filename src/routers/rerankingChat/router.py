@@ -82,10 +82,12 @@ async def generator(jwt: str, sessionId: str, prompt: str):
             # Gather the documents to rerank
             docs = []
             doc_metadatas = []
+            similarity_scores = []
             for r in results['matches']:
                 content = r['metadata'].get('content', '')
                 docs.append(content)
                 doc_metadatas.append(r['metadata'])
+                similarity_scores.append(r['score'])  # Store Pinecone similarity score
 
             print('2.5')
 
@@ -118,20 +120,23 @@ async def generator(jwt: str, sessionId: str, prompt: str):
             reranked_matches = []
             for item in rerank_results.get("results", []):
                 idx = item["index"]
-                score = item["relevance_score"]
+                relevance_score = item["relevance_score"]
+                similarity_score = similarity_scores[idx]  # Get corresponding similarity score
                 metadata = doc_metadatas[idx]
                 reranked_matches.append({
                     "metadata": metadata,
-                    "score": score
+                    "relevance_score": relevance_score,
+                    "similarity_score": similarity_score
                 })
 
             print('4')
 
             for match in reranked_matches:
-                score = match["score"]
+                relevance_score = match["relevance_score"]
+                similarity_score = match["similarity_score"]
                 chunk_id = match["metadata"].get("chunk_id", "N/A")
                 content = match["metadata"].get("content", "")
-                print(f"Score: {score}, Chunk ID: {chunk_id}, Content: {content[:10]}")
+                print(f"Relevance Score: {relevance_score}, Similarity Score: {similarity_score}, Chunk ID: {chunk_id}, Content: {content[:10]}")
 
             print('4.5')
 
@@ -145,7 +150,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
 
             print('5')
 
-            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nScore: {r['score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
+            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nRelevance Score: {r['relevance_score']}, Similarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
 
             print('6')
@@ -160,7 +165,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                         matches_data.append({
                             "chunk_id": match["metadata"].get("chunk_id", "N/A"),
                             "total_chunks": match["metadata"].get("total_chunks", "N/A"),
-                            "score": match["score"],
+                            "relevance_score": match["relevance_score"],
+                            "similarity_score": match["similarity_score"],
                             "content": match["metadata"].get("content", "")[:200] + "..." if len(match["metadata"].get("content", "")) > 200 else match["metadata"].get("content", "")
                         })
 
