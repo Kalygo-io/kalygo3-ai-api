@@ -167,7 +167,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                             "total_chunks": match["metadata"].get("total_chunks", "N/A"),
                             "relevance_score": match["relevance_score"],
                             "similarity_score": match["similarity_score"],
-                            "content": match["metadata"].get("content", "")[:200] + "..." if len(match["metadata"].get("content", "")) > 200 else match["metadata"].get("content", "")
+                            "content": match["metadata"].get("content", "")
                         })
 
                     yield json.dumps({
