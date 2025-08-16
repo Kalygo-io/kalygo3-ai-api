@@ -31,7 +31,7 @@ load_dotenv()
 
 callbacks = [
     LangChainTracer(
-    project_name="reranking-chat",
+    project_name="chat-with-txt",
     client=Client(
         api_url=os.getenv("LANGSMITH_ENDPOINT"),
         api_key=os.getenv("LANGSMITH_API_KEY"),
@@ -70,14 +70,10 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 namespace='cookbook'
             )
 
-            print('1')
-
             # Prepare documents and query for Cohere Rerank 3.5
             cohere_api_key = os.getenv("COHERE_API_KEY")
             if not cohere_api_key:
                 raise Exception("COHERE_API_KEY not set in environment variables")
-
-            print('2')
 
             # Gather the documents to rerank
             docs = []
@@ -88,8 +84,6 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 docs.append(content)
                 doc_metadatas.append(r['metadata'])
                 similarity_scores.append(r['score'])  # Store Pinecone similarity score
-
-            print('2.5')
 
             # Call Cohere Rerank 3.5 API
             cohere_url = "https://api.cohere.ai/v1/rerank"
@@ -105,18 +99,11 @@ async def generator(jwt: str, sessionId: str, prompt: str):
             }
             cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
 
-            print('2.75')
-
             if cohere_response.status_code != 200:
                 raise Exception(f"Cohere Rerank API error: {cohere_response.text}")
 
-            print('2.8')
-
             rerank_results = cohere_response.json()
 
-            print('3')
-
-            # The rerank results contain a list of dicts with 'index' and 'relevance_score'
             reranked_matches = []
             for item in rerank_results.get("results", []):
                 idx = item["index"]
@@ -148,12 +135,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 ]
             )
 
-            print('5')
-
             prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nRelevance Score: {r['relevance_score']}, Similarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
-
-            print('6')
 
             async for evt in llm.astream_events(messages, version="v1", config={"callbacks": callbacks}, model=model):
                 if evt["event"] == "on_chat_model_start":
