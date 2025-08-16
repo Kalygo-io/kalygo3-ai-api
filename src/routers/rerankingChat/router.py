@@ -154,8 +154,19 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 if evt["event"] == "on_chat_model_start":
                     history.add_user_message(prompt)
 
+                    # Include re-ranked matches in the response
+                    matches_data = []
+                    for match in reranked_matches:
+                        matches_data.append({
+                            "chunk_id": match["metadata"].get("chunk_id", "N/A"),
+                            "total_chunks": match["metadata"].get("total_chunks", "N/A"),
+                            "score": match["score"],
+                            "content": match["metadata"].get("content", "")[:200] + "..." if len(match["metadata"].get("content", "")) > 200 else match["metadata"].get("content", "")
+                        })
+
                     yield json.dumps({
-                        "event": "on_chat_model_start"
+                        "event": "on_chat_model_start",
+                        "reranked_chunks": matches_data
                     }, separators=(',', ':'))
 
                 elif evt["event"] == "on_chat_model_stream":
