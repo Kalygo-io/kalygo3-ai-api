@@ -41,7 +41,7 @@ callbacks = [
 
 router = APIRouter()
 
-@router.get("/knowledge-base-stats")
+@router.get("/kb-stats")
 @limiter.limit("10/minute")
 def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
     """
@@ -56,7 +56,6 @@ def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
         index = pc.Index(index_name)
         index_stats = index.describe_index_stats()
         
-        # Get namespace statistics
         namespace_stats = index.describe_index_stats(filter={})
         
         return {
@@ -64,11 +63,7 @@ def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
             "namespace": namespace,
             "index_dimension": index_stats.get("dimension"),
             "index_metric": index_stats.get("metric"),
-            "index_pods": index_stats.get("pods"),
-            "index_replicas": index_stats.get("replicas"),
-            "index_shards": index_stats.get("shards"),
             "total_vector_count": index_stats.get("total_vector_count"),
-            "namespaces": index_stats.get("namespaces", {}),
             "namespace_vector_count": namespace_stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
         }
     except Exception as e:
