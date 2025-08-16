@@ -45,7 +45,6 @@ async def generator(jwt: str, sessionId: str, prompt: str):
     print("---> generator called <---")
 
     try:
-
         model: str = "claude-3-5-sonnet-20240620"
         llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
 
@@ -64,11 +63,13 @@ async def generator(jwt: str, sessionId: str, prompt: str):
 
             results = index.query(
                 vector=embedding,
-                top_k=3,
+                top_k=10,
                 include_values=False,
                 include_metadata=True,
                 namespace='cookbook'
             )
+
+            
 
             promptTemplate = ChatPromptTemplate.from_messages(
                 [
