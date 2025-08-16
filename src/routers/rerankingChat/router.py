@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 from src.services import fetch_embedding
 from src.deps import jwt_dependency
 from datetime import datetime
+import requests
 import psycopg
 
 limiter = Limiter(key_func=get_remote_address)
@@ -30,7 +31,7 @@ load_dotenv()
 
 callbacks = [
     LangChainTracer(
-    project_name="rerank-chat",
+    project_name="reranking-chat",
     client=Client(
         api_url=os.getenv("LANGSMITH_ENDPOINT"),
         api_key=os.getenv("LANGSMITH_API_KEY"),
@@ -69,7 +70,70 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 namespace='cookbook'
             )
 
-            
+            print('1')
+
+            # Prepare documents and query for Cohere Rerank 3.5
+            cohere_api_key = os.getenv("COHERE_API_KEY")
+            if not cohere_api_key:
+                raise Exception("COHERE_API_KEY not set in environment variables")
+
+            print('2')
+
+            # Gather the documents to rerank
+            docs = []
+            doc_metadatas = []
+            for r in results['matches']:
+                content = r['metadata'].get('content', '')
+                docs.append(content)
+                doc_metadatas.append(r['metadata'])
+
+            print('2.5')
+
+            # Call Cohere Rerank 3.5 API
+            cohere_url = "https://api.cohere.ai/v1/rerank"
+            headers = {
+                "Authorization": f"Bearer {cohere_api_key}",
+                "Content-Type": "application/json"
+            }
+            rerank_payload = {
+                "model": "rerank-v3.5",
+                "query": prompt,
+                "documents": docs,
+                "top_n": min(5, len(docs))
+            }
+            cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
+
+            print('2.75')
+
+            if cohere_response.status_code != 200:
+                raise Exception(f"Cohere Rerank API error: {cohere_response.text}")
+
+            print('2.8')
+
+            rerank_results = cohere_response.json()
+
+            print('3')
+
+            # The rerank results contain a list of dicts with 'index' and 'relevance_score'
+            reranked_matches = []
+            for item in rerank_results.get("results", []):
+                idx = item["index"]
+                score = item["relevance_score"]
+                metadata = doc_metadatas[idx]
+                reranked_matches.append({
+                    "metadata": metadata,
+                    "score": score
+                })
+
+            print('4')
+
+            for match in reranked_matches:
+                score = match["score"]
+                chunk_id = match["metadata"].get("chunk_id", "N/A")
+                content = match["metadata"].get("content", "")
+                print(f"Score: {score}, Chunk ID: {chunk_id}, Content: {content[:10]}")
+
+            print('4.5')
 
             promptTemplate = ChatPromptTemplate.from_messages(
                 [
@@ -79,8 +143,12 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 ]
             )
 
-            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"content: {r['metadata']['content']}\n" for r in results['matches']]) + "\n\n" + "# PROMPT\n\n" + prompt
+            print('5')
+
+            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nScore: {r['score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
+
+            print('6')
 
             async for evt in llm.astream_events(messages, version="v1", config={"callbacks": callbacks}, model=model):
                 if evt["event"] == "on_chat_model_start":
