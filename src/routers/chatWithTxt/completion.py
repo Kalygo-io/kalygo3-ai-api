@@ -151,7 +151,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                             "total_chunks": match["metadata"].get("total_chunks", "N/A"),
                             "relevance_score": match["relevance_score"],
                             "similarity_score": match["similarity_score"],
-                            "content": match["metadata"].get("content", "")
+                            "content": match["metadata"].get("content", ""),
+                            "filename": match["metadata"].get("filename", "N/A")
                         })
 
                     yield json.dumps({
