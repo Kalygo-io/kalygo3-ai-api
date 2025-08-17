@@ -1,5 +1,5 @@
 {
-    "name": "Kalygo FastAPI Devcontainer",
+    "name": "Kalygo API",
     "build": {
       "dockerfile": "../Dockerfile.dev"
     },

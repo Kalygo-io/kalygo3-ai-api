@@ -6,7 +6,9 @@ import json
 import hashlib
 import time
 import asyncio
-from typing import List
+import re
+import yaml
+from typing import List, Dict, Tuple, Any
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
@@ -15,6 +17,107 @@ import tiktoken
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
+
+def parse_metadata_from_file(text_content: str) -> Tuple[Dict[str, Any], str]:
+    """
+    Parse YAML metadata from the top of a file and return both metadata and content without metadata.
+    
+    Expected format:
+    - YAML metadata section at the top of the file
+    - Metadata section is delimited by --- at the beginning and end
+    - Example:
+      ---
+      video_title: "What is Ollama?"
+      video_url: "https://www.youtube.com/watch/glkQIUTCAK4"
+      tags:
+        - tutorial
+        - ollama
+      ---
+      
+      Content starts here...
+    
+    Returns:
+        Tuple of (metadata_dict, content_without_metadata)
+    """
+    metadata = {}
+    lines = text_content.split('\n')
+    content_lines = []
+    
+    # Check if file starts with YAML front matter (---)
+    if lines and lines[0].strip() == '---':
+        # Find the end of YAML section
+        yaml_end_index = -1
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == '---':
+                yaml_end_index = i
+                break
+        
+        if yaml_end_index > 0:
+            # Extract YAML content
+            yaml_content = '\n'.join(lines[1:yaml_end_index])
+            
+            try:
+                # Parse YAML metadata
+                metadata = yaml.safe_load(yaml_content) or {}
+                
+                # Convert all values to strings for consistency
+                string_metadata = {}
+                for key, value in metadata.items():
+                    if isinstance(value, (list, dict)):
+                        string_metadata[key] = str(value)
+                    else:
+                        string_metadata[key] = str(value) if value is not None else ""
+                
+                metadata = string_metadata
+                
+                # Content starts after the second ---
+                content_lines = lines[yaml_end_index + 1:]
+                
+            except yaml.YAMLError as e:
+                print(f"Warning: Failed to parse YAML metadata: {e}")
+                # If YAML parsing fails, treat the whole file as content
+                content_lines = lines
+        else:
+            # No closing --- found, treat as content
+            content_lines = lines
+    else:
+        # No YAML front matter, treat as content
+        content_lines = lines
+    
+    content_without_metadata = '\n'.join(content_lines)
+    return metadata, content_without_metadata
+
+def prepend_metadata_to_chunk(chunk: str, chunk_index: int, total_chunks: int, file_metadata: Dict[str, Any], filename: str) -> str:
+    """
+    Prepend YAML front matter metadata to a chunk with additional chunk-specific metadata.
+    
+    Args:
+        chunk: The original chunk content
+        chunk_index: The index of this chunk (0-based)
+        total_chunks: Total number of chunks in the file
+        file_metadata: Metadata from the original file's YAML front matter
+        filename: The original filename
+    
+    Returns:
+        Chunk with prepended metadata
+    """
+    # Create chunk-specific metadata
+    chunk_metadata = {
+        "chunk_number": f"{chunk_index + 1} of {total_chunks}",  # 1-based for readability
+        "filename": filename,
+        "upload_timestamp_in_unix": int(time.time())
+    }
+    
+    # Combine file metadata with chunk metadata
+    combined_metadata = {**file_metadata, **chunk_metadata}
+    
+    # Convert to YAML format
+    yaml_content = yaml.dump(combined_metadata, default_flow_style=False, sort_keys=False)
+    
+    # Create the final chunk with YAML front matter
+    final_chunk = f"---\n{yaml_content}---\n\n{chunk}"
+    
+    return final_chunk
 
 def chunk_text_by_tokens(text: str, chunk_size: int = 200, overlap: int = 50) -> List[str]:
     """
@@ -53,9 +156,9 @@ def chunk_text_by_tokens(text: str, chunk_size: int = 200, overlap: int = 50) ->
         print(f"Warning: tiktoken failed, using fallback chunking: {e}")
         return [text[i:i + chunk_size * 4] for i in range(0, len(text), chunk_size * 3)]
 
-async def process_chunk_with_embedding(chunk: str, chunk_index: int, filename: str, jwt: str) -> dict:
+async def generate_embedding_for_chunk(chunk: str, chunk_index: int, filename: str, jwt: str, file_metadata: Dict[str, Any] = None) -> dict:
     """
-    Process a single chunk by generating its embedding and preparing vector data.
+    Generate embedding for a single chunk and prepare vector data for storage.
     Returns None if processing fails.
     """
     try:
@@ -92,17 +195,30 @@ async def process_chunk_with_embedding(chunk: str, chunk_index: int, filename: s
         # Create unique ID for the vector
         chunk_id = hashlib.sha256(f"{filename}_{chunk_index}_{chunk[:50]}".encode()).hexdigest()
         
+        # Prepare base metadata
+        metadata = {
+            "filename": filename,
+            "chunk_id": chunk_index,
+            "content": chunk,
+            "chunk_size_tokens": len(chunk.split()), # Approximate token count
+            "upload_timestamp": str(int(time.time() * 1000))
+        }
+        
+        # Add file metadata if available
+        if file_metadata:
+            # Prefix file metadata keys to avoid conflicts
+            for key, value in file_metadata.items():
+                metadata[f"file_{key}"] = value
+        
+        # Add chunk-specific metadata
+        metadata["chunk_number"] = chunk_index + 1
+        metadata["total_chunks"] = file_metadata.get("total_chunks", "unknown") if file_metadata else "unknown"
+        
         # Prepare vector data
         vector_data = {
             "id": chunk_id,
             "values": embedding_values,
-            "metadata": {
-                "filename": filename,
-                "chunk_id": chunk_index,
-                "content": chunk,
-                "chunk_size_tokens": len(chunk.split()),  # Approximate token count
-                "upload_timestamp": str(int(time.time() * 1000))
-            }
+            "metadata": metadata
         }
         
         return vector_data
@@ -135,24 +251,43 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
                 "error": "File is empty"
             }
         
-        # Chunk the text into 200-token pieces
-        chunks = chunk_text_by_tokens(text_content, chunk_size=200, overlap=50)
+        # Parse metadata from the file
+        metadata, content_without_metadata = parse_metadata_from_file(text_content)
         
-        if not chunks:
+        # Log metadata if found
+        if metadata:
+            print(f"Found YAML front matter in {file.filename}:")
+            for key, value in metadata.items():
+                print(f"  {key}: {value}")
+        else:
+            print(f"No YAML front matter found in {file.filename}")
+        
+        # Chunk the text into 200-token pieces
+        raw_chunks = chunk_text_by_tokens(content_without_metadata, chunk_size=200, overlap=50)
+        
+        if not raw_chunks:
             return {
                 "success": False,
                 "filename": file.filename,
                 "error": "No valid chunks created from file"
             }
         
+        # Prepend metadata to each chunk
+        chunks_with_metadata = []
+        for i, chunk in enumerate(raw_chunks):
+            chunk_with_metadata = prepend_metadata_to_chunk(
+                chunk, i, len(raw_chunks), metadata, file.filename
+            )
+            chunks_with_metadata.append(chunk_with_metadata)
+        
         # Process chunks in parallel
-        print(f"Processing {len(chunks)} chunks for {file.filename}...")
+        print(f"Processing {len(chunks_with_metadata)} chunks for {file.filename}...")
         
         # Create tasks for parallel processing
         tasks = []
-        for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i+1} of {len(chunks)} for {file.filename}")
-            task = process_chunk_with_embedding(chunk, i, file.filename, jwt)
+        for i, chunk in enumerate(chunks_with_metadata):
+            print(f"Processing chunk {i+1} of {len(chunks_with_metadata)} for {file.filename}")
+            task = generate_embedding_for_chunk(chunk, i, file.filename, jwt, metadata)
             tasks.append(task)
         
         # Execute all tasks concurrently
@@ -169,7 +304,7 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
                 failed_chunks += 1
             elif result is not None:
                 # Add total_chunks to metadata
-                result["metadata"]["total_chunks"] = len(chunks)
+                result["metadata"]["total_chunks"] = len(chunks_with_metadata)
                 vectors_to_upsert.append(result)
                 successful_chunks += 1
             else:
@@ -191,7 +326,7 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
         return {
             "success": True,
             "filename": file.filename,
-            "total_chunks_created": len(chunks),
+            "total_chunks_created": len(chunks_with_metadata),
             "successful_uploads": successful_chunks,
             "failed_uploads": failed_chunks,
             "file_size_bytes": len(content)
@@ -206,7 +341,7 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
 
 @router.post("/upload")
 @limiter.limit("50/minute")
-async def upload_file(
+async def upload_files(
     files: List[UploadFile] = File(..., description="Files to upload"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
