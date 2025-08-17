@@ -117,11 +117,11 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
     """
     try:
         # Validate file type
-        if not file.filename.endswith('.txt'):
+        if not (file.filename.endswith('.txt') or file.filename.endswith('.md')):
             return {
                 "success": False,
                 "filename": file.filename,
-                "error": "Only .txt files are supported"
+                "error": "Only .txt and .md files are supported"
             }
         
         # Read file content
@@ -151,7 +151,7 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
         # Create tasks for parallel processing
         tasks = []
         for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i} of {len(chunks)} for {file.filename}")
+            print(f"Processing chunk {i+1} of {len(chunks)} for {file.filename}")
             task = process_chunk_with_embedding(chunk, i, file.filename, jwt)
             tasks.append(task)
         
@@ -207,12 +207,12 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
 @router.post("/upload")
 @limiter.limit("50/minute")
 async def upload_file(
-    files: List[UploadFile] = File(...),
+    files: List[UploadFile] = File(..., description="Files to upload"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
-    Upload multiple .txt files, chunk them into 200-token pieces, and upload to Pinecone index.
+    Upload .txt and .md files, chunk them into 200-token pieces, and upload to Pinecone index.
     """
     try:
         if not files:
@@ -244,15 +244,21 @@ async def upload_file(
                 total_failed_uploads += result["failed_uploads"]
                 total_chunks_created += result["total_chunks_created"]
         
-        return {
-            "success": True,
-            "files_processed": len(files),
-            "file_results": file_results,
-            "total_chunks_created": total_chunks_created,
-            "total_successful_uploads": total_successful_uploads,
-            "total_failed_uploads": total_failed_uploads,
-            "namespace": namespace
-        }
+        # Return format depends on whether it's single or multiple files
+        if len(files) == 1:
+            # Single file - return the result directly for backward compatibility
+            return file_results[0]
+        else:
+            # Multiple files - return aggregate results
+            return {
+                "success": True,
+                "files_processed": len(files),
+                "file_results": file_results,
+                "total_chunks_created": total_chunks_created,
+                "total_successful_uploads": total_successful_uploads,
+                "total_failed_uploads": total_failed_uploads,
+                "namespace": namespace
+            }
         
     except HTTPException:
         raise
@@ -260,4 +266,39 @@ async def upload_file(
         return {
             "success": False,
             "error": f"Failed to upload files: {str(e)}"
+        }
+
+@router.post("/upload-single")
+@limiter.limit("50/minute")
+async def upload_single_file(
+    file: UploadFile = File(..., description="Single file to upload"),
+    decoded_jwt: jwt_dependency = None,
+    request: Request = None
+):
+    """
+    Upload a single .txt or .md file, chunk it into 200-token pieces, and upload to Pinecone index.
+    This endpoint is for backward compatibility with existing frontend implementations.
+    """
+    try:
+        # Get the index name from environment variables
+        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
+        namespace = "chat_with_txt"
+        
+        # Get Pinecone index
+        index = pc.Index(index_name)
+        
+        # Get JWT token for embedding service
+        jwt = request.cookies.get("jwt") if request else None
+        
+        # Process the single file
+        result = await process_single_file(file, jwt, index, namespace)
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to upload file: {str(e)}"
         } 
