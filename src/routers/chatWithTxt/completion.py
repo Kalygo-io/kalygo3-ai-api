@@ -63,51 +63,56 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 namespace='chat_with_txt'
             )
 
-            # Prepare documents and query for Cohere Rerank 3.5
-            cohere_api_key = os.getenv("COHERE_API_KEY")
-            if not cohere_api_key:
-                raise Exception("COHERE_API_KEY not set in environment variables")
+            # Check if we have any matches from similarity search
+            if not results['matches']:
+                # No matches found, skip re-ranking and continue with empty results
+                reranked_matches = []
+            else:
+                # Prepare documents and query for Cohere Rerank 3.5
+                cohere_api_key = os.getenv("COHERE_API_KEY")
+                if not cohere_api_key:
+                    raise Exception("COHERE_API_KEY not set in environment variables")
 
-            # Gather the documents to rerank
-            docs = []
-            doc_metadatas = []
-            similarity_scores = []
-            for r in results['matches']:
-                content = r['metadata'].get('content', '')
-                docs.append(content)
-                doc_metadatas.append(r['metadata'])
-                similarity_scores.append(r['score'])  # Store Pinecone similarity score
+                # Gather the documents to rerank
+                docs = []
+                doc_metadatas = []
+                similarity_scores = []
+                for r in results['matches']:
+                    content = r['metadata'].get('content', '')
+                    docs.append(content)
+                    doc_metadatas.append(r['metadata'])
+                    similarity_scores.append(r['score'])  # Store Pinecone similarity score
 
-            # Call Cohere Rerank 3.5 API
-            cohere_url = "https://api.cohere.ai/v1/rerank"
-            headers = {
-                "Authorization": f"Bearer {cohere_api_key}",
-                "Content-Type": "application/json"
-            }
-            rerank_payload = {
-                "model": "rerank-v3.5",
-                "query": prompt,
-                "documents": docs,
-                "top_n": min(5, len(docs))
-            }
-            cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
+                # Call Cohere Rerank 3.5 API
+                cohere_url = "https://api.cohere.ai/v1/rerank"
+                headers = {
+                    "Authorization": f"Bearer {cohere_api_key}",
+                    "Content-Type": "application/json"
+                }
+                rerank_payload = {
+                    "model": "rerank-v3.5",
+                    "query": prompt,
+                    "documents": docs,
+                    "top_n": min(5, len(docs))
+                }
+                cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
 
-            if cohere_response.status_code != 200:
-                raise Exception(f"Cohere Rerank API error: {cohere_response.text}")
+                if cohere_response.status_code != 200:
+                    raise Exception(f"Cohere Rerank API error: {cohere_response.text}")
 
-            rerank_results = cohere_response.json()
+                rerank_results = cohere_response.json()
 
-            reranked_matches = []
-            for item in rerank_results.get("results", []):
-                idx = item["index"]
-                relevance_score = item["relevance_score"]
-                similarity_score = similarity_scores[idx]  # Get corresponding similarity score
-                metadata = doc_metadatas[idx]
-                reranked_matches.append({
-                    "metadata": metadata,
-                    "relevance_score": relevance_score,
-                    "similarity_score": similarity_score
-                })
+                reranked_matches = []
+                for item in rerank_results.get("results", []):
+                    idx = item["index"]
+                    relevance_score = item["relevance_score"]
+                    similarity_score = similarity_scores[idx]  # Get corresponding similarity score
+                    metadata = doc_metadatas[idx]
+                    reranked_matches.append({
+                        "metadata": metadata,
+                        "relevance_score": relevance_score,
+                        "similarity_score": similarity_score
+                    })
 
             print('4')
 
@@ -128,7 +133,10 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 ]
             )
 
-            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nRelevance Score: {r['relevance_score']}, Similarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
+            if reranked_matches:
+                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nRelevance Score: {r['relevance_score']}, Similarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
+            else:
+                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\nNo relevant information found in the knowledge base.\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
 
             async for evt in llm.astream_events(messages, version="v1", config={"callbacks": callbacks}, model=model):

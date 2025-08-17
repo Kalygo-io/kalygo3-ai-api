@@ -78,7 +78,10 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 ]
             )
 
-            prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"Q: {r['metadata']['q']}\nA: {r['metadata']['a']}" for r in results['matches']]) + "\n\n" + "# PROMPT\n\n" + prompt
+            if results['matches']:
+                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"Q: {r['metadata']['q']}\nA: {r['metadata']['a']}" for r in results['matches']]) + "\n\n" + "# PROMPT\n\n" + prompt
+            else:
+                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\nNo relevant information found in the knowledge base.\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
 
             async for evt in llm.astream_events(messages, version="v1", config={"callbacks": callbacks}, model=model):
