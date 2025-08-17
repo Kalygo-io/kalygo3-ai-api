@@ -57,7 +57,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
 
             results = index.query(
                 vector=embedding,
-                top_k=10,
+                top_k=20,
                 include_values=False,
                 include_metadata=True,
                 namespace='chat_with_txt'
@@ -93,7 +93,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                     "model": "rerank-v3.5",
                     "query": prompt,
                     "documents": docs,
-                    "top_n": min(5, len(docs))
+                    "top_n": min(10, len(docs))
                 }
                 cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
 
@@ -114,16 +114,12 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                         "similarity_score": similarity_score
                     })
 
-            print('4')
-
             for match in reranked_matches:
                 relevance_score = match["relevance_score"]
                 similarity_score = match["similarity_score"]
                 chunk_id = match["metadata"].get("chunk_id", "N/A")
                 content = match["metadata"].get("content", "")
                 print(f"Relevance Score: {relevance_score}, Similarity Score: {similarity_score}, Chunk ID: {chunk_id}, Content: {content[:10]}")
-
-            print('4.5')
 
             promptTemplate = ChatPromptTemplate.from_messages(
                 [
@@ -134,7 +130,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
             )
 
             if reranked_matches:
-                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nRelevance Score: {r['relevance_score']}, Similarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
+                prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\n" + "\n".join([f"--------\nFilename: {r['metadata']['filename']}\nRelevance Score: {r['relevance_score']}\nSimilarity Score: {r['similarity_score']}\nChunk: {r['metadata']['chunk_id']} of {r['metadata']['total_chunks']}\n--------\n\n{r['metadata']['content']}\n" for r in reranked_matches]) + "\n\n" + "# PROMPT\n\n" + prompt
             else:
                 prompt_with_relevant_knowledge = "# RELEVANT KNOWLEDGE\n\nNo relevant information found in the knowledge base.\n\n" + "# PROMPT\n\n" + prompt
             messages = promptTemplate.format_messages(input=prompt_with_relevant_knowledge, history=history.messages)
