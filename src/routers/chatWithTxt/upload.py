@@ -110,51 +110,48 @@ async def process_chunk_with_embedding(chunk: str, chunk_index: int, filename: s
         print(f"Error processing chunk {chunk_index}: {e}")
         return None
 
-@router.post("/upload")
-@limiter.limit("50/minute")
-async def upload_file(
-    file: UploadFile = File(...),
-    decoded_jwt: jwt_dependency = None,
-    request: Request = None
-):
+async def process_single_file(file: UploadFile, jwt: str, index, namespace: str) -> dict:
     """
-    Upload a .txt file, chunk it into 200-token pieces, and upload to Pinecone index.
+    Process a single file: validate, chunk, and upload to Pinecone.
+    Returns a result dictionary with upload statistics.
     """
     try:
         # Validate file type
         if not file.filename.endswith('.txt'):
-            raise HTTPException(status_code=400, detail="Only .txt files are supported")
+            return {
+                "success": False,
+                "filename": file.filename,
+                "error": "Only .txt files are supported"
+            }
         
         # Read file content
         content = await file.read()
         text_content = content.decode('utf-8')
         
         if not text_content.strip():
-            raise HTTPException(status_code=400, detail="File is empty")
+            return {
+                "success": False,
+                "filename": file.filename,
+                "error": "File is empty"
+            }
         
         # Chunk the text into 200-token pieces
         chunks = chunk_text_by_tokens(text_content, chunk_size=200, overlap=50)
         
         if not chunks:
-            raise HTTPException(status_code=400, detail="No valid chunks created from file")
-        
-        # Get the index name from environment variables
-        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "chat_with_txt"
-        
-        # Get Pinecone index
-        index = pc.Index(index_name)
-        
-        # Get JWT token for embedding service
-        jwt = request.cookies.get("jwt") if request else None
+            return {
+                "success": False,
+                "filename": file.filename,
+                "error": "No valid chunks created from file"
+            }
         
         # Process chunks in parallel
-        print(f"Processing {len(chunks)} chunks in parallel...")
+        print(f"Processing {len(chunks)} chunks for {file.filename}...")
         
         # Create tasks for parallel processing
         tasks = []
         for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i} of {len(chunks)}")
+            print(f"Processing chunk {i} of {len(chunks)} for {file.filename}")
             task = process_chunk_with_embedding(chunk, i, file.filename, jwt)
             tasks.append(task)
         
@@ -168,7 +165,7 @@ async def upload_file(
         
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"Exception processing chunk {i}: {result}")
+                print(f"Exception processing chunk {i} for {file.filename}: {result}")
                 failed_chunks += 1
             elif result is not None:
                 # Add total_chunks to metadata
@@ -187,7 +184,7 @@ async def upload_file(
                 try:
                     index.upsert(vectors=batch, namespace=namespace)
                 except Exception as e:
-                    print(f"Error uploading batch {i//batch_size}: {e}")
+                    print(f"Error uploading batch {i//batch_size} for {file.filename}: {e}")
                     failed_chunks += len(batch)
                     successful_chunks -= len(batch)
         
@@ -197,8 +194,64 @@ async def upload_file(
             "total_chunks_created": len(chunks),
             "successful_uploads": successful_chunks,
             "failed_uploads": failed_chunks,
-            "namespace": namespace,
             "file_size_bytes": len(content)
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "filename": file.filename,
+            "error": f"Failed to process file: {str(e)}"
+        }
+
+@router.post("/upload")
+@limiter.limit("50/minute")
+async def upload_file(
+    files: List[UploadFile] = File(...),
+    decoded_jwt: jwt_dependency = None,
+    request: Request = None
+):
+    """
+    Upload multiple .txt files, chunk them into 200-token pieces, and upload to Pinecone index.
+    """
+    try:
+        if not files:
+            raise HTTPException(status_code=400, detail="No files provided")
+        
+        # Get the index name from environment variables
+        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
+        namespace = "chat_with_txt"
+        
+        # Get Pinecone index
+        index = pc.Index(index_name)
+        
+        # Get JWT token for embedding service
+        jwt = request.cookies.get("jwt") if request else None
+        
+        # Process each file
+        file_results = []
+        total_successful_uploads = 0
+        total_failed_uploads = 0
+        total_chunks_created = 0
+        
+        for file in files:
+            print(f"Processing file: {file.filename}")
+            result = await process_single_file(file, jwt, index, namespace)
+            file_results.append(result)
+            
+            if result["success"]:
+                total_successful_uploads += result["successful_uploads"]
+                total_failed_uploads += result["failed_uploads"]
+                total_chunks_created += result["total_chunks_created"]
+        
+        return {
+            "success": True,
+            "files_processed": len(files),
+            "file_results": file_results,
+            "total_chunks_created": total_chunks_created,
+            "total_successful_uploads": total_successful_uploads,
+            "total_failed_uploads": total_failed_uploads,
+            "namespace": namespace
         }
         
     except HTTPException:
@@ -206,6 +259,5 @@ async def upload_file(
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to upload file: {str(e)}",
-            "filename": file.filename if file else "unknown"
+            "error": f"Failed to upload files: {str(e)}"
         } 
