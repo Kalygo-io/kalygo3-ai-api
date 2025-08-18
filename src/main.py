@@ -21,6 +21,7 @@ from .routers import (
   rawLLM,
   spreadsheetSwarm,
   designAndRunSwarm,
+  similaritySearch,
 )
 
 from src.db.database import Base, engine
@@ -128,4 +129,10 @@ app.include_router(
     designAndRunSwarm.router,
     prefix="/api/design-and-run-swarm",
     tags=['Swarm Designer'],
+)
+
+app.include_router(
+    similaritySearch.router,
+    prefix="/api/similarity-search",
+    tags=['Similarity Search'],
 )
