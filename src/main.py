@@ -22,6 +22,7 @@ from .routers import (
   spreadsheetSwarm,
   designAndRunSwarm,
   similaritySearch,
+  reranking,
 )
 
 from src.db.database import Base, engine
@@ -135,4 +136,10 @@ app.include_router(
     similaritySearch.router,
     prefix="/api/similarity-search",
     tags=['Similarity Search'],
+)
+
+app.include_router(
+    reranking.router,
+    prefix="/api/reranking",
+    tags=['Reranking'],
 )
