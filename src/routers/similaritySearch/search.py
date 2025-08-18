@@ -14,12 +14,13 @@ router = APIRouter()
 
 class Query(BaseModel):
     query: str
+    top_k: int = 5
+    similarity_threshold: float = 0.0
 
 @router.post("/search")
 @limiter.limit("50/minute")
 async def similarity_search(
     query: Query,
-    top_k: int = 5,
     namespace: str = "similarity_search",
     decoded_jwt: jwt_dependency = None,
     request: Request = None
@@ -49,17 +50,28 @@ async def similarity_search(
         # Perform similarity search
         results = index.query(
             vector=embedding,
-            top_k=top_k,
+            top_k=query.top_k,
             include_values=False,
             include_metadata=True,
             namespace=namespace
         )
         
-        final_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches']]
+        # Filter results by similarity threshold if provided
+        if query.similarity_threshold > 0.0:
+            filtered_matches = [
+                r for r in results['matches'] 
+                if r['score'] >= query.similarity_threshold
+            ]
+        else:
+            filtered_matches = results['matches']
+        
+        final_results = [{'metadata': r['metadata'], 'score': r['score']} for r in filtered_matches]
 
         return {
             "success": True,
             "query": query.query,
+            "top_k": query.top_k,
+            "similarity_threshold": query.similarity_threshold,
             "namespace": namespace,
             "results": final_results
         }
