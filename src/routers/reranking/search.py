@@ -14,9 +14,9 @@ router = APIRouter()
 
 class Query(BaseModel):
     query: str
-    top_k: int = 50
+    top_k_for_similarity: int = 5
+    top_k_for_rerank: int = 10
     similarity_threshold: float = 0.0
-    rerank_top_k: int = 10  # Number of results to re-rank
 
 @router.post("/search")
 @limiter.limit("50/minute")
@@ -51,7 +51,7 @@ async def reranking_search(
         # Perform initial similarity search with higher top_k for re-ranking
         initial_results = index.query(
             vector=embedding,
-            top_k=query.rerank_top_k,  # Get more results for re-ranking
+            top_k=query.top_k_for_rerank,  # Get more results for re-ranking
             include_values=False,
             include_metadata=True,
             namespace=namespace
@@ -61,9 +61,9 @@ async def reranking_search(
             return {
                 "success": True,
                 "query": query.query,
-                "top_k": query.top_k,
+                "top_k_for_similarity": query.top_k_for_similarity,
+                "top_k_for_rerank": query.top_k_for_rerank,
                 "similarity_threshold": query.similarity_threshold,
-                "rerank_top_k": query.rerank_top_k,
                 "namespace": namespace,
                 "results": [],
                 "reranking_applied": False
@@ -81,15 +81,15 @@ async def reranking_search(
         # Perform re-ranking using cross-encoder or additional scoring
         reranked_results = await perform_reranking(query.query, filtered_matches, jwt)
         
-        # Take only the top_k results after re-ranking
-        final_results = reranked_results[:query.top_k]
+        # Take only the top_k_for_similarity results after re-ranking
+        final_results = reranked_results[:query.top_k_for_similarity]
         
         return {
             "success": True,
             "query": query.query,
-            "top_k": query.top_k,
+            "top_k_for_similarity": query.top_k_for_similarity,
+            "top_k_for_rerank": query.top_k_for_rerank,
             "similarity_threshold": query.similarity_threshold,
-            "rerank_top_k": query.rerank_top_k,
             "namespace": namespace,
             "results": final_results,
             "reranking_applied": True,
