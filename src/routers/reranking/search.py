@@ -36,14 +36,14 @@ def serialize_search_result(result: Dict[str, Any]) -> Dict[str, Any]:
         
         return {
             'id': result.get('id', ''),
-            'score': float(result.get('score', 0.0)),
+            'similarity_score': float(result.get('score', 0.0)),
             'metadata': cleaned_metadata
         }
     except Exception as e:
         print(f"Error serializing result: {e}")
         return {
             'id': str(result.get('id', '')),
-            'score': 0.0,
+            'similarity_score': 0.0,
             'metadata': {}
         }
 
@@ -119,7 +119,15 @@ async def reranking_search(
             filtered_matches = initial_results['matches']
         
         # Store initial similarity search results for comparison (show top_k_for_similarity results in first stage)
-        initial_similarity_results = [serialize_search_result(r) for r in filtered_matches[:query.top_k_for_similarity]]
+        initial_similarity_results = []
+        for r in filtered_matches[:query.top_k_for_similarity]:
+            result = {
+                'id': r.get('id', ''),
+                'score': float(r.get('score', 0.0)),  # This is the similarity score
+                'metadata': r.get('metadata', {}),
+                'similarity_score': float(r.get('score', 0.0))  # Explicitly label as similarity_score
+            }
+            initial_similarity_results.append(result)
         
         # Debug: Print result counts
         print(f"Debug - Initial matches: {len(filtered_matches)}")
@@ -138,11 +146,9 @@ async def reranking_search(
         for result in final_results:
             serialized_result = {
                 'id': result.get('id', ''),
-                'score': float(result.get('score', 0.0)),  # This should be the Cohere relevance score
                 'metadata': result.get('metadata', {}),
                 'similarity_score': float(result.get('similarity_score', 0.0)),  # Original similarity score
-                'relevance_score': float(result.get('relevance_score', 0.0)),  # Cohere relevance score
-                'reranked_score': float(result.get('reranked_score', 0.0))  # Cohere reranked score (for frontend)
+                'relevance_score': float(result.get('relevance_score', 0.0))  # Cohere relevance score
             }
             serialized_final_results.append(serialized_result)
         
@@ -202,7 +208,7 @@ async def perform_reranking(query: str, candidates: list, jwt: str) -> list:
             
             docs.append(content)
             doc_metadatas.append(r['metadata'])
-            similarity_scores.append(r['score'])  # Store Pinecone similarity score
+            similarity_scores.append(r['score'])  # Store Pinecone similarity score (original score)
         
         print(f"Prepared {len(docs)} documents for re-ranking")
         print(f"Sample document content: {docs[0][:100] if docs else 'No documents'}...")
@@ -257,11 +263,8 @@ async def perform_reranking(query: str, candidates: list, jwt: str) -> list:
                 reranked_candidates.append({
                     'id': candidates[idx].get('id', ''),
                     'metadata': metadata,
-                    'score': relevance_score,  # Use Cohere relevance score as the main score
-                    'reranked_score': relevance_score,
-                    'relevance_score': relevance_score,
-                    'similarity_score': similarity_score,  # Keep original similarity score
-                    'original_similarity_score': similarity_score  # Keep original for comparison
+                    'similarity_score': similarity_score,  # Original similarity score
+                    'relevance_score': relevance_score,  # New relevance score from Cohere
                 })
                 print(f"  Added candidate: similarity={similarity_score:.3f}, relevance={relevance_score:.3f}")
             else:
@@ -269,17 +272,21 @@ async def perform_reranking(query: str, candidates: list, jwt: str) -> list:
         
         print(f"After filtering: {len(reranked_candidates)} candidates")
         
+        # Sort reranked candidates by relevance_score (highest first) to show re-ranking effect
+        reranked_candidates.sort(key=lambda x: x['relevance_score'], reverse=True)
+        print(f"Sorted reranked candidates by relevance_score (highest first)")
+        
         # Debug: Print the re-ranking results
         print(f"Cohere re-ranking results for query '{query}':")
         for i, candidate in enumerate(reranked_candidates[:5]):
-            print(f"  {i+1}. ID: {candidate['id']}, Score: {candidate['score']:.3f}, "
-                  f"Relevance Score: {candidate['relevance_score']:.3f}, "
-                  f"Original Similarity: {candidate.get('original_similarity_score', 'N/A'):.3f}")
+            print(f"  {i+1}. ID: {candidate['id']}, "
+                  f"Similarity Score: {candidate['similarity_score']:.3f}, "
+                  f"Relevance Score: {candidate['relevance_score']:.3f}")
         
         # Debug: Show the difference between similarity and relevance scores
         print(f"Debug - Score comparison:")
         for i, candidate in enumerate(reranked_candidates[:5]):
-            similarity = candidate.get('original_similarity_score', 0)
+            similarity = candidate.get('similarity_score', 0)
             relevance = candidate.get('relevance_score', 0)
             diff = abs(similarity - relevance)
             print(f"  {i+1}. Similarity: {similarity:.3f}, Relevance: {relevance:.3f}, Diff: {diff:.3f}")
