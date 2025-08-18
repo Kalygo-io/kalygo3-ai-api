@@ -55,11 +55,13 @@ async def similarity_search(
             namespace=namespace
         )
         
+        final_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches']]
+
         return {
             "success": True,
             "query": query.query,
             "namespace": namespace,
-            "results": results.get("matches", [])
+            "results": final_results
         }
         
     except Exception as e:
