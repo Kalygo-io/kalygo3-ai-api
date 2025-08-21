@@ -57,6 +57,8 @@ async def generator(sessionId: str, prompt: str):
     conn_info = os.getenv("POSTGRES_URL")
     sync_connection = psycopg.connect(conn_info)
 
+    print('sessionId', sessionId)
+
     message_history = PostgresChatMessageHistory(
         'chat_history', # table name
         sessionId,
