@@ -32,7 +32,7 @@ load_dotenv()
 
 callbacks = [
   LangChainTracer(
-    project_name="re-act-agent",
+    project_name="agentic-rag-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")

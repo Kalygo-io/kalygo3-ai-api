@@ -11,6 +11,7 @@ from .routers import (
   basicMemory,
   naiveRagChat,
   chatWithTxt,
+  agenticRagAgent,
   reActAgent,
   healthcheck,
   auth,
@@ -88,6 +89,11 @@ app.include_router(
 app.include_router(
     reActAgent.router,
     prefix="/api/react-agent",
+)
+
+app.include_router(
+    agenticRagAgent.router,
+    prefix="/api/agentic-rag-agent",
 )
 
 app.include_router(
