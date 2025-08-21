@@ -48,7 +48,8 @@ async def generator(sessionId: str, prompt: str):
     # Get the prompt to use - you can modify this!
     prompt_template = hub.pull("hwchase17/openai-tools-agent")
     # tools = [serp_tool, gptuesday_tool]
-    tools = [gptuesday_tool, tad_tool, retrieval_with_reranking_tool]
+    # tools = [gptuesday_tool, tad_tool, retrieval_with_reranking_tool]
+    tools = [retrieval_with_reranking_tool]
     
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
