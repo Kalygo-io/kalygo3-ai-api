@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Request
 
-from .tools import gptuesday_tool, tad_tool
+from .tools import gptuesday_tool, tad_tool, retrieval_with_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -48,7 +48,7 @@ async def generator(sessionId: str, prompt: str):
     # Get the prompt to use - you can modify this!
     prompt_template = hub.pull("hwchase17/openai-tools-agent")
     # tools = [serp_tool, gptuesday_tool]
-    tools = [gptuesday_tool, tad_tool]
+    tools = [gptuesday_tool, tad_tool, retrieval_with_reranking_tool]
     
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
