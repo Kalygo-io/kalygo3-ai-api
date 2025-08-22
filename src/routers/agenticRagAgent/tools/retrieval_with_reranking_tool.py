@@ -34,14 +34,15 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "agentic_ra
         # Get Pinecone index
         index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
         
-        # Perform initial similarity search
+        # Perform initial similarity search with a larger pool for reranking
+        # We want to show top_k results, but rerank from a broader pool
+        rerank_pool_size = max(top_k * 3, 20)  # Get 3x more candidates for reranking
+        
         results = index.query(
             vector=embedding,
-            top_k=top_k,
+            top_k=rerank_pool_size,  # Get a larger pool for reranking
             include_values=False,
             include_metadata=True,
-            # namespace=namespace
-            # namespace="chat_with_txt"
             namespace="reranking"
         )
         
@@ -77,6 +78,8 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "agentic_ra
             doc_metadatas.append(r['metadata'])
             similarity_scores.append(r['score'])
         
+        print(f"Prepared {len(docs)} documents for re-ranking")
+        
         # Call Cohere Rerank 3.5 API
         cohere_url = "https://api.cohere.ai/v1/rerank"
         headers = {
@@ -87,57 +90,81 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "agentic_ra
             "model": "rerank-v3.5",
             "query": query,
             "documents": docs,
-            "top_n": min(len(docs), 20)
+            "top_n": len(docs)  # Rerank all documents to get full range
         }
         
         cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
         
         if cohere_response.status_code != 200:
-            # Fallback to similarity search if Cohere API fails
-            similarity_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches']]
+            print(f"Cohere Rerank API error: {cohere_response.text}")
+            # Fallback to original results if API call fails
+            fallback_results = []
+            for r in results['matches']:
+                fallback_results.append({
+                    'metadata': r['metadata'], 
+                    'similarity_score': r['score'],
+                    'relevance_score': r['score']  # Use similarity score as fallback
+                })
             return {
                 "message": f"Cohere API error: {cohere_response.text}, using similarity search only",
-                "reranked_results": similarity_results,
-                "similarity_results": similarity_results
+                "reranked_results": fallback_results[:top_k],
+                "similarity_results": [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches'][:top_k]]
             }
         
         rerank_results = cohere_response.json()
         
         # Process reranked results
         reranked_matches = []
+        print(f"Cohere API returned {len(rerank_results.get('results', []))} results")
+        
         for item in rerank_results.get("results", []):
             idx = item["index"]
             relevance_score = item["relevance_score"]
             similarity_score = similarity_scores[idx]
             metadata = doc_metadatas[idx]
             
-            # Only keep matches with relevance score above threshold
-            if relevance_score > 0.1:
-                reranked_matches.append({
-                    "metadata": metadata,
-                    "relevance_score": relevance_score,
-                    "similarity_score": similarity_score
-                })
+            # Include all results to show the full range of reranking effects
+            # This allows lower-ranked similarity results to potentially rise to the top
+            reranked_matches.append({
+                "metadata": metadata,
+                "relevance_score": relevance_score,
+                "similarity_score": similarity_score
+            })
         
-        # Sort by relevance score (highest first)
+        # Sort by relevance score (highest first) to show re-ranking effect
         reranked_matches.sort(key=lambda x: x['relevance_score'], reverse=True)
+        print(f"After reranking: {len(reranked_matches)} candidates")
         
-        # Prepare similarity results for comparison
-        similarity_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches']]
+        # Prepare similarity results for comparison (show top_k results)
+        similarity_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches'][:top_k]]
+        
+        # Take only the top_k results after re-ranking
+        final_reranked_results = reranked_matches[:top_k]
         
         return {
-            "message": f"Retrieved {len(reranked_matches)} relevant documents using reranking",
-            "reranked_results": reranked_matches,
+            "message": f"Retrieved {len(final_reranked_results)} relevant documents using reranking",
+            "reranked_results": final_reranked_results,
             "similarity_results": similarity_results,
             "query": query,
             "namespace": namespace
         }
         
     except Exception as e:
+        print(f"Error in retrieval with reranking: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
+        # Fallback to original results if re-ranking fails
+        fallback_results = []
+        for r in results.get('matches', [])[:top_k]:
+            fallback_results.append({
+                'metadata': r['metadata'], 
+                'similarity_score': r['score'],
+                'relevance_score': r['score']  # Use similarity score as fallback
+            })
         return {
             "error": f"Failed to perform retrieval with reranking: {str(e)}",
-            "reranked_results": [],
-            "similarity_results": []
+            "reranked_results": fallback_results,
+            "similarity_results": [{'metadata': r['metadata'], 'score': r['score']} for r in results.get('matches', [])[:top_k]]
         }
 
 class RetrievalQuery(BaseModel):
