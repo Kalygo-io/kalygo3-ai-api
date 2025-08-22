@@ -165,30 +165,7 @@ async def reranking_search(
             }
             serialized_final_results.append(serialized_result)
         
-        # Ensure reranked results are also shown in the similarity search results for better UX
-        # This allows users to see where each reranked result originally ranked
-        reranked_ids = {result.get('id', '') for result in serialized_final_results}
-        existing_ids = {result.get('id', '') for result in initial_similarity_results}
-        
-        # Add any reranked results that weren't in the initial similarity results
-        for result in serialized_final_results:
-            if result.get('id', '') not in existing_ids:
-                # Find the original similarity score for this result
-                original_similarity_score = None
-                for r in filtered_matches:
-                    if r.get('id', '') == result.get('id', ''):
-                        original_similarity_score = float(r.get('score', 0.0))
-                        break
-                
-                if original_similarity_score is not None:
-                    similarity_result = {
-                        'id': result.get('id', ''),
-                        'score': original_similarity_score,
-                        'metadata': result.get('metadata', {}),
-                        'similarity_score': original_similarity_score
-                    }
-                    initial_similarity_results.append(similarity_result)
-                    print(f"Debug - Added reranked result {result.get('id', '')} to similarity display with score {original_similarity_score:.3f}")
+
         
         # Debug: Print the structure of reranked results
         print(f"Debug - Reranked results structure:")
