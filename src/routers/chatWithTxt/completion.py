@@ -169,9 +169,6 @@ Chat History (most recent first):
 
 No relevant information found in the knowledge base.
 """
-
-            # Construct the general prompt as specified
-
             # Prepare chat history string (most recent to earlier)
             chat_history_str = ""
             for msg in reversed(history.messages):
