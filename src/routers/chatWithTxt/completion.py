@@ -39,6 +39,8 @@ router = APIRouter()
 async def generator(jwt: str, sessionId: str, prompt: str):
 
     print("---> generator called <---")
+    print(f"DEBUG: Session ID: {sessionId}")
+    print(f"DEBUG: Original prompt: {prompt}")
 
     try:
         #model: str = "claude-3-5-sonnet-20240620"
@@ -46,8 +48,10 @@ async def generator(jwt: str, sessionId: str, prompt: str):
         
         model: str = "gpt-4o-mini"
         llm = ChatOpenAI(model_name=model, temperature=0.2, max_tokens=1024)
+        print(f"DEBUG: Using model: {model}")
 
         conn_info = os.getenv("POSTGRES_URL")
+        print(f"DEBUG: Connecting to PostgreSQL...")
         with psycopg.connect(conn_info) as sync_connection:
 
             history = PostgresChatMessageHistory(
@@ -55,12 +59,14 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 sessionId,
                 sync_connection=sync_connection
             )
+            print(f"DEBUG: Chat history loaded, message count: {len(history.messages)}")
 
             # Generate a vector search query based on chat history and current prompt
             chat_history_text = ""
             if history.messages:
                 # Collect messages in order, but reverse for most recent first
                 reversed_messages = list(reversed(history.messages))
+                print(f"DEBUG: Processing {len(reversed_messages)} chat history messages")
                 for message in reversed_messages:
                     if hasattr(message, 'type') and message.type == 'human':
                         chat_history_text += f"Human: {message.content}\n"
@@ -69,6 +75,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                     else:
                         if hasattr(message, 'content'):
                             chat_history_text += f"{message.content}\n"
+            else:
+                print("DEBUG: No chat history found")
 
             # Model the search query prompt as below, with the prompt at the top and most recent messages first
             summary_prompt = f"""You are an expert at transforming chat history and user prompts into effective search queries for a knowledge base.
@@ -82,19 +90,25 @@ Chat History (most recent first):
 {chat_history_text}
 """
 
+            print("DEBUG: Generating search query from LLM...")
             # Use the same LLM to generate the search query
             search_query_response = llm.invoke(summary_prompt)
             search_query = search_query_response.content.strip()
             
             print()
             print(f"Generated search query: {search_query}")
+            print(f"DEBUG: Search query length: {len(search_query)} characters")
             print()
 
             # Use the generated search query for embedding instead of the original prompt
+            print("DEBUG: Fetching embedding for search query...")
             embedding = await fetch_embedding(jwt, search_query) # fetch embedding from embedding service
+            print(f"DEBUG: Embedding fetched, vector length: {len(embedding)}")
 
             index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
+            print(f"DEBUG: Pinecone index initialized: {os.getenv('PINECONE_ALL_MINILM_L6_V2_INDEX')}")
 
+            print("DEBUG: Performing Pinecone similarity search...")
             results = index.query(
                 vector=embedding,
                 top_k=200,
@@ -103,27 +117,36 @@ Chat History (most recent first):
                 namespace='chat_with_txt'
             )
 
+            print(f"DEBUG: Pinecone search completed")
+            print(f"DEBUG: Raw Pinecone matches count: {len(results['matches'])}")
+
             # Check if we have any matches from similarity search
             if not results['matches']:
+                print("DEBUG: No Pinecone matches found - skipping reranking")
                 # No matches found, skip re-ranking and continue with empty results
                 reranked_matches = []
             else:
+                print("DEBUG: Pinecone matches found - proceeding to reranking")
                 # Prepare documents and query for Cohere Rerank 3.5
                 cohere_api_key = os.getenv("COHERE_API_KEY")
                 if not cohere_api_key:
+                    print("DEBUG: ERROR - COHERE_API_KEY not set")
                     raise Exception("COHERE_API_KEY not set in environment variables")
 
                 # Gather the documents to rerank
                 docs = []
                 doc_metadatas = []
                 similarity_scores = []
-                for r in results['matches']:
+                print(f"DEBUG: Preparing {len(results['matches'])} documents for reranking")
+                for i, r in enumerate(results['matches']):
                     content = r['metadata'].get('content', '')
                     docs.append(content)
                     doc_metadatas.append(r['metadata'])
                     similarity_scores.append(r['score'])  # Store Pinecone similarity score
+                    print(f"DEBUG: Document {i+1} - Score: {r['score']:.4f}, Content length: {len(content)} chars")
 
                 # Call Cohere Rerank 3.5 API
+                print("DEBUG: Calling Cohere Rerank API...")
                 cohere_url = "https://api.cohere.ai/v1/rerank"
                 headers = {
                     "Authorization": f"Bearer {cohere_api_key}",
@@ -135,12 +158,17 @@ Chat History (most recent first):
                     "documents": docs,
                     "top_n": min(20, len(docs))
                 }
+                print(f"DEBUG: Rerank payload - query: '{search_query}', documents: {len(docs)}, top_n: {min(20, len(docs))}")
+                
                 cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
 
                 if cohere_response.status_code != 200:
+                    print(f"DEBUG: ERROR - Cohere API returned status {cohere_response.status_code}")
+                    print(f"DEBUG: Cohere response: {cohere_response.text}")
                     raise Exception(f"Cohere Rerank API error: {cohere_response.text}")
 
                 rerank_results = cohere_response.json()
+                print(f"DEBUG: Cohere rerank successful, returned {len(rerank_results.get('results', []))} results")
 
                 reranked_matches = []
                 for item in rerank_results.get("results", []):
@@ -149,6 +177,8 @@ Chat History (most recent first):
                     similarity_score = similarity_scores[idx]  # Get corresponding similarity score
                     metadata = doc_metadatas[idx]
 
+                    print(f"DEBUG: Rerank result {idx+1} - Relevance: {relevance_score:.4f}, Similarity: {similarity_score:.4f}")
+
                     # Only keep matches with relevance score above 0.2 (20%)
                     if relevance_score > 0.1:
                         reranked_matches.append({
@@ -156,19 +186,28 @@ Chat History (most recent first):
                             "relevance_score": relevance_score,
                             "similarity_score": similarity_score
                         })
+                        print(f"DEBUG: Added match {idx+1} to final results (relevance: {relevance_score:.4f})")
+                    else:
+                        print(f"DEBUG: Skipped match {idx+1} due to low relevance ({relevance_score:.4f})")
+
+            print(f"DEBUG: Final reranked matches count: {len(reranked_matches)}")
 
             for match in reranked_matches:
                 relevance_score = match["relevance_score"]
                 similarity_score = match["similarity_score"]
                 content = match["metadata"].get("content", "")
+                print(f"DEBUG: Final match - Relevance: {relevance_score:.4f}, Similarity: {similarity_score:.4f}, Content length: {len(content)}")
 
             if reranked_matches:
                 relevant_knowledge = f"""{"\n".join([f"### RERANKED CHUNK {idx + 1} \n\n{match['metadata']['content']}\n" for idx, match in enumerate(reranked_matches)])}"""
+                print(f"DEBUG: Knowledge base content prepared with {len(reranked_matches)} chunks")
             else:
                 relevant_knowledge = f"""# RELEVANT KNOWLEDGE
 
 No relevant information found in the knowledge base.
 """
+                print("DEBUG: No relevant knowledge found - using empty knowledge base")
+
             # Prepare chat history string (most recent to earlier)
             chat_history_str = ""
             for msg in reversed(history.messages):
@@ -213,27 +252,34 @@ Answer the prompt to the best of your ability given the past history of messages
                 HumanMessage(content=general_prompt)
             ]
 
+            print("DEBUG: Starting LLM streaming...")
             async for evt in llm.astream_events(messages, version="v1", config={"callbacks": callbacks}, model=model):
                 if evt["event"] == "on_chat_model_start":
+                    print("DEBUG: LLM started - adding user message to history")
                     history.add_user_message(prompt)
 
                     # Include re-ranked matches in the response
                     matches_data = []
-                    for match in reranked_matches:
-                        matches_data.append({
+                    print(f"DEBUG: Preparing {len(reranked_matches)} reranked matches for client response")
+                    for i, match in enumerate(reranked_matches):
+                        match_data = {
                             "chunk_id": match["metadata"].get("chunk_id", "N/A"),
                             "total_chunks": match["metadata"].get("total_chunks", "N/A"),
                             "relevance_score": match["relevance_score"],
                             "similarity_score": match["similarity_score"],
                             "content": match["metadata"].get("content", ""),
                             "filename": match["metadata"].get("filename", "N/A")
-                        })
+                        }
+                        matches_data.append(match_data)
+                        print(f"DEBUG: Match {i+1} - Chunk ID: {match_data['chunk_id']}, Relevance: {match_data['relevance_score']:.4f}, Filename: {match_data['filename']}")
 
-                    yield json.dumps({
+                    response_data = {
                         "event": "on_chat_model_start",
                         "reranked_chunks": matches_data,
                         "kb_search_query": search_query
-                    }, separators=(',', ':'))
+                    }
+                    print(f"DEBUG: Sending on_chat_model_start event with {len(matches_data)} chunks")
+                    yield json.dumps(response_data, separators=(',', ':'))
 
                 elif evt["event"] == "on_chat_model_stream":
                     yield json.dumps({
@@ -252,6 +298,10 @@ Answer the prompt to the best of your ability given the past history of messages
                         "event": "on_chat_model_end"
                     }, separators=(',', ':'))
     except Exception as e:
+        print(f"DEBUG: ERROR in generator function: {str(e)}")
+        print(f"DEBUG: Exception type: {type(e).__name__}")
+        import traceback
+        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
         # Yield an error event
         yield json.dumps({
             "event": "event_stream_error",
@@ -261,5 +311,10 @@ Answer the prompt to the best of your ability given the past history of messages
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(prompt: ChatSessionPrompt, decoded_jwt: jwt_dependency, request: Request):
+    print(f"DEBUG: Completion endpoint called")
+    print(f"DEBUG: Session ID: {prompt.sessionId}")
+    print(f"DEBUG: Content length: {len(prompt.content)}")
+    print(f"DEBUG: JWT present: {bool(request.cookies.get('jwt'))}")
+    
     jwt = request.cookies.get("jwt")
     return StreamingResponse(generator(jwt, prompt.sessionId, prompt.content), media_type='text/event-stream') 
