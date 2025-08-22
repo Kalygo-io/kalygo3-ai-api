@@ -82,13 +82,10 @@ async def reranking_search(
         # Get Pinecone index
         index = pc.Index(index_name)
         
-        # Perform initial similarity search with a larger pool for reranking
-        # We want to show top_k_for_similarity in the first stage, but rerank from a broader pool
-        rerank_pool_size = max(query.top_k_for_similarity * 3, 20)  # Get 3x more candidates for reranking
-        
+        # Perform initial similarity search to get top_k_for_similarity results
         initial_results = index.query(
             vector=embedding,
-            top_k=rerank_pool_size,  # Get a larger pool for reranking
+            top_k=query.top_k_for_similarity,  # Get exactly top_k_for_similarity results
             include_values=False,
             include_metadata=True,
             namespace=namespace
@@ -122,7 +119,7 @@ async def reranking_search(
         
         # Store top_k_for_similarity results for comparison (first stage)
         initial_similarity_results = []
-        for r in filtered_matches[:query.top_k_for_similarity]:
+        for r in filtered_matches:
             result = {
                 'id': r.get('id', ''),
                 'score': float(r.get('score', 0.0)),  # This is the similarity score
@@ -135,12 +132,11 @@ async def reranking_search(
         print(f"Debug - Initial matches: {len(filtered_matches)}")
         print(f"Debug - top_k_for_similarity: {query.top_k_for_similarity}")
         print(f"Debug - top_k_for_rerank: {query.top_k_for_rerank}")
-        print(f"Debug - Rerank pool size: {rerank_pool_size}")
+
         print(f"Debug - Top {query.top_k_for_similarity} similarity results count: {len(initial_similarity_results)}")
         
-        # Perform re-ranking using a broader pool of candidates for more dramatic reordering
-        # Use more candidates for reranking to allow lower-ranked similarity results to rise to the top
-        rerank_candidates = filtered_matches[:rerank_pool_size]
+        # Perform re-ranking using the top_k_for_similarity results
+        rerank_candidates = filtered_matches
         print(f"Debug - Using {len(rerank_candidates)} candidates for reranking (vs {query.top_k_for_rerank} requested)")
         
         reranked_results = await perform_reranking(query.query, rerank_candidates, jwt)
