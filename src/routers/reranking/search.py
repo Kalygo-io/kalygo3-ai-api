@@ -58,7 +58,6 @@ class Query(BaseModel):
 async def reranking_search(
     query: Query,
     namespace: str = "reranking",
-    decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
@@ -83,10 +82,13 @@ async def reranking_search(
         # Get Pinecone index
         index = pc.Index(index_name)
         
-        # Perform initial similarity search with top_k_for_similarity to show in first stage
+        # Perform initial similarity search with a larger pool for reranking
+        # We want to show top_k_for_similarity in the first stage, but rerank from a broader pool
+        rerank_pool_size = max(query.top_k_for_similarity * 3, 20)  # Get 3x more candidates for reranking
+        
         initial_results = index.query(
             vector=embedding,
-            top_k=query.top_k_for_similarity,  # Get results for first stage display
+            top_k=rerank_pool_size,  # Get a larger pool for reranking
             include_values=False,
             include_metadata=True,
             namespace=namespace
@@ -118,7 +120,7 @@ async def reranking_search(
         else:
             filtered_matches = initial_results['matches']
         
-        # Store initial similarity search results for comparison (show top_k_for_similarity results in first stage)
+        # Store top_k_for_similarity results for comparison (first stage)
         initial_similarity_results = []
         for r in filtered_matches[:query.top_k_for_similarity]:
             result = {
@@ -133,13 +135,24 @@ async def reranking_search(
         print(f"Debug - Initial matches: {len(filtered_matches)}")
         print(f"Debug - top_k_for_similarity: {query.top_k_for_similarity}")
         print(f"Debug - top_k_for_rerank: {query.top_k_for_rerank}")
-        print(f"Debug - Initial similarity results count: {len(initial_similarity_results)}")
+        print(f"Debug - Rerank pool size: {rerank_pool_size}")
+        print(f"Debug - Top {query.top_k_for_similarity} similarity results count: {len(initial_similarity_results)}")
         
-        # Perform re-ranking using top_k_for_rerank candidates from the initial results
-        reranked_results = await perform_reranking(query.query, filtered_matches[:query.top_k_for_rerank], jwt)
+        # Perform re-ranking using a broader pool of candidates for more dramatic reordering
+        # Use more candidates for reranking to allow lower-ranked similarity results to rise to the top
+        rerank_candidates = filtered_matches[:rerank_pool_size]
+        print(f"Debug - Using {len(rerank_candidates)} candidates for reranking (vs {query.top_k_for_rerank} requested)")
+        
+        reranked_results = await perform_reranking(query.query, rerank_candidates, jwt)
         
         # Take only the top_k_for_rerank results after re-ranking (show in second stage)
+        # This ensures we respect the top_k_for_rerank parameter from the request
         final_results = reranked_results[:query.top_k_for_rerank]
+        print(f"Debug - Returning top {len(final_results)} reranked results (requested: {query.top_k_for_rerank})")
+        
+        # If we have fewer reranked results than requested, log it for debugging
+        if len(final_results) < query.top_k_for_rerank:
+            print(f"Debug - Warning: Only {len(final_results)} reranked results available, requested {query.top_k_for_rerank}")
         
         # Ensure reranked results are properly serialized
         serialized_final_results = []
@@ -151,6 +164,31 @@ async def reranking_search(
                 'relevance_score': float(result.get('relevance_score', 0.0))  # Cohere relevance score
             }
             serialized_final_results.append(serialized_result)
+        
+        # Ensure reranked results are also shown in the similarity search results for better UX
+        # This allows users to see where each reranked result originally ranked
+        reranked_ids = {result.get('id', '') for result in serialized_final_results}
+        existing_ids = {result.get('id', '') for result in initial_similarity_results}
+        
+        # Add any reranked results that weren't in the initial similarity results
+        for result in serialized_final_results:
+            if result.get('id', '') not in existing_ids:
+                # Find the original similarity score for this result
+                original_similarity_score = None
+                for r in filtered_matches:
+                    if r.get('id', '') == result.get('id', ''):
+                        original_similarity_score = float(r.get('score', 0.0))
+                        break
+                
+                if original_similarity_score is not None:
+                    similarity_result = {
+                        'id': result.get('id', ''),
+                        'score': original_similarity_score,
+                        'metadata': result.get('metadata', {}),
+                        'similarity_score': original_similarity_score
+                    }
+                    initial_similarity_results.append(similarity_result)
+                    print(f"Debug - Added reranked result {result.get('id', '')} to similarity display with score {original_similarity_score:.3f}")
         
         # Debug: Print the structure of reranked results
         print(f"Debug - Reranked results structure:")
@@ -223,10 +261,10 @@ async def perform_reranking(query: str, candidates: list, jwt: str) -> list:
             "model": "rerank-v3.5",
             "query": query,
             "documents": docs,
-            "top_n": min(len(docs), 20)  # Limit to 20 or fewer documents
+            "top_n": len(docs)  # Rerank all documents to get full range
         }
         
-        print(f"Sending to Cohere: query='{query}', {len(docs)} documents, top_n={min(len(docs), 20)}")
+        print(f"Sending to Cohere: query='{query}', {len(docs)} documents, top_n={len(docs)}")
         print(f"Cohere API key (first 10 chars): {cohere_api_key[:10]}...")
         
         cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
@@ -258,17 +296,15 @@ async def perform_reranking(query: str, candidates: list, jwt: str) -> list:
             
             print(f"Result {idx}: relevance_score={relevance_score:.3f}, similarity_score={similarity_score:.3f}")
             
-            # Lower the threshold to be more permissive
-            if relevance_score > 0.0:  # Lowered from 0.1 to 0.05 (5% threshold)
-                reranked_candidates.append({
-                    'id': candidates[idx].get('id', ''),
-                    'metadata': metadata,
-                    'similarity_score': similarity_score,  # Original similarity score
-                    'relevance_score': relevance_score,  # New relevance score from Cohere
-                })
-                print(f"  Added candidate: similarity={similarity_score:.3f}, relevance={relevance_score:.3f}")
-            else:
-                print(f"  Skipping result {idx} due to low relevance score: {relevance_score:.3f}")
+            # Include all results to show the full range of reranking effects
+            # This allows lower-ranked similarity results to potentially rise to the top
+            reranked_candidates.append({
+                'id': candidates[idx].get('id', ''),
+                'metadata': metadata,
+                'similarity_score': similarity_score,  # Original similarity score
+                'relevance_score': relevance_score,  # New relevance score from Cohere
+            })
+            print(f"  Added candidate: similarity={similarity_score:.3f}, relevance={relevance_score:.3f}")
         
         print(f"After filtering: {len(reranked_candidates)} candidates")
         
