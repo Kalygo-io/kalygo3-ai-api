@@ -20,6 +20,12 @@ spec:
                   name: PINECONE_API_KEY
                   key: latest      
 
+            - name: COHERE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: COHERE_API_KEY
+                  key: latest      
+
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
