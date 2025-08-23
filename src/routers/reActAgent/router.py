@@ -22,6 +22,9 @@ from langchain_openai import ChatOpenAI
 from langchain_postgres import PostgresChatMessageHistory
 from langchain.memory import ConversationBufferMemory
 
+from .tools.reflect_tool import reflect_tool
+from .tools.deliberate_tool import deliberate_tool
+
 from src.deps import jwt_dependency
 
 limiter = Limiter(key_func=get_remote_address)
@@ -48,7 +51,8 @@ async def generator(sessionId: str, prompt: str):
     # Get the prompt to use - you can modify this!
     prompt_template = hub.pull("hwchase17/openai-tools-agent")
     # tools = [serp_tool, gptuesday_tool]
-    tools = [gptuesday_tool, tad_tool]
+    # tools = [gptuesday_tool, tad_tool]
+    tools = [reflect_tool, deliberate_tool]
     
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
@@ -67,7 +71,7 @@ async def generator(sessionId: str, prompt: str):
         memory_key="chat_history", chat_memory=message_history, return_messages=True, output_key="output"
     )
 
-    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory).with_config(
+    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=10).with_config(
         {
             "run_name": "Agent",
             "callbacks": callbacks

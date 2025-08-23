@@ -108,13 +108,15 @@ async def generator(sessionId: str, prompt: str):
                 print()
                 print("--")
                 print(
-                    f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}"
+                    f"Done agent: {event['name']}"
                 )
+                print(len(retrieval_calls))
+                
                 if content:
                 # Empty content in the context of OpenAI means
                 # that the model is asking for a tool to be invoked.
                 # So we only print non-empty content
-                    print(content, end="|")
+                    # print(content, end="|")
                     yield json.dumps({
                         "event": "on_chain_end",
                         "data": content,
