@@ -14,12 +14,6 @@ spec:
                   name: POSTGRES_URL
                   key: latest
 
-            - name: PINECONE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: PINECONE_API_KEY
-                  key: latest      
-
             - name: COHERE_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -127,28 +121,24 @@ spec:
                   name: EMBEDDINGS_API_URL
                   key: latest
             
-            # - name: PINECONE_API_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: PINECONE_API_KEY
-            #       key: latest
-            
+            # Pinecone
+
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: PINECONE_API_KEY
+                  key: latest
+
             - name: PINECONE_ALL_MINILM_L6_V2_INDEX
               valueFrom:
                 secretKeyRef:
                   name: PINECONE_ALL_MINILM_L6_V2_INDEX
                   key: latest
 
-            # - name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
-            #       key: latest
-            
-            # - name: REPLICATE_API_TOKEN
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: REPLICATE_API_TOKEN
-            #       key: latest
+            - name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
+              valueFrom:
+                secretKeyRef:
+                  name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
+                  key: latest
           ports:
             - containerPort: 8080
