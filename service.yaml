@@ -26,6 +26,12 @@ spec:
                   name: COHERE_API_KEY
                   key: latest      
 
+            - name: REPLICATE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: REPLICATE_API_TOKEN
+                  key: latest      
+
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
