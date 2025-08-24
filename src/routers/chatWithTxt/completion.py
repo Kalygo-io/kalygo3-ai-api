@@ -46,8 +46,8 @@ async def generator(jwt: str, sessionId: str, prompt: str):
         #model: str = "claude-3-5-sonnet-20240620"
         #llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
         
-        model: str = "gpt-5"
-        llm = ChatOpenAI(model_name=model, temperature=1)
+        model: str = "gpt-4o-mini"
+        llm = ChatOpenAI(model_name=model)
         print(f"DEBUG: Using model: {model}")
         
         print("DEBUG: Fetching embedding for prompt...")
