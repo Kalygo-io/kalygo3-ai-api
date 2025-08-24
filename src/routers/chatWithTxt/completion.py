@@ -60,7 +60,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
         print("DEBUG: Performing Pinecone similarity search...")
         results = index.query(
             vector=embedding,
-            top_k=10,
+            top_k=20,
             include_values=False,
             include_metadata=True,
             namespace='chat_with_txt'
@@ -105,9 +105,9 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 "model": "rerank-v3.5",
                 "query": prompt,
                 "documents": docs,
-                "top_n": min(5, len(docs))
+                "top_n": min(10, len(docs))
             }
-            print(f"DEBUG: Rerank payload - query: '{prompt}', documents: {len(docs)}, top_n: {min(20, len(docs))}")
+            print(f"DEBUG: Rerank payload - query: '{prompt}', documents: {len(docs)}, top_n: {min(10, len(docs))}")
             
             cohere_response = requests.post(cohere_url, headers=headers, json=rerank_payload)
 
