@@ -7,6 +7,13 @@ spec:
     spec:
       containers:
         - image: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
+          resources:
+            limits:
+              memory: "2Gi"  # Increase this value as needed
+              cpu: "2"       # Optional: also set CPU limits
+            requests:
+              memory: "1Gi"  # Minimum memory request
+              cpu: "1"       # Optional: minimum CPU request
           env:
             - name: POSTGRES_URL
               valueFrom:
