@@ -26,7 +26,7 @@ load_dotenv()
 
 callbacks = [
     LangChainTracer(
-    project_name="chat-with-txt",
+    project_name="search-with-reranking",
     client=Client(
         api_url=os.getenv("LANGSMITH_ENDPOINT"),
         api_key=os.getenv("LANGSMITH_API_KEY"),
