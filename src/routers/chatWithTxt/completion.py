@@ -60,7 +60,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
         print("DEBUG: Performing Pinecone similarity search...")
         results = index.query(
             vector=embedding,
-            top_k=200,
+            top_k=20,
             include_values=False,
             include_metadata=True,
             namespace='chat_with_txt'
