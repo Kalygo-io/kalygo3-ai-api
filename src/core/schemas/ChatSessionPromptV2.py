@@ -7,5 +7,7 @@ class Message(BaseModel):
     content: str
     timestamp: Optional[datetime] = None
 
-class MessagesList(BaseModel):
-    messages: List[Message]
+class ChatSessionPromptV2(BaseModel):
+    chatHistory: List[Message]
+    prompt: str
+    sessionId: str

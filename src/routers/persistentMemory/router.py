@@ -8,7 +8,6 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.core.schemas.ChatSessionPromptV2 import ChatSessionPromptV2
-from src.core.schemas.Prompt import Prompt
 
 import json
 import os
@@ -84,5 +83,4 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2):
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(chatSessionPrompt: ChatSessionPromptV2, jwt: jwt_dependency, request: Request):
-# def prompt(chatSessionPrompt: Prompt, jwt: jwt_dependency, request: Request):
     return StreamingResponse(generator(chatSessionPrompt), media_type='text/event-stream')

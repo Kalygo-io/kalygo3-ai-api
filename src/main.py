@@ -9,6 +9,7 @@ from slowapi.util import get_remote_address
 
 from .routers import (
   basicMemory,
+  persistentMemory,
   naiveRagChat,
   chatWithTxt,
   agenticRagAgent,
@@ -74,6 +75,11 @@ app.include_router(
 app.include_router(
     basicMemory.router,
     prefix="/api/basic-memory",
+)
+
+app.include_router(
+    persistentMemory.router,
+    prefix="/api/persistent-memory",
 )
 
 app.include_router(
