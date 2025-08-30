@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Request
 from langchain_openai import ChatOpenAI
 from slowapi import Limiter
