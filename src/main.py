@@ -39,7 +39,8 @@ debugpy.listen(("0.0.0.0", 5678))
 
 app = FastAPI(docs_url=None, redoc_url=None)
 
-Base.metadata.create_all(bind=engine)
+# Let Alembic handle all database schema changes
+# Base.metadata.create_all(bind=engine)
 
 origins = [
     "https://kalygo.io",

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import ChatAppSession, ChatMessage, Account
+from src.db.models import ChatAppSession, ChatMessage, ChatAppMessage, Account
 import uuid
 from datetime import datetime
 
@@ -26,6 +26,12 @@ def to_camel(s: str) -> str:
     parts = s.split('_')
     return parts[0] + ''.join(p.title() for p in parts[1:])
 
+class ChatAppMessageResponse(BaseModel):
+    id: int
+    role: str
+    content: str
+    createdAt: datetime
+
 class ChatAppSessionResponse(BaseModel):
     id: int
     sessionId: uuid.UUID
@@ -33,6 +39,15 @@ class ChatAppSessionResponse(BaseModel):
     accountId: int
     createdAt: datetime
     title: Optional[str] = None
+
+class ChatAppSessionWithMessagesResponse(BaseModel):
+    id: int
+    sessionId: uuid.UUID
+    chatAppId: str
+    accountId: int
+    createdAt: datetime
+    title: Optional[str] = None
+    messages: List[ChatAppMessageResponse] = []
 
     class Config:
         from_attributes = True
@@ -91,51 +106,99 @@ async def create_session(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-# @router.get("/sessions", response_model=List[ChatAppSessionResponse])
-# @limiter.limit("30/minute")
-# async def get_sessions(
-#     db: db_dependency,
-#     jwt: jwt_dependency,
-#     request: Request,
-#     chat_app_id: Optional[str] = None,
-#     limit: int = 50,
-#     offset: int = 0
-# ):
-#     """Get all sessions for the authenticated user, optionally filtered by chat_app_id"""
-#     try:
-#         query = db.query(ChatAppSession).filter(ChatAppSession.account_id == jwt['id'])
+@router.get("/sessions", response_model=List[ChatAppSessionResponse])
+@limiter.limit("30/minute")
+async def get_sessions(
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+    limit: int = 50,
+    offset: int = 0
+):
+    """Get all sessions for the authenticated user, optionally filtered by chat_app_id"""
+    try:
+        query = db.query(ChatAppSession).filter(ChatAppSession.account_id == jwt['id'])
         
-#         if chat_app_id:
-#             query = query.filter(ChatAppSession.chat_app_id == chat_app_id)
-        
-#         sessions = query.order_by(ChatAppSession.created_at.desc()).offset(offset).limit(limit).all()
-#         return sessions
-#     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        sessions = query.order_by(ChatAppSession.created_at.desc()).offset(offset).limit(limit).all()
 
-# @router.get("/sessions/{session_id}", response_model=ChatAppSessionResponse)
-# @limiter.limit("30/minute")
-# async def get_session(
-#     session_id: str,
-#     db: db_dependency,
-#     jwt: jwt_dependency,
-#     request: Request
-# ):
-#     """Get a specific session by session_id"""
-#     try:
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
+        sessions = [{
+            "id": s.id,
+            "sessionId": s.session_id,
+            "chatAppId": s.chat_app_id,
+            "accountId": s.account_id,
+            "createdAt": s.created_at,
+            "title": s.title
+        } for s in sessions]
+
+        return sessions
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/sessions/{session_id}", response_model=ChatAppSessionWithMessagesResponse)
+@limiter.limit("30/minute")
+async def get_session(
+    session_id: str,
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request
+):
+    """Get a specific session by session_id with its messages"""
+    try:
+
+        print('Get a specific session by session_id with its messages')
+
+        # Convert string to UUID for database query
+        session_uuid = uuid.UUID(session_id)
         
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        session = db.query(ChatAppSession).filter(
+            ChatAppSession.session_id == session_uuid,
+            ChatAppSession.account_id == jwt['id']
+        ).first()
         
-#         return session
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        
+        # Get all messages for this session
+        messages = db.query(ChatAppMessage).filter(
+            ChatAppMessage.chat_app_session_id == session.id
+        ).order_by(ChatAppMessage.created_at.asc()).all()
+
+        # Convert message fields to camelCase for each message
+        def to_camel(s: str) -> str:
+            parts = s.split('_')
+            return parts[0] + ''.join(p.title() for p in parts[1:])
+
+        def convert_shape_of_message(msg):
+            
+            print('convert_shape_of_message', msg)
+
+            return {
+                "id": msg.id,
+                "role": msg.message['role'],
+                "content": msg.message['content'],
+                "createdAt": msg.created_at
+            }
+
+        messages = [convert_shape_of_message(m) for m in messages]
+        
+        # Create response with session and messages
+        response_data = {
+            "id": session.id,
+            "sessionId": session.session_id,
+            "chatAppId": session.chat_app_id,
+            "accountId": session.account_id,
+            "createdAt": session.created_at,
+            "title": session.title,
+            "messages": messages
+        }
+        
+        return response_data
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid session ID format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 # @router.put("/sessions/{session_id}", response_model=ChatAppSessionResponse)
 # @limiter.limit("10/minute")
@@ -169,33 +232,33 @@ async def create_session(
 #         db.rollback()
 #         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-# @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-# @limiter.limit("10/minute")
-# async def delete_session(
-#     session_id: str, 
-#     db: db_dependency, 
-#     jwt: jwt_dependency, 
-#     request: Request
-# ):
-#     """Delete a session and all its messages"""
-#     try:
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def delete_session(
+    session_id: str, 
+    db: db_dependency, 
+    jwt: jwt_dependency, 
+    request: Request
+):
+    """Delete a session and all its messages"""
+    try:
+        session = db.query(ChatAppSession).filter(
+            ChatAppSession.session_id == session_id,
+            ChatAppSession.account_id == jwt['id']
+        ).first()
         
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
         
-#         db.delete(session)
-#         db.commit()
+        db.delete(session)
+        db.commit()
         
-#         return None
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         db.rollback()
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 # CRUD Operations for ChatMessage
 
