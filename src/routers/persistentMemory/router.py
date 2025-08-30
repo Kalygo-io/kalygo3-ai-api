@@ -45,6 +45,8 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2):
     model: str = "claude-3-5-sonnet-20240620"
     llm = ChatAnthropic(model_name=model, temperature=0.2, max_tokens=1024)
 
+    print('chatSessionPrompt.sessionId', chatSessionPrompt.sessionId)
+
     # conn_info = os.getenv("POSTGRES_URL")
     # with psycopg.connect(conn_info) as sync_connection:
         # history = PostgresChatMessageHistory(
