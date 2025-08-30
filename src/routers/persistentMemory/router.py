@@ -28,7 +28,7 @@ load_dotenv()
 
 callbacks = [
   LangChainTracer(
-    project_name="basic-memory",
+    project_name="persistent-memory",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")
@@ -47,18 +47,17 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2):
 
     print('chatSessionPrompt.sessionId', chatSessionPrompt.sessionId)
 
-    # conn_info = os.getenv("POSTGRES_URL")
-    # with psycopg.connect(conn_info) as sync_connection:
-        # history = PostgresChatMessageHistory(
-        #     'chat_history', # table name
-        #     sessionId,
-        #     sync_connection=sync_connection
-        # )
-
-    print("DEBUGGING MESSAGE LIST")
-    for message in chatSessionPrompt.chatHistory:
-        print(message)
-    print("DEBUGGING MESSAGE LIST END")
+    ###
+    if not getattr(chatSessionPrompt, "sessionId", None):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Missing sessionId",
+                "message": "A valid sessionId must be provided to continue the chat session.",
+                "hint": "Please ensure your request includes a sessionId field."
+            }
+        )
 
     system_message = [("human", "You're an assistant. Bold key terms in your responses.")]
     chat_history_messages = [(msg.role, msg.content) for msg in chatSessionPrompt.chatHistory]

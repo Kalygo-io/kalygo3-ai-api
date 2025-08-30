@@ -25,6 +25,7 @@ from .routers import (
   designAndRunSwarm,
   similaritySearch,
   reranking,
+  chatAppSessions,
 )
 
 from src.db.database import Base, engine
@@ -154,4 +155,10 @@ app.include_router(
     reranking.router,
     prefix="/api/reranking",
     tags=['Reranking'],
+)
+
+app.include_router(
+    chatAppSessions.router,
+    prefix="/api/chat-app-sessions",
+    tags=['Chat App Sessions'],
 )

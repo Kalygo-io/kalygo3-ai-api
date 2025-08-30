@@ -11,6 +11,7 @@ class Account(Base):
     reset_token = Column(String)
 
     logins = relationship('Logins', back_populates='account')
+    chat_app_sessions = relationship('ChatAppSession', back_populates='account')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -34,3 +35,30 @@ class ChatHistory(Base):
     session_id = Column(UUID, nullable=False)
     message = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
+
+class ChatAppSession(Base):
+    __tablename__ = 'chat_app_sessions'
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(UUID, unique=True, index=True)
+    chat_app_id = Column(String, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    title = Column(String)
+    
+    account = relationship('Account', back_populates='chat_app_sessions')
+    messages = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<ChatAppSession {self.session_id}>'
+
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
+    id = Column(Integer, primary_key=True, index=True)
+    message = Column(JSON)
+    session_id = Column(Integer, ForeignKey('chat_app_sessions.id'), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    
+    session = relationship('ChatAppSession', back_populates='messages')
+    
+    def __repr__(self):
+        return f'<ChatMessage {self.id}>'
