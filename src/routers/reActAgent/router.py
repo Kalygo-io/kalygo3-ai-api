@@ -1,5 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Request
+import uuid
+from fastapi import APIRouter, HTTPException, Request
+
+from src.db.models import ChatAppMessage, ChatAppSession
 
 from .tools import gptuesday_tool, tad_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
@@ -9,23 +12,21 @@ from slowapi.util import get_remote_address
 
 import json
 import os
-import psycopg
 
 from fastapi.responses import StreamingResponse
 
 from langchain.callbacks import LangChainTracer
 from langsmith import Client
-
 from langchain import hub
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
-from langchain_postgres import PostgresChatMessageHistory
 from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import ChatMessageHistory
 
 from .tools.reflect_tool import reflect_tool
 from .tools.deliberate_tool import deliberate_tool
 
-from src.deps import jwt_dependency
+from src.deps import db_dependency, jwt_dependency
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -45,26 +46,77 @@ callbacks = [
 
 router = APIRouter()
 
-async def generator(sessionId: str, prompt: str):
+async def generator(sessionId: str, prompt: str, db, jwt):
     llm = ChatOpenAI(temperature=0, streaming=True, model="gpt-4o-mini")
 
-    # Get the prompt to use - you can modify this!
-    prompt_template = hub.pull("hwchase17/openai-tools-agent")
+    #v#v#v#
+    try:
+        # Convert string to UUID for database query
+        session_uuid = uuid.UUID(sessionId)
+        
+        # Verify the session exists and belongs to the user
+        session = db.query(ChatAppSession).filter(
+            ChatAppSession.session_id == session_uuid,
+            ChatAppSession.account_id == jwt['id']
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "Session not found",
+                    "message": "The specified session was not found or does not belong to you.",
+                    "hint": "Please check the sessionId or create a new session."
+                }
+            )
+        
+        # Get all messages for this session from chat_app_messages table
+        db_messages = db.query(ChatAppMessage).filter(
+            ChatAppMessage.chat_app_session_id == session.id
+        ).order_by(ChatAppMessage.created_at.asc()).all()
+        
+        print(f"Found {len(db_messages)} existing messages for session {sessionId}")
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Invalid sessionId format",
+                "message": "The sessionId must be a valid UUID format.",
+                "hint": "Please provide a valid UUID for the sessionId."
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Database error",
+                "message": "Failed to retrieve session messages.",
+                "hint": str(e)
+            }
+        )
+    #^#^#
+
+    #v#v#v#
+    message_history = ChatMessageHistory()
+    for msg in db_messages:
+        message_data = msg.message
+        # Assuming message structure has 'role' and 'content' fields
+        if isinstance(message_data, dict) and 'role' in message_data and 'content' in message_data:
+            message_history.add_message(
+                {"role": message_data['role'], "content": message_data['content']}
+            )
+    #^#^#^#
+
+    prompt_template = hub.pull("hwchase17/openai-tools-agent") # Get the prompt to use - you can modify this!
     # tools = [serp_tool, gptuesday_tool]
     # tools = [gptuesday_tool, tad_tool]
     tools = [reflect_tool, deliberate_tool]
     
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
-    )
-    
-    conn_info = os.getenv("POSTGRES_URL")
-    sync_connection = psycopg.connect(conn_info)
-
-    message_history = PostgresChatMessageHistory(
-        'chat_history', # table name
-        sessionId,
-        sync_connection=sync_connection
     )
     
     memory = ConversationBufferMemory(
@@ -108,16 +160,51 @@ async def generator(sessionId: str, prompt: str):
                 print(
                     f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}"
                 )
+                
                 if content:
                 # Empty content in the context of OpenAI means
                 # that the model is asking for a tool to be invoked.
                 # So we only print non-empty content
+                    try: # Store the AI's response into the session message history
+                        ai_message = ChatAppMessage(
+                            message={
+                                "role": "ai",
+                                "content": content
+                            },
+                            chat_app_session_id=session.id
+                        )
+                        db.add(ai_message)
+                        db.commit()
+                        db.refresh(ai_message)
+                        print(f"Stored AI response with ID: {ai_message.id}")
+                    except Exception as e:
+                        print(f"Failed to store AI response: {e}")
+                        db.rollback()
+
                     print(content, end="|")
+
                     yield json.dumps({
                         "event": "on_chain_end",
                         "data": content
                     }, separators=(',', ':'))
         if kind == "on_chat_model_start":
+            try: # Store the latest prompt into the session message history
+                user_message = ChatAppMessage(
+                    message={
+                        "role": "human",
+                        "content": prompt
+                    },
+                    chat_app_session_id=session.id
+                )
+                db.add(user_message)
+                db.commit()
+                db.refresh(user_message)
+                user_message_id = user_message.id
+                print(f"Stored user message with ID: {user_message_id}")
+            except Exception as e:
+                print(f"Failed to store user message: {e}")
+                db.rollback()
+            
             yield json.dumps({
                 "event": "on_chat_model_start",
             }, separators=(',', ':'))
@@ -132,6 +219,9 @@ async def generator(sessionId: str, prompt: str):
                     "event": "on_chat_model_stream",
                     "data": content
                 }, separators=(',', ':'))
+        elif kind == "on_chat_model_end":
+            print("!!! on_chat_model_end !!!")
+            # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
         elif kind == "on_tool_start":
             print("--")
             print(
@@ -151,5 +241,5 @@ async def generator(sessionId: str, prompt: str):
 
 @router.post("/completion")
 @limiter.limit("10/minute")
-def prompt(prompt: ChatSessionPrompt, jwt: jwt_dependency, request: Request):
-    return StreamingResponse(generator(prompt.sessionId, prompt.content), media_type='text/event-stream')
+def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
+    return StreamingResponse(generator(chatSessionPrompt.sessionId, chatSessionPrompt.prompt, db, jwt), media_type='text/event-stream')

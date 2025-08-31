@@ -7,7 +7,7 @@ from langchain_postgres import PostgresChatMessageHistory
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from src.core.schemas.ChatSessionPromptV2 import ChatSessionPromptV2
+from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 import json
 import os
@@ -41,7 +41,7 @@ callbacks = [
 
 router = APIRouter()
 
-async def generator(chatSessionPrompt: ChatSessionPromptV2, db, jwt):
+async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
     
     # model: str = "gpt-4o-mini"
     # llm = ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
@@ -96,7 +96,6 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2, db, jwt):
             }
         )
 
-    # 2. Build a prompt for the LLM
     system_message = [("human", "You're an assistant. Bold key terms in your responses.")]
     
     # Convert database messages to chat format
@@ -116,8 +115,7 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2, db, jwt):
     
     async for evt in llm.astream_events(all_messages, version="v1", config={"callbacks": callbacks}, model=model):
         if evt["event"] == "on_chat_model_start":
-            # 3. Store the latest prompt into the session message history
-            try:
+            try: # Store the latest prompt into the session message history
                 user_message = ChatAppMessage(
                     message={
                         "role": "human",
@@ -148,8 +146,7 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2, db, jwt):
             }, separators=(',', ':'))
 
         elif evt["event"] == "on_chat_model_end":
-            # 4. Store the AI's response
-            try:
+            try: # Store the AI's response into the session message history
                 ai_message = ChatAppMessage(
                     message={
                         "role": "ai",
@@ -172,7 +169,7 @@ async def generator(chatSessionPrompt: ChatSessionPromptV2, db, jwt):
 
 @router.post("/completion")
 @limiter.limit("10/minute")
-async def prompt(chatSessionPrompt: ChatSessionPromptV2, jwt: jwt_dependency, db: db_dependency, request: Request):
+async def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
 
     print('chatSessionPrompt.sessionId', chatSessionPrompt.sessionId)
 

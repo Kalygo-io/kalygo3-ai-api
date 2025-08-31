@@ -1,5 +1,5 @@
 from pydantic import BaseModel
 
 class ChatSessionPrompt(BaseModel):
-    content: str
+    prompt: str
     sessionId: str
