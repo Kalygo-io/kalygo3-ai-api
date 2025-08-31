@@ -2,440 +2,78 @@ from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import os
-import json
-import hashlib
-import time
-import asyncio
-import re
-import yaml
 from typing import List, Dict, Tuple, Any
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
-import tiktoken
-import csv
-import io
 
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
-def parse_metadata_from_file(text_content: str) -> Tuple[Dict[str, Any], str]:
-    """
-    Parse YAML metadata from the top of a file and return both metadata and content without metadata.
-    
-    Expected format:
-    - YAML metadata section at the top of the file
-    - Metadata section is delimited by --- at the beginning and end
-    - Example:
-      ---
-      video_title: "What is Ollama?"
-      video_url: "https://www.youtube.com/watch/glkQIUTCAK4"
-      tags:
-        - tutorial
-        - ollama
-      ---
-      
-      Content starts here...
-    
-    Returns:
-        Tuple of (metadata_dict, content_without_metadata)
-    """
-    metadata = {}
-    lines = text_content.split('\n')
-    content_lines = []
-    
-    # Check if file starts with YAML front matter (---)
-    if lines and lines[0].strip() == '---':
-        # Find the end of YAML section
-        yaml_end_index = -1
-        for i, line in enumerate(lines[1:], 1):
-            if line.strip() == '---':
-                yaml_end_index = i
-                break
+# @router.post("/upload")
+# @limiter.limit("50/minute")
+# async def upload_files(
+#     files: List[UploadFile] = File(..., description="Files to upload"),
+#     decoded_jwt: jwt_dependency = None,
+#     request: Request = None
+# ):
+#     """
+#     Upload .txt and .md files, chunk them and upload them to a Pinecone index.
+#     """
+#     try:
+#         if not files:
+#             raise HTTPException(status_code=400, detail="No files provided")
         
-        if yaml_end_index > 0:
-            # Extract YAML content
-            yaml_content = '\n'.join(lines[1:yaml_end_index])
+#         # Get the index name from environment variables
+#         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
+#         namespace = "similarity_search"  # Using the namespace for similaritySearch
+        
+#         # Get Pinecone index
+#         index = pc.Index(index_name)
+        
+#         # Get JWT token for embedding service
+#         jwt = request.cookies.get("jwt") if request else None
+        
+#         # Process each file
+#         file_results = []
+#         total_successful_uploads = 0
+#         total_failed_uploads = 0
+#         total_chunks_created = 0
+        
+#         for file in files:
+#             print(f"Processing file: {file.filename}")
+#             result = await process_single_file(file, jwt, index, namespace)
+#             file_results.append(result)
             
-            try:
-                # Parse YAML metadata
-                metadata = yaml.safe_load(yaml_content) or {}
-                
-                # Convert all values to strings for consistency
-                string_metadata = {}
-                for key, value in metadata.items():
-                    if isinstance(value, (list, dict)):
-                        string_metadata[key] = str(value)
-                    else:
-                        string_metadata[key] = str(value) if value is not None else ""
-                
-                metadata = string_metadata
-                
-                # Content starts after the second ---
-                content_lines = lines[yaml_end_index + 1:]
-                
-            except yaml.YAMLError as e:
-                print(f"Warning: Failed to parse YAML metadata: {e}")
-                # If YAML parsing fails, treat the whole file as content
-                content_lines = lines
-        else:
-            # No closing --- found, treat as content
-            content_lines = lines
-    else:
-        # No YAML front matter, treat as content
-        content_lines = lines
-    
-    content_without_metadata = '\n'.join(content_lines)
-    return metadata, content_without_metadata
-
-def prepend_metadata_to_chunk(chunk: str, chunk_index: int, total_chunks: int, file_metadata: Dict[str, Any], filename: str) -> str:
-    """
-    Prepend YAML front matter metadata to a chunk with additional chunk-specific metadata.
-    
-    Args:
-        chunk: The original chunk content
-        chunk_index: The index of this chunk (0-based)
-        total_chunks: Total number of chunks in the file
-        file_metadata: Metadata from the original file's YAML front matter
-        filename: The original filename
-    
-    Returns:
-        Chunk with prepended metadata
-    """
-    # Create chunk-specific metadata
-    chunk_metadata = {
-        "chunk_number": f"{chunk_index + 1} of {total_chunks}",  # 1-based for readability
-        "filename": filename,
-        "upload_timestamp_in_unix": int(time.time())
-    }
-    
-    # Combine file metadata with chunk metadata
-    combined_metadata = {**file_metadata, **chunk_metadata}
-    
-    # Convert to YAML format
-    yaml_content = yaml.dump(combined_metadata, default_flow_style=False, sort_keys=False)
-    
-    # Create the final chunk with YAML front matter
-    final_chunk = f"---\n{yaml_content}---\n\n{chunk}"
-    
-    return final_chunk
-
-def chunk_text_by_tokens(text: str, chunk_size: int = 200, overlap: int = 50) -> List[str]:
-    """
-    Chunk text into pieces of approximately chunk_size tokens with overlap.
-    Uses tiktoken for accurate token counting.
-    """
-    try:
-        # Use cl100k_base encoding (used by GPT-4, Claude, etc.)
-        encoding = tiktoken.get_encoding("cl100k_base")
-        tokens = encoding.encode(text)
+#             if result["success"]:
+#                 total_successful_uploads += result["successful_uploads"]
+#                 total_failed_uploads += result["failed_uploads"]
+#                 total_chunks_created += result["total_chunks_created"]
         
-        chunks = []
-        i = 0
+#         # Return format depends on whether it's single or multiple files
+#         if len(files) == 1:
+#             # Single file - return the result directly for backward compatibility
+#             return file_results[0]
+#         else:
+#             # Multiple files - return aggregate results
+#             return {
+#                 "success": True,
+#                 "files_processed": len(files),
+#                 "file_results": file_results,
+#                 "total_chunks_created": total_chunks_created,
+#                 "total_successful_uploads": total_successful_uploads,
+#                 "total_failed_uploads": total_failed_uploads,
+#                 "namespace": namespace
+#             }
         
-        while i < len(tokens):
-            # Take chunk_size tokens
-            chunk_tokens = tokens[i:i + chunk_size]
-            chunk_text = encoding.decode(chunk_tokens)
-            chunks.append(chunk_text)
-            
-            # Move forward by chunk_size - overlap
-            i += chunk_size - overlap
-            
-            # If we're near the end, just take the remaining tokens
-            if i + chunk_size >= len(tokens):
-                if i < len(tokens):
-                    remaining_tokens = tokens[i:]
-                    remaining_text = encoding.decode(remaining_tokens)
-                    if remaining_text.strip():  # Only add if not empty
-                        chunks.append(remaining_text)
-                break
-        
-        return chunks
-    except Exception as e:
-        # Fallback to simple character-based chunking if tiktoken fails
-        print(f"Warning: tiktoken failed, using fallback chunking: {e}")
-        return [text[i:i + chunk_size * 4] for i in range(0, len(text), chunk_size * 3)]
-
-async def generate_embedding_for_chunk(chunk: str, chunk_index: int, filename: str, jwt: str, file_metadata: Dict[str, Any] = None) -> dict:
-    """
-    Generate embedding for a single chunk and prepare vector data for storage.
-    Returns None if processing fails.
-    """
-    try:
-        # Skip empty chunks
-        if not chunk.strip():
-            return None
-        
-        # Get embedding for the chunk
-        embedding = await fetch_embedding(jwt, chunk)
-        
-        # Ensure embedding values are floats (Pinecone requirement)
-        if embedding is not None:
-            # Flatten the embedding if it's nested and convert to floats
-            def flatten_and_convert(obj):
-                if isinstance(obj, list):
-                    return [flatten_and_convert(item) for item in obj]
-                else:
-                    return float(obj)
-            
-            # Flatten the nested structure
-            flattened_embedding = []
-            def flatten_list(lst):
-                for item in lst:
-                    if isinstance(item, list):
-                        flatten_list(item)
-                    else:
-                        flattened_embedding.append(item)
-            
-            flatten_list(embedding)
-            embedding_values = [float(val) for val in flattened_embedding]
-        else:
-            raise Exception("Failed to get embedding from API")
-        
-        # Create unique ID for the vector
-        chunk_id = hashlib.sha256(f"{filename}_{chunk_index}_{chunk[:50]}".encode()).hexdigest()
-        
-        # Prepare base metadata
-        metadata = {
-            "filename": filename,
-            "chunk_id": chunk_index,
-            "content": chunk,
-            "chunk_size_tokens": len(chunk.split()), # Approximate token count
-            "upload_timestamp": str(int(time.time() * 1000))
-        }
-        
-        # Add file metadata if available
-        if file_metadata:
-            # Prefix file metadata keys to avoid conflicts
-            for key, value in file_metadata.items():
-                metadata[f"file_{key}"] = value
-        
-        # Add chunk-specific metadata
-        metadata["chunk_number"] = chunk_index + 1
-        metadata["total_chunks"] = file_metadata.get("total_chunks", "unknown") if file_metadata else "unknown"
-        
-        # Prepare vector data
-        vector_data = {
-            "id": chunk_id,
-            "values": embedding_values,
-            "metadata": metadata
-        }
-        
-        return vector_data
-    except Exception as e:
-        print(f"Error processing chunk {chunk_index}: {e}")
-        return None
-
-async def process_single_file(file: UploadFile, jwt: str, index, namespace: str) -> dict:
-    """
-    Process a single file: validate, chunk, and upload to Pinecone.
-    Returns a result dictionary with upload statistics.
-    """
-    try:
-        # Validate file type
-        if not file.filename.endswith('.csv'):
-            return {
-                "success": False,
-                "filename": file.filename,
-                "error": "Only .csv files are supported"
-            }
-        
-        # Read file content
-        content = await file.read()
-        
-        return await process_csv_file(file, content, jwt, index, namespace)
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "filename": file.filename,
-            "error": f"Failed to process file: {str(e)}"
-        }
-
-async def process_csv_file(file: UploadFile, content: bytes, jwt: str, index, namespace: str) -> dict:
-    """
-    Process a CSV file for similarity search. Expects CSV with 'q' and 'a' columns.
-    """
-    try:
-        # Decode CSV content
-        csv_content = content.decode('utf-8')
-        
-        if not csv_content.strip():
-            return {
-                "success": False,
-                "filename": file.filename,
-                "error": "CSV file is empty"
-            }
-        
-        # Parse CSV
-        csv_reader = csv.DictReader(io.StringIO(csv_content))
-        
-        # Validate CSV structure
-        if 'q' not in csv_reader.fieldnames or 'a' not in csv_reader.fieldnames:
-            return {
-                "success": False,
-                "filename": file.filename,
-                "error": "CSV must contain 'q' and 'a' columns"
-            }
-        
-        # Process each row
-        vectors_to_upsert = []
-        successful_rows = 0
-        failed_rows = 0
-        
-        for row_num, row in enumerate(csv_reader):
-            try:
-                question = row.get('q', '').strip()
-                answer = row.get('a', '').strip()
-                
-                if not question or not answer:
-                    print(f"Skipping row {row_num + 1}: empty question or answer")
-                    failed_rows += 1
-                    continue
-                
-                # Create content for embedding (combine question and answer)
-                content = f"Q: {question}\nA: {answer}"
-                
-                # Generate embedding
-                embedding = await fetch_embedding(jwt, content)
-                
-                if embedding is None:
-                    print(f"Failed to generate embedding for row {row_num + 1}")
-                    failed_rows += 1
-                    continue
-                
-                # Flatten and convert embedding to floats
-                flattened_embedding = []
-                def flatten_list(lst):
-                    for item in lst:
-                        if isinstance(item, list):
-                            flatten_list(item)
-                        else:
-                            flattened_embedding.append(item)
-                
-                flatten_list(embedding)
-                embedding_values = [float(val) for val in flattened_embedding]
-                
-                # Create unique ID for the vector
-                chunk_id = hashlib.sha256(f"{file.filename}_{row_num}_{question[:50]}".encode()).hexdigest()
-                
-                # Prepare metadata
-                metadata = {
-                    "filename": file.filename,
-                    "row_number": row_num + 1,
-                    "q": question,
-                    "a": answer,
-                    "content": content,
-                    "upload_timestamp": str(int(time.time() * 1000))
-                }
-                
-                # Prepare vector data
-                vector_data = {
-                    "id": chunk_id,
-                    "values": embedding_values,
-                    "metadata": metadata
-                }
-                
-                vectors_to_upsert.append(vector_data)
-                successful_rows += 1
-                
-            except Exception as e:
-                print(f"Error processing row {row_num + 1}: {e}")
-                failed_rows += 1
-        
-        # Upload vectors to Pinecone in batches
-        if vectors_to_upsert:
-            batch_size = 100
-            for i in range(0, len(vectors_to_upsert), batch_size):
-                batch = vectors_to_upsert[i:i + batch_size]
-                try:
-                    index.upsert(vectors=batch, namespace=namespace)
-                except Exception as e:
-                    print(f"Error uploading batch {i//batch_size} for {file.filename}: {e}")
-                    failed_rows += len(batch)
-                    successful_rows -= len(batch)
-        
-        return {
-            "success": True,
-            "filename": file.filename,
-            "total_chunks_created": successful_rows + failed_rows,
-            "successful_uploads": successful_rows,
-            "failed_uploads": failed_rows,
-            "file_size_bytes": len(content)
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "filename": file.filename,
-            "error": f"Failed to process CSV file: {str(e)}"
-        }
-
-@router.post("/upload")
-@limiter.limit("50/minute")
-async def upload_files(
-    files: List[UploadFile] = File(..., description="Files to upload"),
-    decoded_jwt: jwt_dependency = None,
-    request: Request = None
-):
-    """
-    Upload .txt and .md files, chunk them into 200-token pieces, and upload to Pinecone index.
-    """
-    try:
-        if not files:
-            raise HTTPException(status_code=400, detail="No files provided")
-        
-        # Get the index name from environment variables
-        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "similarity_search"  # Using the namespace for similaritySearch
-        
-        # Get Pinecone index
-        index = pc.Index(index_name)
-        
-        # Get JWT token for embedding service
-        jwt = request.cookies.get("jwt") if request else None
-        
-        # Process each file
-        file_results = []
-        total_successful_uploads = 0
-        total_failed_uploads = 0
-        total_chunks_created = 0
-        
-        for file in files:
-            print(f"Processing file: {file.filename}")
-            result = await process_single_file(file, jwt, index, namespace)
-            file_results.append(result)
-            
-            if result["success"]:
-                total_successful_uploads += result["successful_uploads"]
-                total_failed_uploads += result["failed_uploads"]
-                total_chunks_created += result["total_chunks_created"]
-        
-        # Return format depends on whether it's single or multiple files
-        if len(files) == 1:
-            # Single file - return the result directly for backward compatibility
-            return file_results[0]
-        else:
-            # Multiple files - return aggregate results
-            return {
-                "success": True,
-                "files_processed": len(files),
-                "file_results": file_results,
-                "total_chunks_created": total_chunks_created,
-                "total_successful_uploads": total_successful_uploads,
-                "total_failed_uploads": total_failed_uploads,
-                "namespace": namespace
-            }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to upload files: {str(e)}"
-        }
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         return {
+#             "success": False,
+#             "error": f"Failed to upload files: {str(e)}"
+#         }
 
 @router.post("/upload-single")
 @limiter.limit("50/minute")
@@ -460,7 +98,14 @@ async def upload_single_file(
         jwt = request.cookies.get("jwt") if request else None
         
         # Process the single file
-        result = await process_single_file(file, jwt, index, namespace)
+        # result = await process_single_file(file, jwt, index, namespace)
+
+        
+
+        result = {
+            "success": True,
+            "filename": file.filename
+        }
         
         return result
         
