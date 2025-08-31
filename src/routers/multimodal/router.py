@@ -18,8 +18,8 @@ class Query(BaseModel):
 @router.post("/media-assets/query")
 @limiter.limit("10/minute")
 def media_library(request: Request, response: Response, jwt: jwt_dependency, query: Query):
-    print(f"Received query: {query.text}")
-    
+    print(f"Received query: {query.text}")  
+    print(f"Generating ImageBind embedding for query: {query.text}")
     output = replicate.run(
         "daanelson/imagebind:0383f62e173dc821ec52663ed22a076d9c970549c209666ac3db181618b7a304",
         input={

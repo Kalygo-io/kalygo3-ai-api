@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -80,4 +80,4 @@ async def similarity_search(
         return {
             "success": False,
             "error": f"Failed to perform similarity search: {str(e)}"
-        } 
+        }
