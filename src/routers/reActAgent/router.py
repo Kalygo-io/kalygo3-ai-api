@@ -21,7 +21,7 @@ from langchain import hub
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
-from langchain.memory.chat_message_histories import ChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
 
 from .tools.reflect_tool import reflect_tool
 from .tools.deliberate_tool import deliberate_tool
@@ -181,7 +181,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
                         print(f"Failed to store AI response: {e}")
                         db.rollback()
 
-                    print(content, end="|")
+                    # print(content, end="|")
 
                     yield json.dumps({
                         "event": "on_chain_end",
@@ -220,8 +220,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
                     "data": content
                 }, separators=(',', ':'))
         elif kind == "on_chat_model_end":
-            print("!!! on_chat_model_end !!!")
-            # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
+            print("!!! on_chat_model_end !!!") # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
         elif kind == "on_tool_start":
             print("--")
             print(

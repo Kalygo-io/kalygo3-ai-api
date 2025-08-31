@@ -43,14 +43,13 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
             top_k=rerank_pool_size,  # Get a larger pool for reranking
             include_values=False,
             include_metadata=True,
-            namespace="reranking"
+            namespace="chat_with_txt"
         )
         
         if not results['matches']:
             return {
                 "message": "No relevant documents found",
                 "reranked_results": [],
-                "similarity_results": []
             }
         
         # Prepare documents for Cohere Rerank 3.5
@@ -60,8 +59,7 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
             similarity_results = [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches']]
             return {
                 "message": "Cohere API key not available, using similarity search only",
-                "reranked_results": similarity_results,
-                "similarity_results": similarity_results
+                "reranked_results": similarity_results, # HACK IN CASE COHERE API KEY IS NOT AVAILABLE
             }
         
         # Gather documents for reranking
@@ -108,7 +106,6 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
             return {
                 "message": f"Cohere API error: {cohere_response.text}, using similarity search only",
                 "reranked_results": fallback_results[:top_k_for_rerank],
-                "similarity_results": [{'metadata': r['metadata'], 'score': r['score']} for r in results['matches'][:top_k_for_similarity]]
             }
         
         rerank_results = cohere_response.json()
@@ -144,7 +141,6 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
         return {
             "message": f"Retrieved {len(final_reranked_results)} relevant documents using reranking",
             "reranked_results": final_reranked_results,
-            "similarity_results": similarity_results,
             "query": query,
             "namespace": namespace
         }
@@ -164,7 +160,6 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
         return {
             "error": f"Failed to perform retrieval with reranking: {str(e)}",
             "reranked_results": fallback_results,
-            "similarity_results": [{'metadata': r['metadata'], 'score': r['score']} for r in results.get('matches', [])[:top_k_for_similarity]]
         }
 
 class RetrievalQuery(BaseModel):
