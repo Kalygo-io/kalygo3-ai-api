@@ -235,8 +235,8 @@ Answer the prompt to the best of your ability given the past history of messages
 def prompt(prompt: ChatSessionPrompt, decoded_jwt: jwt_dependency, request: Request):
     print(f"DEBUG: Completion endpoint called")
     print(f"DEBUG: Session ID: {prompt.sessionId}")
-    print(f"DEBUG: Content length: {len(prompt.content)}")
+    print(f"DEBUG: Content length: {len(prompt.prompt)}")
     print(f"DEBUG: JWT present: {bool(request.cookies.get('jwt'))}")
     
     jwt = request.cookies.get("jwt")
-    return StreamingResponse(generator(jwt, prompt.sessionId, prompt.content), media_type='text/event-stream') 
+    return StreamingResponse(generator(jwt, prompt.sessionId, prompt.prompt), media_type='text/event-stream') 
