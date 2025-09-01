@@ -9,13 +9,13 @@ class PubSubClient:
     def get_publisher_client():
         """Get a Pub/Sub publisher client with appropriate credentials."""
         if (os.getenv("ENVIRONMENT") == "production"):
-            GCS_SA = json.loads(os.getenv('GCS_SA'))
+            KB_INGEST_SA = json.loads(os.getenv('KB_INGEST_SA'))
 
             print("ENVIRONMENT")
             print(os.getenv("ENVIRONMENT"))
 
             # Load credentials from the dictionary
-            credentials, project = google.auth.load_credentials_from_dict(GCS_SA)
+            credentials, project = google.auth.load_credentials_from_dict(KB_INGEST_SA)
             
             print()
             print('credentials', credentials)
@@ -24,10 +24,9 @@ class PubSubClient:
             
             return pubsub_v1.PublisherClient(credentials=credentials)
         else:
-            GCS_SA_PATH = os.getenv("GCS_SA_PATH")
+            KB_INGEST_SA = os.getenv("KB_INGEST_SA")
             credentials = service_account.Credentials.from_service_account_file(
-                GCS_SA_PATH
+                KB_INGEST_SA
             )
             
             return pubsub_v1.PublisherClient(credentials=credentials)
-    

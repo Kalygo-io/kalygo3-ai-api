@@ -33,7 +33,7 @@ class FileUploadService:
             timestamp = datetime.now().isoformat()
             
             # Create GCS file path
-            gcs_file_path = f"{namespace}/{file_id}/{file.filename}"
+            gcs_file_path = f"similarity_search/{namespace}/{file_id}/{file.filename}"
             
             # Upload file to GCS
             storage_client = GCSClient.get_storage_client()

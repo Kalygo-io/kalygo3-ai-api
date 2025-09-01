@@ -17,7 +17,6 @@ Info regarding how the FastAPI was integrated with GCS (Google Cloud Storage)
 
 - NOTE: a different technique for importing the S.A. creds is needed in local (dev machine) vs production (Cloud Run)
 
-
 ## Needed to give SA in GitHub action an additional permission for giving a non-default S.A. when deploying Cloud Run services
 
 - gcloud iam service-accounts add-iam-policy-binding kalygo3-gcs-sa@kalygo-v3.iam.gserviceaccount.com \

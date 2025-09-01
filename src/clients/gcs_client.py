@@ -9,13 +9,13 @@ class GCSClient:
   def get_storage_client():
 
     if (os.getenv("ENVIRONMENT") == "production"):
-      GCS_SA = json.loads(os.getenv('GCS_SA'))
+      KB_INGEST_SA = json.loads(os.getenv('KB_INGEST_SA'))
 
       print("ENVIRONMENT")
       print(os.getenv("ENVIRONMENT"))
 
       # Load credentials from the dictionary
-      credentials, project = google.auth.load_credentials_from_dict(GCS_SA)
+      credentials, project = google.auth.load_credentials_from_dict(KB_INGEST_SA)
       
       print()
       print('credentials', credentials)
@@ -26,10 +26,10 @@ class GCSClient:
     else:
       print("*!*!* get_storage_client credential *!*!*")
 
-      GCS_SA_PATH = os.getenv("GCS_SA_PATH")
-      print("GCS_SA_PATH", GCS_SA_PATH)
+      KB_INGEST_SA = os.getenv("KB_INGEST_SA")
+      print("KB_INGEST_SA", KB_INGEST_SA)
       credentials = service_account.Credentials.from_service_account_file(
-        GCS_SA_PATH
+        KB_INGEST_SA
       )
       
       return storage.Client(credentials=credentials)
