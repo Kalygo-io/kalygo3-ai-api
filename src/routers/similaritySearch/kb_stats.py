@@ -10,7 +10,7 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 @router.get("/kb-stats")
-@limiter.limit("10/minute")
+@limiter.limit("50/minute")
 def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
     """
     Get information about the knowledge base index and namespace used by the similaritySearch endpoint.
