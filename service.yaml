@@ -147,5 +147,12 @@ spec:
                 secretKeyRef:
                   name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
                   key: latest
+            
+            # Google Cloud Storage and PubSub
+            - name: GCS_BUCKET_NAME
+              value: "kalygo-kb-ingest-storage"
+            
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "kalygo-436411"
           ports:
             - containerPort: 8080

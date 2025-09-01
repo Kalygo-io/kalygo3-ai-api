@@ -355,7 +355,7 @@ async def upload_files(
         
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "chat_with_txt"
+        namespace = "reranking"
         
         # Get Pinecone index
         index = pc.Index(index_name)
@@ -417,7 +417,7 @@ async def upload_single_file(
     try:
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "chat_with_txt"
+        namespace = "reranking"
         
         # Get Pinecone index
         index = pc.Index(index_name)

@@ -19,7 +19,7 @@ def delete_vectors_in_namespace(request_body: DeleteVectorsRequest, decoded_jwt:
     try:
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "chat_with_txt"
+        namespace = "reranking"
         
         # Get index and delete all vectors in the namespace
         index = pc.Index(index_name)

@@ -18,7 +18,7 @@ def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
     try:
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "chat_with_txt"  # This is hardcoded in the generator function
+        namespace = "reranking"  # This is hardcoded in the generator function
         
         # Get index statistics from Pinecone
         index = pc.Index(index_name)

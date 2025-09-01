@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple, Any, Optional
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
+from src.services.reranking_upload_service import RerankingUploadService
 import tiktoken
 
 limiter = Limiter(key_func=get_remote_address)
@@ -414,39 +415,87 @@ async def upload_files(
             "error": f"Failed to upload files: {str(e)}"
         }
 
+# @router.post("/upload-single")
+# @limiter.limit("50/minute")
+# async def upload_single_file(
+#     file: UploadFile = File(..., description="Single file to upload"),
+#     chunk_size: int = Form(200, description="Size of each chunk in tokens"),
+#     overlap: int = Form(50, description="Overlap between chunks in tokens"),
+#     decoded_jwt: jwt_dependency = None,
+#     request: Request = None
+# ):
+#     """
+#     Upload a single .txt or .md file with dynamic chunking strategy and upload to Pinecone index.
+#     This endpoint is for backward compatibility with existing frontend implementations.
+#     """
+#     try:
+#         # Validate chunking parameters
+#         if chunk_size < 10 or chunk_size > 1000:
+#             raise HTTPException(status_code=400, detail="chunk_size must be between 10 and 1000")
+        
+#         if overlap < 0 or overlap >= chunk_size:
+#             raise HTTPException(status_code=400, detail="overlap must be between 0 and chunk_size")
+        
+#         # Get the index name from environment variables
+#         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
+#         namespace = "reranking"  # Using the namespace for reranking
+        
+#         # Get Pinecone index
+#         index = pc.Index(index_name)
+        
+#         # Get JWT token for embedding service
+#         jwt = request.cookies.get("jwt") if request else None
+        
+#         # Process the single file
+#         result = await process_single_file(file, jwt, index, namespace, chunk_size, overlap)
+        
+#         return result
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         return {
+#             "success": False,
+#             "error": f"Failed to upload file: {str(e)}"
+#        } 
+
 @router.post("/upload-single")
-@limiter.limit("50/minute")
-async def upload_single_file(
+@limiter.limit("100/minute")
+async def upload_file_to_gcs(
     file: UploadFile = File(..., description="Single file to upload"),
-    chunk_size: int = Form(200, description="Size of each chunk in tokens"),
-    overlap: int = Form(50, description="Overlap between chunks in tokens"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
-    Upload a single .txt or .md file with dynamic chunking strategy and upload to Pinecone index.
-    This endpoint is for backward compatibility with existing frontend implementations.
+    Upload a single file to Google Cloud Storage and queue it for async processing.
+    The file will be processed (chunked and uploaded to Pinecone) asynchronously.
+    This endpoint follows the same design as the similaritySearch module.
     """
     try:
-        # Validate chunking parameters
-        if chunk_size < 10 or chunk_size > 1000:
-            raise HTTPException(status_code=400, detail="chunk_size must be between 10 and 1000")
+        if not decoded_jwt:
+            raise HTTPException(status_code=401, detail="Authentication required")
         
-        if overlap < 0 or overlap >= chunk_size:
-            raise HTTPException(status_code=400, detail="overlap must be between 0 and chunk_size")
+        # Validate file type - support .txt and .md files for reranking
+        if not file.filename.endswith(('.txt', '.md')):
+            return {
+                "success": False,
+                "error": "Only .txt and .md files are supported for reranking"
+            }
         
-        # Get the index name from environment variables
-        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "reranking"  # Using the namespace for reranking
+        # Initialize reranking upload service
+        upload_service = RerankingUploadService()
+        namespace = "reranking"
         
-        # Get Pinecone index
-        index = pc.Index(index_name)
-        
-        # Get JWT token for embedding service
-        jwt = request.cookies.get("jwt") if request else None
-        
-        # Process the single file
-        result = await process_single_file(file, jwt, index, namespace, chunk_size, overlap)
+        print("decoded_jwt", decoded_jwt)
+
+        # Upload file to GCS and publish to Pub/Sub
+        result = await upload_service.upload_file_and_publish(
+            file=file,
+            user_id=str(decoded_jwt.get('id')),
+            user_email=str(decoded_jwt.get('email')),
+            namespace=namespace,
+            jwt=request.cookies.get("jwt") if request else None
+        )
         
         return result
         

@@ -63,7 +63,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
             top_k=16,
             include_values=False,
             include_metadata=True,
-            namespace='chat_with_txt'
+            namespace='reranking'
         )
 
         print(f"DEBUG: Pinecone search completed")
