@@ -11,6 +11,8 @@ class PubSubClient:
         if (os.getenv("ENVIRONMENT") == "production"):
             KB_INGEST_SA = json.loads(os.getenv('KB_INGEST_SA'))
 
+            print('KB_INGEST_SA', KB_INGEST_SA)
+
             print("ENVIRONMENT")
             print(os.getenv("ENVIRONMENT"))
 
