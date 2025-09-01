@@ -102,11 +102,13 @@ async def upload_single_file(
         upload_service = FileUploadService()
         namespace = "similarity_search"
         
+        print("decoded_jwt", decoded_jwt)
+
         # Upload file to GCS and publish to Pub/Sub
         result = await upload_service.upload_file_and_publish(
             file=file,
             user_id=str(decoded_jwt.get('id')),
-            user_email=str(decoded_jwt.get('sub')),
+            user_email=str(decoded_jwt.get('email')),
             namespace=namespace,
             jwt=request.cookies.get("jwt") if request else None
         )

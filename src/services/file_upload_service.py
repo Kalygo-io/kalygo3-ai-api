@@ -43,7 +43,9 @@ class FileUploadService:
             # Read file content and upload
             file_content = await file.read()
             blob.upload_from_string(file_content, content_type=file.content_type)
-            
+
+            print("AAAAAAA")
+            print(user_email)            
             # Prepare message data for Pub/Sub
             message_data = {
                 "file_id": file_id,
