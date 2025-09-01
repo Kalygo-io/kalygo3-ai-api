@@ -10,7 +10,7 @@ from src.clients.pubsub_client import PubSubClient
 class FileUploadService:
     def __init__(self):
         self.gcs_bucket_name = os.getenv("GCS_BUCKET_NAME", "kalygo-kb-ingest-storage")
-        self.pubsub_topic_name = os.getenv("PUBSUB_TOPIC_NAME", "kb-ingest-topic")
+        self.pubsub_topic_name = os.getenv("PUBSUB_TOPIC_NAME", "qna-ingest-topic")
         self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "kalygo-436411")
     
     async def upload_file_and_publish(self, file: UploadFile, user_id: str, namespace: str) -> Dict[str, Any]:
