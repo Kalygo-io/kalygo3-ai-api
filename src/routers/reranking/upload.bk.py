@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Form
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import os
@@ -8,13 +8,11 @@ import time
 import asyncio
 import re
 import yaml
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Optional
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
 import tiktoken
-import csv
-import io
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -228,24 +226,111 @@ async def generate_embedding_for_chunk(chunk: str, chunk_index: int, filename: s
         print(f"Error processing chunk {chunk_index}: {e}")
         return None
 
-async def process_single_file(file: UploadFile, jwt: str, index, namespace: str) -> dict:
+async def process_single_file(file: UploadFile, jwt: str, index, namespace: str, chunk_size: int = 200, overlap: int = 50) -> dict:
     """
     Process a single file: validate, chunk, and upload to Pinecone.
     Returns a result dictionary with upload statistics.
     """
     try:
         # Validate file type
-        if not file.filename.endswith('.csv'):
+        if not (file.filename.endswith('.txt') or file.filename.endswith('.md')):
             return {
                 "success": False,
                 "filename": file.filename,
-                "error": "Only .csv files are supported"
+                "error": "Only .txt and .md files are supported"
             }
         
         # Read file content
         content = await file.read()
+        text_content = content.decode('utf-8')
         
-        return await process_csv_file(file, content, jwt, index, namespace)
+        if not text_content.strip():
+            return {
+                "success": False,
+                "filename": file.filename,
+                "error": "File is empty"
+            }
+        
+        # Parse metadata from the file
+        metadata, content_without_metadata = parse_metadata_from_file(text_content)
+        
+        # Log metadata if found
+        if metadata:
+            print(f"Found YAML front matter in {file.filename}:")
+            for key, value in metadata.items():
+                print(f"  {key}: {value}")
+        else:
+            print(f"No YAML front matter found in {file.filename}")
+        
+        # Chunk the text using dynamic chunking parameters
+        raw_chunks = chunk_text_by_tokens(content_without_metadata, chunk_size=chunk_size, overlap=overlap)
+        
+        if not raw_chunks:
+            return {
+                "success": False,
+                "filename": file.filename,
+                "error": "No valid chunks created from file"
+            }
+        
+        # Prepend metadata to each chunk
+        chunks_with_metadata = []
+        for i, chunk in enumerate(raw_chunks):
+            chunk_with_metadata = prepend_metadata_to_chunk(
+                chunk, i, len(raw_chunks), metadata, file.filename
+            )
+            chunks_with_metadata.append(chunk_with_metadata)
+        
+        # Process chunks in parallel
+        print(f"Processing {len(chunks_with_metadata)} chunks for {file.filename}...")
+        
+        # Create tasks for parallel processing
+        tasks = []
+        for i, chunk in enumerate(chunks_with_metadata):
+            print(f"Processing chunk {i+1} of {len(chunks_with_metadata)} for {file.filename}")
+            task = generate_embedding_for_chunk(chunk, i, file.filename, jwt, metadata)
+            tasks.append(task)
+        
+        # Execute all tasks concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        vectors_to_upsert = []
+        successful_chunks = 0
+        failed_chunks = 0
+        
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"Exception processing chunk {i} for {file.filename}: {result}")
+                failed_chunks += 1
+            elif result is not None:
+                # Add total_chunks to metadata
+                result["metadata"]["total_chunks"] = len(chunks_with_metadata)
+                vectors_to_upsert.append(result)
+                successful_chunks += 1
+            else:
+                failed_chunks += 1
+        
+        # Upload vectors to Pinecone in batches
+        if vectors_to_upsert:
+            # Pinecone recommends batches of 100 or less
+            batch_size = 100
+            for i in range(0, len(vectors_to_upsert), batch_size):
+                batch = vectors_to_upsert[i:i + batch_size]
+                try:
+                    index.upsert(vectors=batch, namespace=namespace)
+                except Exception as e:
+                    print(f"Error uploading batch {i//batch_size} for {file.filename}: {e}")
+                    failed_chunks += len(batch)
+                    successful_chunks -= len(batch)
+        
+        return {
+            "success": True,
+            "filename": file.filename,
+            "total_chunks_created": len(chunks_with_metadata),
+            "successful_uploads": successful_chunks,
+            "failed_uploads": failed_chunks,
+            "file_size_bytes": len(content)
+        }
         
     except Exception as e:
         return {
@@ -254,142 +339,32 @@ async def process_single_file(file: UploadFile, jwt: str, index, namespace: str)
             "error": f"Failed to process file: {str(e)}"
         }
 
-async def process_csv_file(file: UploadFile, content: bytes, jwt: str, index, namespace: str) -> dict:
-    """
-    Process a CSV file for similarity search. Expects CSV with 'q' and 'a' columns.
-    """
-    try:
-        # Decode CSV content
-        csv_content = content.decode('utf-8')
-        
-        if not csv_content.strip():
-            return {
-                "success": False,
-                "filename": file.filename,
-                "error": "CSV file is empty"
-            }
-        
-        # Parse CSV
-        csv_reader = csv.DictReader(io.StringIO(csv_content))
-        
-        # Validate CSV structure
-        if 'q' not in csv_reader.fieldnames or 'a' not in csv_reader.fieldnames:
-            return {
-                "success": False,
-                "filename": file.filename,
-                "error": "CSV must contain 'q' and 'a' columns"
-            }
-        
-        # Process each row
-        vectors_to_upsert = []
-        successful_rows = 0
-        failed_rows = 0
-        
-        for row_num, row in enumerate(csv_reader):
-            try:
-                question = row.get('q', '').strip()
-                answer = row.get('a', '').strip()
-                
-                if not question or not answer:
-                    print(f"Skipping row {row_num + 1}: empty question or answer")
-                    failed_rows += 1
-                    continue
-                
-                # Create content for embedding (combine question and answer)
-                content = f"Q: {question}\nA: {answer}"
-                
-                # Generate embedding
-                embedding = await fetch_embedding(jwt, content)
-                
-                if embedding is None:
-                    print(f"Failed to generate embedding for row {row_num + 1}")
-                    failed_rows += 1
-                    continue
-                
-                # Flatten and convert embedding to floats
-                flattened_embedding = []
-                def flatten_list(lst):
-                    for item in lst:
-                        if isinstance(item, list):
-                            flatten_list(item)
-                        else:
-                            flattened_embedding.append(item)
-                
-                flatten_list(embedding)
-                embedding_values = [float(val) for val in flattened_embedding]
-                
-                # Create unique ID for the vector
-                chunk_id = hashlib.sha256(f"{file.filename}_{row_num}_{question[:50]}".encode()).hexdigest()
-                
-                # Prepare metadata
-                metadata = {
-                    "filename": file.filename,
-                    "row_number": row_num + 1,
-                    "q": question,
-                    "a": answer,
-                    "content": content,
-                    "upload_timestamp": str(int(time.time() * 1000))
-                }
-                
-                # Prepare vector data
-                vector_data = {
-                    "id": chunk_id,
-                    "values": embedding_values,
-                    "metadata": metadata
-                }
-                
-                vectors_to_upsert.append(vector_data)
-                successful_rows += 1
-                
-            except Exception as e:
-                print(f"Error processing row {row_num + 1}: {e}")
-                failed_rows += 1
-        
-        # Upload vectors to Pinecone in batches
-        if vectors_to_upsert:
-            batch_size = 100
-            for i in range(0, len(vectors_to_upsert), batch_size):
-                batch = vectors_to_upsert[i:i + batch_size]
-                try:
-                    index.upsert(vectors=batch, namespace=namespace)
-                except Exception as e:
-                    print(f"Error uploading batch {i//batch_size} for {file.filename}: {e}")
-                    failed_rows += len(batch)
-                    successful_rows -= len(batch)
-        
-        return {
-            "success": True,
-            "filename": file.filename,
-            "total_chunks_created": successful_rows + failed_rows,
-            "successful_uploads": successful_rows,
-            "failed_uploads": failed_rows,
-            "file_size_bytes": len(content)
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "filename": file.filename,
-            "error": f"Failed to process CSV file: {str(e)}"
-        }
-
 @router.post("/upload")
 @limiter.limit("50/minute")
 async def upload_files(
     files: List[UploadFile] = File(..., description="Files to upload"),
+    chunk_size: int = Form(200, description="Size of each chunk in tokens"),
+    overlap: int = Form(50, description="Overlap between chunks in tokens"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
-    Upload .txt and .md files, chunk them and upload them to a Pinecone index.
+    Upload .txt and .md files with dynamic chunking strategy and upload to Pinecone index.
     """
     try:
         if not files:
             raise HTTPException(status_code=400, detail="No files provided")
         
+        # Validate chunking parameters
+        if chunk_size < 10 or chunk_size > 1000:
+            raise HTTPException(status_code=400, detail="chunk_size must be between 10 and 1000")
+        
+        if overlap < 0 or overlap >= chunk_size:
+            raise HTTPException(status_code=400, detail="overlap must be between 0 and chunk_size")
+        
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "similarity_search"  # Using the namespace for similaritySearch
+        namespace = "reranking"  # Using the namespace for reranking
         
         # Get Pinecone index
         index = pc.Index(index_name)
@@ -405,7 +380,7 @@ async def upload_files(
         
         for file in files:
             print(f"Processing file: {file.filename}")
-            result = await process_single_file(file, jwt, index, namespace)
+            result = await process_single_file(file, jwt, index, namespace, chunk_size, overlap)
             file_results.append(result)
             
             if result["success"]:
@@ -426,7 +401,9 @@ async def upload_files(
                 "total_chunks_created": total_chunks_created,
                 "total_successful_uploads": total_successful_uploads,
                 "total_failed_uploads": total_failed_uploads,
-                "namespace": namespace
+                "namespace": namespace,
+                "chunk_size": chunk_size,
+                "overlap": overlap
             }
         
     except HTTPException:
@@ -441,17 +418,26 @@ async def upload_files(
 @limiter.limit("50/minute")
 async def upload_single_file(
     file: UploadFile = File(..., description="Single file to upload"),
+    chunk_size: int = Form(200, description="Size of each chunk in tokens"),
+    overlap: int = Form(50, description="Overlap between chunks in tokens"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
-    Upload a single .txt or .md file, chunk it into 200-token pieces, and upload to Pinecone index.
+    Upload a single .txt or .md file with dynamic chunking strategy and upload to Pinecone index.
     This endpoint is for backward compatibility with existing frontend implementations.
     """
     try:
+        # Validate chunking parameters
+        if chunk_size < 10 or chunk_size > 1000:
+            raise HTTPException(status_code=400, detail="chunk_size must be between 10 and 1000")
+        
+        if overlap < 0 or overlap >= chunk_size:
+            raise HTTPException(status_code=400, detail="overlap must be between 0 and chunk_size")
+        
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "similarity_search"  # Using the namespace for similaritySearch
+        namespace = "reranking"  # Using the namespace for reranking
         
         # Get Pinecone index
         index = pc.Index(index_name)
@@ -460,7 +446,7 @@ async def upload_single_file(
         jwt = request.cookies.get("jwt") if request else None
         
         # Process the single file
-        result = await process_single_file(file, jwt, index, namespace)
+        result = await process_single_file(file, jwt, index, namespace, chunk_size, overlap)
         
         return result
         
