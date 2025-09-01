@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple, Any
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
+from src.services.file_upload_service import FileUploadService
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -76,36 +77,37 @@ router = APIRouter()
 #         }
 
 @router.post("/upload-single")
-@limiter.limit("50/minute")
+@limiter.limit("100/minute")
 async def upload_single_file(
     file: UploadFile = File(..., description="Single file to upload"),
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
     """
-    Upload a single .txt or .md file, chunk it into 200-token pieces, and upload to Pinecone index.
-    This endpoint is for backward compatibility with existing frontend implementations.
+    Upload a single file to Google Cloud Storage and queue it for async processing.
+    The file will be processed (chunked and uploaded to Pinecone) asynchronously.
     """
     try:
-        # Get the index name from environment variables
-        index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "similarity_search"  # Using the namespace for similaritySearch
+        if not decoded_jwt:
+            raise HTTPException(status_code=401, detail="Authentication required")
         
-        # Get Pinecone index
-        index = pc.Index(index_name)
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            return {
+                "success": False,
+                "error": "Only .csv files are supported"
+            }
         
-        # Get JWT token for embedding service
-        jwt = request.cookies.get("jwt") if request else None
+        # Initialize upload service
+        upload_service = FileUploadService()
+        namespace = "similarity_search"
         
-        # Process the single file
-        # result = await process_single_file(file, jwt, index, namespace)
-
-        
-
-        result = {
-            "success": True,
-            "filename": file.filename
-        }
+        # Upload file to GCS and publish to Pub/Sub
+        result = await upload_service.upload_file_and_publish(
+            file=file,
+            user_id=str(decoded_jwt.get('id')),
+            namespace=namespace
+        )
         
         return result
         
@@ -115,4 +117,4 @@ async def upload_single_file(
         return {
             "success": False,
             "error": f"Failed to upload file: {str(e)}"
-        } 
+        }

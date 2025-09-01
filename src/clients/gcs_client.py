@@ -24,7 +24,10 @@ class GCSClient:
       
       return storage.Client(credentials=credentials, project=project) 
     else:
+      print("*!*!* get_storage_client credential *!*!*")
+
       GCS_SA_PATH = os.getenv("GCS_SA_PATH")
+      print("GCS_SA_PATH", GCS_SA_PATH)
       credentials = service_account.Credentials.from_service_account_file(
         GCS_SA_PATH
       )
