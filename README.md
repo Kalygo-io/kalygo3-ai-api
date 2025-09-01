@@ -22,4 +22,3 @@ Kalygo 3.0 A.I. API (powered by FastAPI)
 
 - pip install pipreqs
 - pipreqs . --force
-
