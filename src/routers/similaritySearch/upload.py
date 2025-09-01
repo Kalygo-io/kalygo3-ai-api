@@ -106,6 +106,7 @@ async def upload_single_file(
         result = await upload_service.upload_file_and_publish(
             file=file,
             user_id=str(decoded_jwt.get('id')),
+            user_email=str(decoded_jwt.get('sub')),
             namespace=namespace,
             jwt=request.cookies.get("jwt") if request else None
         )

@@ -13,7 +13,7 @@ class FileUploadService:
         self.pubsub_topic_name = os.getenv("PUBSUB_TOPIC_NAME", "qna-ingest-topic")
         self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "kalygo-436411")
     
-    async def upload_file_and_publish(self, file: UploadFile, user_id: str, namespace: str, jwt: str) -> Dict[str, Any]:
+    async def upload_file_and_publish(self, file: UploadFile, user_id: str, user_email: str, namespace: str, jwt: str) -> Dict[str, Any]:
         """
         Upload file to GCS and publish a message to Pub/Sub for async processing.
         
@@ -40,14 +40,10 @@ class FileUploadService:
             bucket = storage_client.get_bucket(self.gcs_bucket_name)
             blob = bucket.blob(gcs_file_path)
             
-            print("AAAAAAA")
-
             # Read file content and upload
             file_content = await file.read()
             blob.upload_from_string(file_content, content_type=file.content_type)
             
-            print("BBBBBBB")
-
             # Prepare message data for Pub/Sub
             message_data = {
                 "file_id": file_id,
@@ -57,14 +53,13 @@ class FileUploadService:
                 "file_size": len(file_content),
                 "content_type": file.content_type,
                 "user_id": user_id,
+                "user_email": user_email,
                 "namespace": namespace,
                 "upload_timestamp": timestamp,
                 "processing_status": "pending",
                 "jwt": jwt
             }
 
-            print("CCCCCCC")
-            
             # Publish message to Pub/Sub
             publisher_client = PubSubClient.get_publisher_client()
             topic_path = publisher_client.topic_path(self.project_id, self.pubsub_topic_name)
