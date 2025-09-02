@@ -16,13 +16,10 @@ from .routers import (
   reActAgent,
   healthcheck,
   auth,
-  recommendations,
   logins,
   multimodal,
   waitlist,
   rawLLM,
-  spreadsheetSwarm,
-  designAndRunSwarm,
   similaritySearch,
   reranking,
   chatAppSessions,
@@ -117,12 +114,6 @@ app.include_router(
 )
 
 app.include_router(
-    recommendations.router,
-    prefix="/api/recommendations",
-    tags=['recommendations'],
-)
-
-app.include_router(
     logins.router,
     prefix="/api/logins",
     tags=['logins'],
@@ -132,18 +123,6 @@ app.include_router(
     multimodal.router,
     prefix="/api/multi-modal",
     tags=['multimodal'],
-)
-
-app.include_router(
-    spreadsheetSwarm.router,
-    prefix="/api/spreadsheet-swarm",
-    tags=['Spreadsheet Swarm'],
-)
-
-app.include_router(
-    designAndRunSwarm.router,
-    prefix="/api/design-and-run-swarm",
-    tags=['Swarm Designer'],
 )
 
 app.include_router(
