@@ -13,12 +13,12 @@ router = APIRouter()
 @limiter.limit("10/minute")
 def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
     """
-    Get information about the knowledge base index and namespace used by the naiveRagChat endpoint.
+    Get information about the knowledge base index and namespace used by the reranking endpoint.
     """
     try:
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "naive_rag_chat"  # This is hardcoded in the generator function
+        namespace = "reranking"  # This is the namespace for reranking
         
         # Get index statistics from Pinecone
         index = pc.Index(index_name)
@@ -38,5 +38,5 @@ def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
         return {
             "error": f"Failed to retrieve knowledge base statistics: {str(e)}",
             "index_name": os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"),
-            "namespace": "tad"
+            "namespace": "reranking"
         } 

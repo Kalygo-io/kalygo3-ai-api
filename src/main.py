@@ -10,8 +10,7 @@ from slowapi.util import get_remote_address
 from .routers import (
   basicMemory,
   persistentMemory,
-  naiveRagChat,
-  chatWithTxt,
+  rerankingWithLLM,
   agenticRagAgent,
   reActAgent,
   healthcheck,
@@ -82,13 +81,8 @@ app.include_router(
 )
 
 app.include_router(
-    naiveRagChat.router,
-    prefix="/api/naive-rag-chat",
-)
-
-app.include_router(
-    chatWithTxt.router,
-    prefix="/api/chat-with-txt",
+    rerankingWithLLM.router,
+    prefix="/api/reranking-with-llm",
 )
 
 app.include_router(
