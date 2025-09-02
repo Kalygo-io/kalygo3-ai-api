@@ -127,7 +127,7 @@ async def generator(jwt: str, sessionId: str, prompt: str):
                 metadata = doc_metadatas[idx]
 
                 print(f"DEBUG: Rerank result {idx+1} - Relevance: {relevance_score:.4f}, Similarity: {similarity_score:.4f}")
-
+                
                 # Only keep matches with relevance score above 0.2 (20%)
                 if relevance_score > 0.1:
                     reranked_matches.append({
@@ -190,8 +190,8 @@ Answer the prompt to the best of your ability given the past history of messages
                 print(f"DEBUG: Preparing {len(reranked_matches)} reranked matches for client response")
                 for i, match in enumerate(reranked_matches):
                     match_data = {
-                        "chunk_id": match["metadata"].get("chunk_id", "N/A"),
-                        "total_chunks": match["metadata"].get("total_chunks", "N/A"),
+                        "chunk_id": match["metadata"].get("chunkId", "N/A"),
+                        "total_chunks": match["metadata"].get("totalChunks", "N/A"),
                         "relevance_score": match["relevance_score"],
                         "similarity_score": match["similarity_score"],
                         "content": match["metadata"].get("content", ""),
