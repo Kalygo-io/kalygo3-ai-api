@@ -9,11 +9,11 @@ spec:
         - image: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
           resources:
             limits:
-              memory: "2Gi"  # Increase this value as needed
-              cpu: "2"       # Optional: also set CPU limits
+              memory: "4Gi"  # Increased for demo with 30 concurrent users
+              cpu: "4"       # Increased for demo with 30 concurrent users
             requests:
-              memory: "1Gi"  # Minimum memory request
-              cpu: "1"       # Optional: minimum CPU request
+              memory: "2Gi"  # Increased minimum memory request
+              cpu: "2"       # Increased minimum CPU request
           env:
             - name: POSTGRES_URL
               valueFrom:
