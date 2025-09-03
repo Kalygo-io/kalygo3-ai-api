@@ -160,7 +160,7 @@ No relevant information found in the knowledge base.
         # Compose the full prompt
         general_prompt = f"""# TASK
 
-Answer the prompt to the best of your ability given the past history of messages and relevant chunks of knowledge from your external knowledge base
+Answer the prompt to the best of your ability given the past history of messages and relevant chunks of knowledge from your external knowledge base. If you don't know the answer, say so.
 
 ## TOC
 
