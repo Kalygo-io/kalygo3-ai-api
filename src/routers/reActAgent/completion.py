@@ -23,8 +23,7 @@ from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-from .tools.reflect_tool import reflect_tool
-from .tools.deliberate_tool import deliberate_tool
+from .tools.calculator_tool import calculator_tool
 
 from src.deps import db_dependency, jwt_dependency
 
@@ -113,7 +112,8 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     prompt_template = hub.pull("hwchase17/openai-tools-agent") # Get the prompt to use - you can modify this!
     # tools = [serp_tool, gptuesday_tool]
     # tools = [gptuesday_tool, tad_tool]
-    tools = [reflect_tool, deliberate_tool]
+    # tools = [reflect_tool, deliberate_tool]
+    tools = [calculator_tool]
     
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
