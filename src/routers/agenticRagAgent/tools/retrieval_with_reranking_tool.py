@@ -43,7 +43,7 @@ async def retrieval_with_reranking_impl(query: str, namespace: str = "reranking"
             top_k=rerank_pool_size,  # Get a larger pool for reranking
             include_values=False,
             include_metadata=True,
-            namespace="chat_with_txt"
+            namespace="reranking"
         )
         
         if not results['matches']:
