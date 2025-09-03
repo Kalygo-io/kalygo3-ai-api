@@ -17,13 +17,15 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 import json
+import uuid
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
 # Import LangSmith components
 from langsmith import Client, RunEvaluator
-from langsmith.evaluation import EvaluationResult, run_evaluator
+from langsmith.evaluation import EvaluationResult
 from langsmith.schemas import Example, Run
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -55,10 +57,12 @@ def create_advanced_dataset():
     ]
     
     # Create the dataset
-    dataset = client.create_dataset(
-        dataset_name="advanced-eval-dataset",
-        description="Advanced evaluation dataset for sophisticated testing scenarios"
-    )
+    # dataset = client.create_dataset(
+    #     dataset_name="advanced-eval-dataset",
+    #     description="Advanced evaluation dataset for sophisticated testing scenarios"
+    # )
+
+    dataset = client.read_dataset(dataset_id="355cc5db-ef37-49f5-925d-dac5e56dae00")
     
     # Add examples to the dataset
     for example in examples:
@@ -226,30 +230,49 @@ def simulate_competing_models(examples: List[Example]) -> List[Run]:
     """Simulate responses from different model versions"""
     print("🤖 Simulating competing model responses...")
     
-    # Model A responses (baseline)
-    model_a_responses = [
-        "Renewable energy is good for the environment. It helps reduce pollution and creates jobs.",
-        "Python is easier to learn than JavaScript. It has simpler syntax and is good for beginners.",
-        "Machine learning uses algorithms to find patterns in data and make predictions."
-    ]
+    if not examples:
+        print("⚠️  No examples provided, cannot create runs")
+        return []
     
-    # Model B responses (improved version)
-    model_b_responses = [
-        "Renewable energy sources like solar, wind, and hydroelectric power offer numerous benefits including reduced greenhouse gas emissions, lower operating costs over time, energy independence, and job creation in the green economy. Additionally, they provide sustainable energy solutions that don't deplete natural resources.",
-        "Python is a high-level, interpreted programming language known for its readability and simplicity, while JavaScript is primarily used for web development and runs in browsers. Python has strong typing and is great for data science, while JavaScript is dynamically typed and excels at interactive web applications.",
-        "Machine learning is a subset of artificial intelligence where algorithms learn patterns from data to make predictions or decisions without being explicitly programmed. It involves training models on historical data, validating performance, and deploying for inference on new data. The process includes data preprocessing, feature engineering, model selection, and hyperparameter tuning."
-    ]
+    # Generate responses dynamically based on the number of examples
+    model_a_responses = []
+    model_b_responses = []
+    
+    for i, example in enumerate(examples):
+        question = example.inputs.get("question", f"Question {i+1}")
+        
+        # Generate baseline response (Model A)
+        if "energy" in question.lower() or "renewable" in question.lower():
+            model_a_responses.append("Renewable energy is good for the environment. It helps reduce pollution and creates jobs.")
+        elif "python" in question.lower() or "javascript" in question.lower() or "programming" in question.lower():
+            model_a_responses.append("Python is easier to learn than JavaScript. It has simpler syntax and is good for beginners.")
+        elif "machine learning" in question.lower() or "ai" in question.lower():
+            model_a_responses.append("Machine learning uses algorithms to find patterns in data and make predictions.")
+        else:
+            model_a_responses.append(f"This is a baseline response to: {question}")
+        
+        # Generate improved response (Model B)
+        if "energy" in question.lower() or "renewable" in question.lower():
+            model_b_responses.append("Renewable energy sources like solar, wind, and hydroelectric power offer numerous benefits including reduced greenhouse gas emissions, lower operating costs over time, energy independence, and job creation in the green economy. Additionally, they provide sustainable energy solutions that don't deplete natural resources.")
+        elif "python" in question.lower() or "javascript" in question.lower() or "programming" in question.lower():
+            model_b_responses.append("Python is a high-level, interpreted programming language known for its readability and simplicity, while JavaScript is primarily used for web development and runs in browsers. Python has strong typing and is great for data science, while JavaScript is dynamically typed and excels at interactive web applications.")
+        elif "machine learning" in question.lower() or "ai" in question.lower():
+            model_b_responses.append("Machine learning is a subset of artificial intelligence where algorithms learn patterns from data to make predictions or decisions without being explicitly programmed. It involves training models on historical data, validating performance, and deploying for inference on new data. The process includes data preprocessing, feature engineering, model selection, and hyperparameter tuning.")
+        else:
+            model_b_responses.append(f"This is an improved, detailed response to: {question}")
     
     runs = []
     
     # Create baseline runs (Model A)
     for i, example in enumerate(examples):
         run = Run(
-            id=f"model-a-run-{i}",
+            id=str(uuid.uuid4()),
             inputs=example.inputs,
             outputs={"answer": model_a_responses[i]},
             run_type="llm",
             name="Model A (Baseline)",
+            start_time=datetime.utcnow(),
+            trace_id=str(uuid.uuid4()),
             metadata={"model_version": "A", "baseline": True}
         )
         runs.append(run)
@@ -257,11 +280,13 @@ def simulate_competing_models(examples: List[Example]) -> List[Run]:
     # Create improved runs (Model B)
     for i, example in enumerate(examples):
         run = Run(
-            id=f"model-b-run-{i}",
+            id=str(uuid.uuid4()),
             inputs=example.inputs,
             outputs={"answer": model_b_responses[i]},
             run_type="llm",
             name="Model B (Improved)",
+            start_time=datetime.utcnow(),
+            trace_id=str(uuid.uuid4()),
             metadata={"model_version": "B", "baseline": False}
         )
         runs.append(run)
@@ -269,7 +294,7 @@ def simulate_competing_models(examples: List[Example]) -> List[Run]:
     print(f"✅ Created {len(runs)} runs (2 models × {len(examples)} examples)")
     return runs
 
-def run_advanced_evaluations(dataset, evaluators, runs):
+def run_advanced_evaluations(dataset, evaluators, runs, examples):
     """Run advanced evaluations including pairwise comparisons"""
     print("🔍 Running advanced evaluations...")
     
@@ -281,10 +306,19 @@ def run_advanced_evaluations(dataset, evaluators, runs):
     for run in runs:
         run_results = []
         
+        # Find the corresponding example for this run
+        example = next((ex for ex in examples if ex.inputs == run.inputs), None)
+        if not example and examples:
+            # Fallback to first example if no exact match found
+            example = examples[0]
+        if not example:
+            print(f"⚠️  No matching example found for run {run.id}")
+            continue
+        
         # Run standard evaluators
         for evaluator in evaluators:
             try:
-                result = run_evaluator(evaluator, run, dataset.examples[0])
+                result = evaluator.evaluate_run(run, example)
                 run_results.append(result)
             except Exception as e:
                 print(f"⚠️  Error running evaluator {evaluator.__class__.__name__}: {e}")
@@ -296,7 +330,7 @@ def run_advanced_evaluations(dataset, evaluators, runs):
             if baseline_run:
                 pairwise_evaluator = PairwiseComparisonEvaluator(baseline_run)
                 try:
-                    result = run_evaluator(pairwise_evaluator, run, dataset.examples[0])
+                    result = pairwise_evaluator.evaluate_run(run, example)
                     run_results.append(result)
                 except Exception as e:
                     print(f"⚠️  Error running pairwise evaluator: {e}")
@@ -379,8 +413,8 @@ def main():
             print("⚠️  Warning: OPENAI_API_KEY not set. LLM-as-judge evaluations will not work.")
             print("   Set it to run full advanced evaluations.")
         
-        if not os.getenv("LANGCHAIN_API_KEY"):
-            print("⚠️  Warning: LANGCHAIN_API_KEY not set. Some features may not work.")
+        if not os.getenv("LANGSMITH_API_KEY"):
+            print("⚠️  Warning: LANGSMITH_API_KEY not set. Some features may not work.")
             print("   Set it to run full evaluations with LangSmith.")
         
         # Create advanced dataset
@@ -389,14 +423,24 @@ def main():
         # Get examples from dataset
         examples = list(client.list_examples(dataset_id=dataset.id))
         
+        if not examples:
+            print("❌ No examples found in dataset. Cannot proceed with evaluation.")
+            return
+        
+        print(f"📊 Found {len(examples)} examples in dataset")
+        
         # Create advanced evaluators
         evaluators = create_advanced_evaluators()
         
         # Simulate competing models
         runs = simulate_competing_models(examples)
         
+        if not runs:
+            print("❌ No runs created. Cannot proceed with evaluation.")
+            return
+        
         # Run advanced evaluations
-        results = run_advanced_evaluations(dataset, evaluators, runs)
+        results = run_advanced_evaluations(dataset, evaluators, runs, examples)
         
         # Display results
         display_advanced_results(results, runs)
