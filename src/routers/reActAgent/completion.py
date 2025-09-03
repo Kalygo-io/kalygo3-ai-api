@@ -123,7 +123,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         memory_key="chat_history", chat_memory=message_history, return_messages=True, output_key="output"
     )
 
-    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=10).with_config(
+    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=8).with_config(
         {
             "run_name": "Agent",
             "callbacks": callbacks

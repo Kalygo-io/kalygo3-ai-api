@@ -13,7 +13,7 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 @router.get('/')
-@limiter.limit("10/minute")
+@limiter.limit("100/minute")
 def get_logins(db: db_dependency, jwt: jwt_dependency, request: Request, cursor: Optional[int]):
 
     print('cursor', cursor)
