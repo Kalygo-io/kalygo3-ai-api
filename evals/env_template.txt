@@ -1,0 +1,16 @@
+# LangSmith Evaluation Demo Environment Variables
+# Copy this file to .env and fill in your actual API keys
+
+# LangSmith API Key (optional but recommended)
+# Get yours at: https://smith.langchain.com/
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
+
+# OpenAI API Key (required for advanced demo with LLM-as-judge)
+# Get yours at: https://platform.openai.com/api-keys
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional: LangSmith Project Name
+# LANGCHAIN_PROJECT=your_project_name
+
+# Optional: LangSmith Endpoint (if using self-hosted)
+# LANGCHAIN_ENDPOINT=https://your-langsmith-instance.com
