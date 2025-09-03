@@ -30,15 +30,20 @@ def print_menu():
     print("   Shows: LLM-as-judge, pairwise comparison, regression testing")
     print()
     
-    print("3. 📚 Show Documentation")
+    print("3. 🧪 LangSmith Experiment (Dashboard - 5-7 min)")
+    print("   Run experiments and see results in LangSmith dashboard")
+    print("   Shows: A/B testing, multiple configurations, comprehensive metrics")
+    print()
+    
+    print("4. 📚 Show Documentation")
     print("   Display key concepts and resources")
     print()
     
-    print("4. 🧪 Test Setup")
+    print("5. 🧪 Test Setup")
     print("   Verify your environment is ready")
     print()
     
-    print("5. 🚪 Exit")
+    print("6. 🚪 Exit")
     print()
 
 def run_quick_start():
@@ -100,6 +105,24 @@ def show_documentation():
     print("   • Continuous improvement tracking")
     print("   • Production-ready evaluation framework")
 
+def run_experiment():
+    """Run the LangSmith experiment demo"""
+    print("\n🧪 Starting LangSmith Experiment Demo...")
+    print("This demo will take about 5-7 minutes.")
+    print("Note: Requires LANGSMITH_API_KEY to see results in dashboard.")
+    print("Press Enter to continue...")
+    input()
+    
+    try:
+        # Import and run the experiment demo
+        from langsmith_experiment import main
+        main()
+    except ImportError as e:
+        print(f"❌ Error importing experiment demo: {e}")
+        print("Make sure langsmith_experiment.py is in the same directory.")
+    except Exception as e:
+        print(f"❌ Error running demo: {e}")
+
 def test_setup():
     """Test if the environment is properly set up"""
     print("\n🧪 Testing Your Setup...")
@@ -128,7 +151,7 @@ def test_setup():
     # Check environment variables
     print("\n🔑 Checking environment variables:")
     env_vars = {
-        "LANGCHAIN_API_KEY": "LangSmith API key (optional but recommended)",
+        "LANGSMITH_API_KEY": "LangSmith API key (required for experiment demo)",
         "OPENAI_API_KEY": "OpenAI API key (required for advanced demo)"
     }
     
@@ -142,7 +165,7 @@ def test_setup():
     print("\n📝 Setup Notes:")
     print("   • Basic demo works without API keys (simulated data)")
     print("   • Advanced demo requires OPENAI_API_KEY for LLM-as-judge")
-    print("   • LANGCHAIN_API_KEY enables full LangSmith integration")
+    print("   • Experiment demo requires LANGSMITH_API_KEY for dashboard results")
 
 def main():
     """Main demo runner"""
@@ -151,24 +174,26 @@ def main():
         print_menu()
         
         try:
-            choice = input("Enter your choice (1-5): ").strip()
+            choice = input("Enter your choice (1-6): ").strip()
             
             if choice == "1":
                 run_quick_start()
             elif choice == "2":
                 run_advanced()
             elif choice == "3":
-                show_documentation()
+                run_experiment()
             elif choice == "4":
-                test_setup()
+                show_documentation()
             elif choice == "5":
+                test_setup()
+            elif choice == "6":
                 print("\n👋 Thanks for using the LangSmith Evaluation Demo Suite!")
                 print("Good luck with your presentation! 🎉")
                 break
             else:
-                print("\n❌ Invalid choice. Please enter 1-5.")
+                print("\n❌ Invalid choice. Please enter 1-6.")
             
-            if choice in ["1", "2", "3", "4"]:
+            if choice in ["1", "2", "3", "4", "5"]:
                 print("\n" + "="*80)
                 print("Press Enter to return to main menu...")
                 input()
