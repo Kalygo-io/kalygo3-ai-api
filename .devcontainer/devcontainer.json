@@ -1,27 +1,24 @@
 {
-    "name": "Kalygo API",
-    "build": {
-      "dockerfile": "../Dockerfile.dev"
-    },
-    "customizations": {
-      "vscode": {
-          "extensions": [
-              "ms-python.python",
-              "ms-python.vscode-pylance",
-              "ms-python.black-formatter",
-              "ms-python.debugpy",
-              "ms-azuretools.vscode-docker",
-              "shd101wyy.markdown-preview-enhanced"
-          ],
-          "settings": {}
-      }
-    },
-    "forwardPorts": [
-      4000
-    ],
-    "appPort": 4000,
-    "workspaceMount": "source=${localWorkspaceFolder},target=/code,type=bind,consistency=delegated",
-    "workspaceFolder": "/code",
-    "runArgs": [ "--network=agent-network" ]
-  }
-  
+  "name": "Kalygo API",
+  "build": {
+    "dockerfile": "../Dockerfile.dev"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "ms-python.debugpy",
+        "ms-azuretools.vscode-docker",
+        "shd101wyy.markdown-preview-enhanced"
+      ],
+      "settings": {}
+    }
+  },
+  "forwardPorts": [4000],
+  "appPort": 4000,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/code,type=bind,consistency=delegated",
+  "workspaceFolder": "/code",
+  "runArgs": ["--network=agent-network"]
+}

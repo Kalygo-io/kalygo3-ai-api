@@ -22,3 +22,10 @@ Kalygo 3.0 A.I. API (powered by FastAPI)
 
 - pip install pipreqs
 - pipreqs . --force
+
+## How to run on local
+
+```sh
+python -m venv .venv
+source .venv/bin/activate
+```
