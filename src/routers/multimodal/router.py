@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Request, Response, HTTPException, BackgroundTasks, status
 from pydantic import BaseModel
 import replicate
 from src.deps import jwt_dependency
@@ -230,6 +230,13 @@ async def media_library(request: Request, response: Response, jwt: jwt_dependenc
     Query media assets with proper AbortController support using streaming.
     This endpoint will detect client disconnection and cancel operations accordingly.
     """
+
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="This endpoint is not yet implemented"
+    )
+    
     # Generate unique request ID
     request_id = str(uuid.uuid4())
     response.headers["X-Request-ID"] = request_id
