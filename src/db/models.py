@@ -9,7 +9,7 @@ class Account(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     reset_token = Column(String)
-    stripe_id = Column(String, nullable=True)
+    stripe_customer_id = Column(String, nullable=True)
 
     logins = relationship('Logins', back_populates='account')
     chat_app_sessions = relationship('ChatAppSession', back_populates='account')

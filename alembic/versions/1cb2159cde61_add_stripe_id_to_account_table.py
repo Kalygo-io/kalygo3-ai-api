@@ -20,9 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Add stripe_id column to accounts table
-    op.add_column('accounts', sa.Column('stripe_id', sa.String, nullable=True))
+    op.add_column('accounts', sa.Column('stripe_customer_id', sa.String, nullable=True))
 
 
 def downgrade() -> None:
     # Remove stripe_id column from accounts table
-    op.drop_column('accounts', 'stripe_id')
+    op.drop_column('accounts', 'stripe_customer_id')

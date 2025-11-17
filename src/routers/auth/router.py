@@ -10,6 +10,8 @@ from src.routers.auth.background_tasks import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
 from src.deps import db_dependency, bcrypt_context, jwt_dependency
+from src.clients.stripe_client import create_stripe_customer
+import stripe
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -65,17 +67,36 @@ def create_access_token(email: str, user_id: int, expires_delta: timedelta):
 
 @router.post("/create-account", status_code=status.HTTP_201_CREATED)
 async def create_account(db: db_dependency, create_account_request: AccountCreateRequestBody, request: Request):
+    stripe_customer_id = None
     try:
+        # Create Stripe customer first
+        try:
+            stripe_customer_id = create_stripe_customer(create_account_request.email)
+            print(f"Created Stripe customer: {stripe_customer_id} for email: {create_account_request.email}")
+        except stripe.error.StripeError as e:
+            print(f"Failed to create Stripe customer: {str(e)}")
+            # Continue with account creation even if Stripe fails
+            # The stripe_id will remain None
+        except Exception as e:
+            print(f"Unexpected error creating Stripe customer: {str(e)}")
+            # Continue with account creation
+        
+        # Create account with Stripe customer ID
         hashed_password = bcrypt_context.hash(create_account_request.password)
         create_account_model = Account(
             email=create_account_request.email,
-            hashed_password=hashed_password
+            hashed_password=hashed_password,
+            stripe_customer_id=stripe_customer_id
         )
         db.add(create_account_model)
         db.commit()
         db.refresh(create_account_model)
+        
+        print(f"Account created successfully: {create_account_model.id} with Stripe ID: {stripe_customer_id}")
+        
     except Exception as e:
-        print('create_user error', e)
+        db.rollback()
+        print(f'create_user error: {e}')
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     
 
