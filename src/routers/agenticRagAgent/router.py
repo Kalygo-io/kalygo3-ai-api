@@ -8,4 +8,4 @@ router = APIRouter()
 
 # Include all the endpoint routers
 router.include_router(kb_stats_router)
-router.include_router(completion_router)
+# router.include_router(completion_router)

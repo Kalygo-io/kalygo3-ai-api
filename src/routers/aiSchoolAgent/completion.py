@@ -1,9 +1,11 @@
 from datetime import datetime
 from typing import List
 import uuid
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, status
 
-from src.db.models import ChatAppMessage, ChatAppSession
+from src.db.models import ChatAppMessage, ChatAppSession, Account
+from src.clients.stripe_client import get_payment_methods
+import stripe
 
 from .tools import ai_school_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
@@ -66,6 +68,71 @@ def get_prompt_template(current_date_time: str):
     ])
 
 async def generator(sessionId: str, prompt: str, db, jwt):
+    # ============================================================
+    # Payment verification: Check for Stripe customer ID and payment method
+    # ============================================================
+    try:
+        # Get the account from the database
+        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account = db.query(Account).filter(Account.id == account_id).first()
+        
+        if not account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "Account not found",
+                    "message": "Your account could not be found.",
+                    "hint": "Please contact support if this issue persists."
+                }
+            )
+        
+        # Check if account has a Stripe customer ID
+        if not account.stripe_customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "Payment method required",
+                    "message": "Please add a payment method to your account to use this service.",
+                    "hint": "You can add a payment method in your account settings."
+                }
+            )
+        
+        # Check if the Stripe customer has at least one payment method
+        try:
+            payment_methods = get_payment_methods(account.stripe_customer_id)
+            if not payment_methods or len(payment_methods) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail={
+                        "error": "Payment method required",
+                        "message": "Please add a payment method to your account to use this service.",
+                        "hint": "You can add a payment method in your account settings."
+                    }
+                )
+        except stripe.error.StripeError as e:
+            print(f"Stripe error checking payment methods: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "Payment verification failed",
+                    "message": "Unable to verify payment method. Please try again later.",
+                    "hint": str(e)
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error verifying payment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "Payment verification error",
+                "message": "An error occurred while verifying your payment method.",
+                "hint": str(e)
+            }
+        )
+    # ============================================================
+    
     llm = ChatOpenAI(
         temperature=0, 
         streaming=True, 
