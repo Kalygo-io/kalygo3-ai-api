@@ -25,11 +25,6 @@ bcrypt_context = CryptContext(schemes=["sha256_crypt"])
 
 async def get_current_user(request: Request):
     try:
-        # Debug: Print all cookies received
-        print(f'--- get_current_user called ---')
-        print(f'--- All cookies: {request.cookies} ---')
-        print(f'--- Cookie keys: {list(request.cookies.keys())} ---')
-        
         token = request.cookies.get("jwt")
         
         if not token:

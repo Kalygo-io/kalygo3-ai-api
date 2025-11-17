@@ -23,6 +23,7 @@ from .routers import (
   reranking,
   chatAppSessions,
   aiSchoolAgent,
+  payments,
 )
 
 from src.db.database import Base, engine
@@ -141,4 +142,10 @@ app.include_router(
     chatAppSessions.router,
     prefix="/api/chat-app-sessions",
     tags=['Chat App Sessions'],
+)
+
+app.include_router(
+    payments.router,
+    prefix="/api/payments",
+    tags=['Payments'],
 )
