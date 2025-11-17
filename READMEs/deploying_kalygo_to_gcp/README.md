@@ -126,14 +126,21 @@ gcloud artifacts repositories create kalygo-fastapi \
 - `gcloud services enable secretmanager.googleapis.com`
 
 - ie: `echo -n "render.com url" | gcloud secrets create POSTGRES_URL --data-file=-`
-  - gcloud secrets add-iam-policy-binding POSTGRES_URL \
+- gcloud secrets add-iam-policy-binding POSTGRES_URL \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+- ie: `echo -n "<STRIPE_TEST_KEY>" | gcloud secrets create STRIPE_SECRET_KEY --data-file=-`
+- gcloud secrets add-iam-policy-binding STRIPE_SECRET_KEY \
   --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 
 - ie: `echo -n "pinecone key" | gcloud secrets create PINECONE_API_KEY --data-file=-`
-  - gcloud secrets add-iam-policy-binding PINECONE_API_KEY \
+- gcloud secrets add-iam-policy-binding PINECONE_API_KEY \
   --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
+
+
 
 ### IMPORTANT!
 
