@@ -50,7 +50,7 @@ callbacks = [
 
 router = APIRouter()
 
-def get_prompt_template():
+def get_prompt_template(current_date_time: str):
     """Get the prompt template from LangChain Hub with fallback to default."""
     # try:
     #     return hub.pull("hwchase17/openai-tools-agent")
@@ -59,7 +59,7 @@ def get_prompt_template():
     print("Using default prompt template instead.")
     # Default prompt template for OpenAI tools agent
     return ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant. Use the provided tools to answer questions. The current date and time is {current_date_time}."),
+        ("system", f"You are a helpful assistant. Use the provided tools to answer questions. The current date and time is {current_date_time}."),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -145,7 +145,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             print(f"Removed duplicate prompt from memory: {prompt[:50]}...")
     #^#^#^#
 
-    prompt_template = get_prompt_template()
+    prompt_template = get_prompt_template(current_date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     print("--------------------------------")
     print("--------------------------------")
@@ -180,8 +180,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     
     async for event in agent_executor.astream_events(
         {
-            "input": prompt,
-            "current_date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "input": prompt
         },
         version="v1",
     ):
