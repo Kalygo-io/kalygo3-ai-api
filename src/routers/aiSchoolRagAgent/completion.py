@@ -65,7 +65,12 @@ def get_prompt_template():
         ])
 
 async def generator(sessionId: str, prompt: str, db, jwt):
-    llm = ChatOpenAI(temperature=0, streaming=True, model="gpt-4o-mini")
+    llm = ChatOpenAI(
+        temperature=0, 
+        streaming=True, 
+        stream_usage=True,  # Enable token usage tracking during streaming
+        model="gpt-4o-mini",
+    )
 
     #v#v#v#
     try:

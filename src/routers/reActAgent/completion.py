@@ -33,6 +33,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Set LANGCHAIN_API_KEY from LANGSMITH_API_KEY if not already set (they're the same)
+if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
+    os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+
 callbacks = [
   LangChainTracer(
     project_name="re-act-agent",
@@ -46,7 +50,12 @@ callbacks = [
 router = APIRouter()
 
 async def generator(sessionId: str, prompt: str, db, jwt):
-    llm = ChatOpenAI(temperature=0, streaming=True, model="gpt-4o-mini")
+    llm = ChatOpenAI(
+        temperature=0, 
+        streaming=True, 
+        stream_usage=True,  # Enable token usage tracking during streaming
+        model="gpt-4o-mini"
+    )
 
     #v#v#v#
     try:
