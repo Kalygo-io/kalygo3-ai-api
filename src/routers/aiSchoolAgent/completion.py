@@ -206,6 +206,11 @@ async def generator(sessionId: str, prompt: str, db, jwt):
 
                     # print(content, end="|")
 
+                    # print("--------------------------------")
+                    # print("retrieval_calls")
+                    # print(retrieval_calls)
+                    # print("--------------------------------")
+
                     yield json.dumps({
                         "event": "on_chain_end",
                         "data": content,
@@ -261,7 +266,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             print("--")
             
             # Track retrieval calls if it's the retrieval_with_reranking tool
-            if event['name'] == "retrieval_with_reranking":
+            if event['name'] == "ai_school_reranking_tool":
                 tool_input = event['data'].get('input', {})
                 tool_output = event['data'].get('output', {})
                 
