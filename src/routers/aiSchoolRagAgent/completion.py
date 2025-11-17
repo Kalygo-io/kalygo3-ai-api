@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.db.models import ChatAppMessage, ChatAppSession
 
-from .tools import gptuesday_tool, tad_tool
+from .tools import retrieval_with_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -17,19 +17,19 @@ from fastapi.responses import StreamingResponse
 
 from langchain.callbacks import LangChainTracer
 from langsmith import Client
+
 from langchain import hub
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-from .tools.calculator_tool import calculator_tool
-
 from src.deps import db_dependency, jwt_dependency
 
 limiter = Limiter(key_func=get_remote_address)
 
 from dotenv import load_dotenv
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 load_dotenv()
 
@@ -39,7 +39,7 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
 
 callbacks = [
   LangChainTracer(
-    project_name="re-act-agent",
+    project_name="ai-school-rag-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")
@@ -49,12 +49,27 @@ callbacks = [
 
 router = APIRouter()
 
+def get_prompt_template():
+    """Get the prompt template from LangChain Hub with fallback to default."""
+    try:
+        return hub.pull("hwchase17/openai-tools-agent")
+    except Exception as e:
+        print(f"Warning: Failed to pull prompt from LangChain Hub: {e}")
+        print("Using default prompt template instead.")
+        # Default prompt template for OpenAI tools agent
+        return ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful assistant. Use the provided tools to answer questions."),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+
 async def generator(sessionId: str, prompt: str, db, jwt):
     llm = ChatOpenAI(
         temperature=0, 
         streaming=True, 
         stream_usage=True,  # Enable token usage tracking during streaming
-        model="gpt-4o-mini"
+        model="gpt-4o-mini",
     )
 
     #v#v#v#
@@ -118,21 +133,19 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             )
     #^#^#^#
 
-    prompt_template = hub.pull("hwchase17/openai-tools-agent") # Get the prompt to use - you can modify this!
-    # tools = [serp_tool, gptuesday_tool]
-    # tools = [gptuesday_tool, tad_tool]
-    # tools = [reflect_tool, deliberate_tool]
-    tools = [calculator_tool]
-    
+    prompt_template = get_prompt_template()
+    tools = [retrieval_with_reranking_tool]
+    retrieval_calls = [] # Track retrieval calls
+
     agent = create_openai_tools_agent(
         llm.with_config({"tags": ["agent_llm"]}), tools, prompt_template
     )
-    
+        
     memory = ConversationBufferMemory(
         memory_key="chat_history", chat_memory=message_history, return_messages=True, output_key="output"
     )
 
-    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=8).with_config(
+    agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=10).with_config(
         {
             "run_name": "Agent",
             "callbacks": callbacks
@@ -167,8 +180,9 @@ async def generator(sessionId: str, prompt: str, db, jwt):
                 print()
                 print("--")
                 print(
-                    f"Done agent: {event['name']} with output: {event['data'].get('output')['output']}"
+                    f"Done agent: {event['name']}"
                 )
+                print(len(retrieval_calls))
                 
                 if content:
                 # Empty content in the context of OpenAI means
@@ -194,7 +208,8 @@ async def generator(sessionId: str, prompt: str, db, jwt):
 
                     yield json.dumps({
                         "event": "on_chain_end",
-                        "data": content
+                        "data": content,
+                        "retrieval_calls": retrieval_calls
                     }, separators=(',', ':'))
         if kind == "on_chat_model_start":
             try: # Store the latest prompt into the session message history
@@ -216,6 +231,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             
             yield json.dumps({
                 "event": "on_chat_model_start",
+                "retrieval_calls": retrieval_calls
             }, separators=(',', ':'))
         elif kind == "on_chat_model_stream":
             content = event["data"]["chunk"].content
@@ -243,11 +259,43 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             print(f"Done tool: {event['name']}")
             print(f"Tool output was: {event['data'].get('output')}")
             print("--")
+            
+            # Track retrieval calls if it's the retrieval_with_reranking tool
+            if event['name'] == "retrieval_with_reranking":
+                tool_input = event['data'].get('input', {})
+                tool_output = event['data'].get('output', {})
+                
+                # Extract query from tool input
+                query = tool_input.get('query', 'Unknown query')
+                
+                # Extract results from tool output
+                reranked_results = tool_output.get('reranked_results', [])
+                
+                # Format results for response
+                formatted_results = []
+                for result in reranked_results:
+
+                    formatted_results.append({
+                        "chunk_id": result.get("metadata", {}).get("chunk_id", "N/A"),
+                        "total_chunks": result.get("metadata", {}).get("total_chunks", "N/A"),
+                        "relevance_score": result.get("relevance_score", 0.0),
+                        "similarity_score": result.get("similarity_score", 0.0),
+                        "content": result.get("metadata", {}).get("content", ""),
+                        "filename": result.get("metadata", {}).get("filename", "N/A")
+                    })
+                
+                retrieval_calls.append({
+                    "query": query,
+                    "reranked_results": formatted_results,
+                    "message": tool_output.get('message', ''),
+                    "namespace": tool_output.get('namespace', '')
+                })
+            
             yield json.dumps({
                 "event": "on_tool_end",
             }, separators=(',', ':'))
 
 @router.post("/completion")
 @limiter.limit("10/minute")
-def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
-    return StreamingResponse(generator(chatSessionPrompt.sessionId, chatSessionPrompt.prompt, db, jwt), media_type='text/event-stream')
+def prompt(prompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
+    return StreamingResponse(generator(prompt.sessionId, prompt.prompt, db, jwt), media_type='text/event-stream')

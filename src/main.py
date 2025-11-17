@@ -22,6 +22,7 @@ from .routers import (
   similaritySearch,
   reranking,
   chatAppSessions,
+  aiSchoolRagAgent,
 )
 
 from src.db.database import Base, engine
@@ -93,6 +94,11 @@ app.include_router(
 app.include_router(
     agenticRagAgent.router,
     prefix="/api/agentic-rag-agent",
+)
+
+app.include_router(
+    aiSchoolRagAgent.router,
+    prefix="/api/ai-school-rag-agent",
 )
 
 app.include_router(
