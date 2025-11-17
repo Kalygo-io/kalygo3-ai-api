@@ -1,6 +1,6 @@
 from typing import List
 import uuid
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, status
 
 from src.db.models import ChatAppMessage, ChatAppSession
 
@@ -250,4 +250,9 @@ async def generator(sessionId: str, prompt: str, db, jwt):
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
-    return StreamingResponse(generator(chatSessionPrompt.sessionId, chatSessionPrompt.prompt, db, jwt), media_type='text/event-stream')
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="This endpoint is not yet implemented"
+    )
+
+    # return StreamingResponse(generator(chatSessionPrompt.sessionId, chatSessionPrompt.prompt, db, jwt), media_type='text/event-stream')

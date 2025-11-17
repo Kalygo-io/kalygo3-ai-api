@@ -231,7 +231,6 @@ async def media_library(request: Request, response: Response, jwt: jwt_dependenc
     This endpoint will detect client disconnection and cancel operations accordingly.
     """
 
-
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="This endpoint is not yet implemented"

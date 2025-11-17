@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, status
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_postgres import PostgresChatMessageHistory
@@ -170,6 +170,11 @@ async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
 @router.post("/completion")
 @limiter.limit("10/minute")
 async def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="This endpoint is not yet implemented"
+    )
 
     print('chatSessionPrompt.sessionId', chatSessionPrompt.sessionId)
 
