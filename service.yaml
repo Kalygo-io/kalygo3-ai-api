@@ -154,5 +154,13 @@ spec:
             
             - name: GOOGLE_CLOUD_PROJECT
               value: "kalygo-436411"
+
+            # Stripe
+
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: STRIPE_SECRET_KEY
+                  key: latest
           ports:
             - containerPort: 8080
