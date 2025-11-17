@@ -19,7 +19,7 @@ def delete_vectors_in_namespace(request_body: DeleteVectorsRequest, decoded_jwt:
     try:
         # Get the index name from environment variables
         index_name = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
-        namespace = "similarity_search"  # Using the namespace for similaritySearch
+        namespace = "ai_school_kb"  # Using the namespace for similaritySearch
         
         # Get index and delete all vectors in the namespace
         index = pc.Index(index_name)
