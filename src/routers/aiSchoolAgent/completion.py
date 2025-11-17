@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 import uuid
 from fastapi import APIRouter, HTTPException, Request
@@ -51,18 +52,18 @@ router = APIRouter()
 
 def get_prompt_template():
     """Get the prompt template from LangChain Hub with fallback to default."""
-    try:
-        return hub.pull("hwchase17/openai-tools-agent")
-    except Exception as e:
-        print(f"Warning: Failed to pull prompt from LangChain Hub: {e}")
-        print("Using default prompt template instead.")
-        # Default prompt template for OpenAI tools agent
-        return ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant. Use the provided tools to answer questions."),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
+    # try:
+    #     return hub.pull("hwchase17/openai-tools-agent")
+    # except Exception as e:
+    # print(f"Warning: Failed to pull prompt from LangChain Hub: {e}")
+    print("Using default prompt template instead.")
+    # Default prompt template for OpenAI tools agent
+    return ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant. Use the provided tools to answer questions. The current date and time is {current_date_time}."),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ])
 
 async def generator(sessionId: str, prompt: str, db, jwt):
     llm = ChatOpenAI(
@@ -145,6 +146,13 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     #^#^#^#
 
     prompt_template = get_prompt_template()
+
+    print("--------------------------------")
+    print("--------------------------------")
+    print(prompt_template)
+    print("--------------------------------")
+    print("--------------------------------")
+
     tools = [ai_school_reranking_tool]
     retrieval_calls = [] # Track retrieval calls
 
@@ -171,7 +179,10 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     user_message_stored = False
     
     async for event in agent_executor.astream_events(
-        {"input": prompt},
+        {
+            "input": prompt,
+            "current_date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        },
         version="v1",
     ):
         kind = event["event"]
