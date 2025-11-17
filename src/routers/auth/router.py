@@ -9,7 +9,7 @@ from src.db.models import Account
 from src.routers.auth.background_tasks import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
-from src.deps import db_dependency, bcrypt_context
+from src.deps import db_dependency, bcrypt_context, jwt_dependency
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -42,6 +42,9 @@ class PasswordResetBody(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class CurrentUserResponse(BaseModel):
+    email: str
 
 def authenticate(email: str, password: str, db):
     print("authenticate...")
@@ -121,6 +124,16 @@ async def validate_token(request: Request, authorization: str = Header(...)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+@router.get('/me', response_model=CurrentUserResponse)
+async def get_current_user_info(current_user: jwt_dependency, request: Request):
+    """
+    Get the current user's email from the JWT token.
+    """
+    print(f'--- /me endpoint called ---')
+    print(f'--- current_user: {current_user} ---')
+    print(f'--- cookies: {request.cookies} ---')
+    return CurrentUserResponse(email=current_user['email'])
     
 @router.delete("/log-out")
 @limiter.limit("5/minute")
@@ -174,3 +187,4 @@ def check_cookies(request: Request):
     cookies = request.cookies
     print("Received cookies:", cookies)
     return {"cookies": cookies}
+

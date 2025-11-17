@@ -25,23 +25,40 @@ bcrypt_context = CryptContext(schemes=["sha256_crypt"])
 
 async def get_current_user(request: Request):
     try:
+        # Debug: Print all cookies received
+        print(f'--- get_current_user called ---')
+        print(f'--- All cookies: {request.cookies} ---')
+        print(f'--- Cookie keys: {list(request.cookies.keys())} ---')
+        
         token = request.cookies.get("jwt")
-
+        
         if not token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+            print('--- No JWT token found in cookies ---')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated - no JWT token found in cookies")
 
+        print(f'--- JWT token found: {token[:50]}... ---')
+        
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
         email: str | None = payload.get('sub')
         account_id: str = payload.get('id')
         
-        print('--- email (sub) ---', email)
+        print(f'--- email (sub): {email} ---')
+        print(f'--- account_id: {account_id} ---')
         
         if email is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user - email not found in token')
         
         return {'email': email, 'id': account_id}
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
+    except JWTError as e:
+        print(f'--- JWT Error: {str(e)} ---')
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Could not validate user: {str(e)}')
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'--- Unexpected error in get_current_user: {str(e)} ---')
+        import traceback
+        print(f'--- Traceback: {traceback.format_exc()} ---')
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Could not validate user: {str(e)}')
     
 jwt_dependency = Annotated[dict, Depends(get_current_user)]
