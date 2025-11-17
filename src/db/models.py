@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float
 from sqlalchemy.orm import relationship
 from .database import Base
 import datetime
@@ -13,6 +13,7 @@ class Account(Base):
 
     logins = relationship('Logins', back_populates='account')
     chat_app_sessions = relationship('ChatAppSession', back_populates='account')
+    usage_credits = relationship('UsageCredits', back_populates='account')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -76,3 +77,16 @@ class ChatAppMessage(Base):
     
     def __repr__(self):
         return f'<ChatAppMessage {self.id}>'
+
+class UsageCredits(Base):
+    __tablename__ = 'usage_credits'
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    
+    account = relationship('Account', back_populates='usage_credits')
+    
+    def __repr__(self):
+        return f'<UsageCredits {self.account_id}: ${self.amount}>'

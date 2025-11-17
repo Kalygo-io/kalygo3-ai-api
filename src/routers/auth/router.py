@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from jose import jwt
 from dotenv import load_dotenv
 import os
-from src.db.models import Account
+from src.db.models import Account, UsageCredits
 from src.routers.auth.background_tasks import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
@@ -104,6 +104,20 @@ async def create_account(db: db_dependency, create_account_request: AccountCreat
         db.add(create_account_model)
         db.commit()
         db.refresh(create_account_model)
+        
+        # Create initial usage credits for new account ($0.50)
+        try:
+            usage_credits = UsageCredits(
+                account_id=create_account_model.id,
+                amount=1.00 # $1.00
+            )
+            db.add(usage_credits)
+            db.commit()
+            print(f"Created initial usage credits: $1.00 for account {create_account_model.id}")
+        except Exception as e:
+            print(f"Failed to create usage credits: {str(e)}")
+            db.rollback()
+            # Don't fail account creation if credits creation fails, but log the error
         
         print(f"Account created successfully: {create_account_model.id} with Stripe ID: {stripe_customer_id}")
         
