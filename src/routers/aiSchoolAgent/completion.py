@@ -131,6 +131,17 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             message_history.add_message(
                 {"role": message_data['role'], "content": message_data['content']}
             )
+    
+    # Prevent duplicate: Remove the last message if it matches the current prompt
+    # ConversationBufferMemory will automatically add the current input, so we don't want it duplicated
+    if message_history.messages:
+        last_message = message_history.messages[-1]
+        # Check if last message is a human message with the same content as current prompt
+        if (hasattr(last_message, 'content') and last_message.content == prompt and 
+            hasattr(last_message, 'type') and last_message.type == 'human'):
+            # Remove the duplicate - ConversationBufferMemory will add it when agent_executor runs
+            message_history.messages.pop()
+            print(f"Removed duplicate prompt from memory: {prompt[:50]}...")
     #^#^#^#
 
     prompt_template = get_prompt_template()
@@ -156,6 +167,9 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     # on_chat_model_start, on_chat_model_stream, on_chat_model_end, on_llm_start, on_llm_stream, on_llm_end, on_chain_start, on_chain_stream, on_chain_end
     # on_tool_start, on_tool_stream, on_tool_end, on_retriever_start, on_retriever_chunk, on_retriever_end, on_prompt_start, on_prompt_end
 
+    # Track if we've already stored the user message to prevent duplicates
+    user_message_stored = False
+    
     async for event in agent_executor.astream_events(
         {"input": prompt},
         version="v1",
@@ -206,33 +220,32 @@ async def generator(sessionId: str, prompt: str, db, jwt):
 
                     # print(content, end="|")
 
-                    # print("--------------------------------")
-                    # print("retrieval_calls")
-                    # print(retrieval_calls)
-                    # print("--------------------------------")
-
                     yield json.dumps({
                         "event": "on_chain_end",
                         "data": content,
                         "retrieval_calls": retrieval_calls
                     }, separators=(',', ':'))
         if kind == "on_chat_model_start":
-            try: # Store the latest prompt into the session message history
-                user_message = ChatAppMessage(
-                    message={
-                        "role": "human",
-                        "content": prompt
-                    },
-                    chat_app_session_id=session.id
-                )
-                db.add(user_message)
-                db.commit()
-                db.refresh(user_message)
-                user_message_id = user_message.id
-                print(f"Stored user message with ID: {user_message_id}")
-            except Exception as e:
-                print(f"Failed to store user message: {e}")
-                db.rollback()
+            # Only store the user message once, even if on_chat_model_start fires multiple times
+            # (which happens when the agent makes multiple LLM calls for tool usage)
+            if not user_message_stored:
+                try: # Store the latest prompt into the session message history
+                    user_message = ChatAppMessage(
+                        message={
+                            "role": "human",
+                            "content": prompt
+                        },
+                        chat_app_session_id=session.id
+                    )
+                    db.add(user_message)
+                    db.commit()
+                    db.refresh(user_message)
+                    user_message_id = user_message.id
+                    print(f"Stored user message with ID: {user_message_id}")
+                    user_message_stored = True
+                except Exception as e:
+                    print(f"Failed to store user message: {e}")
+                    db.rollback()
             
             yield json.dumps({
                 "event": "on_chat_model_start",
