@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException, status
 from langchain_openai import ChatOpenAI
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -65,4 +65,9 @@ async def generator(prompt: str):
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(prompt: Prompt, jwt: jwt_dependency, request: Request):
-    return StreamingResponse(generator(prompt.prompt), media_type='text/event-stream')
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="This endpoint is not yet implemented"
+    )
+
+    # return StreamingResponse(generator(prompt.prompt), media_type='text/event-stream')
