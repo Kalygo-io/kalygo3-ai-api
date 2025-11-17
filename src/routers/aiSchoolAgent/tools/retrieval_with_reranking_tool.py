@@ -9,7 +9,7 @@ import requests
 
 from src.core.clients import pc
 
-async def retrieval_with_reranking_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8) -> Dict:
+async def retrieval_with_reranking_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "reranking") -> Dict:
     """
     Perform retrieval with reranking using vector embeddings and Cohere Rerank 3.5.
     """

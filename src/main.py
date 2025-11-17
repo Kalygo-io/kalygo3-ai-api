@@ -22,7 +22,7 @@ from .routers import (
   similaritySearch,
   reranking,
   chatAppSessions,
-  aiSchoolRagAgent,
+  aiSchoolAgent,
 )
 
 from src.db.database import Base, engine
@@ -97,8 +97,8 @@ app.include_router(
 )
 
 app.include_router(
-    aiSchoolRagAgent.router,
-    prefix="/api/ai-school-rag-agent",
+    aiSchoolAgent.router,
+    prefix="/api/ai-school-agent",
 )
 
 app.include_router(

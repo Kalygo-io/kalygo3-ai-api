@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.db.models import ChatAppMessage, ChatAppSession
 
-from .tools import retrieval_with_reranking_tool
+from .tools import ai_school_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -39,7 +39,7 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
 
 callbacks = [
   LangChainTracer(
-    project_name="ai-school-rag-agent",
+    project_name="ai-school-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")
@@ -134,7 +134,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     #^#^#^#
 
     prompt_template = get_prompt_template()
-    tools = [retrieval_with_reranking_tool]
+    tools = [ai_school_reranking_tool]
     retrieval_calls = [] # Track retrieval calls
 
     agent = create_openai_tools_agent(
