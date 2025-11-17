@@ -175,3 +175,26 @@ def create_payment_method_from_card(
         print(f"Stripe error creating payment method: {str(e)}")
         raise
 
+
+def detach_payment_method(payment_method_id: str) -> bool:
+    """
+    Detach a payment method from a customer.
+    This effectively removes the payment method from the customer's stored payment methods.
+    
+    Args:
+        payment_method_id: The Stripe payment method ID (e.g., 'pm_xxxxx')
+        
+    Returns:
+        True if successful
+        
+    Raises:
+        stripe.error.StripeError: If Stripe API call fails
+    """
+    try:
+        # Detach the payment method from the customer
+        payment_method = stripe.PaymentMethod.detach(payment_method_id)
+        return True
+    except stripe.error.StripeError as e:
+        print(f"Stripe error detaching payment method: {str(e)}")
+        raise
+

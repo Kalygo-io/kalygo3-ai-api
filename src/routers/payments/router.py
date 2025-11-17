@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Account
-from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, create_payment_method_from_card
+from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, create_payment_method_from_card, detach_payment_method
 import stripe
 
 from slowapi import Limiter
@@ -151,17 +151,17 @@ async def add_payment_method(
         )
 
 
-@router.post("/create-payment-method")
+@router.delete("/payment-methods/{payment_method_id}")
 @limiter.limit("10/minute")
-async def create_payment_method(
-    request_body: CreatePaymentMethodRequest,
+async def delete_payment_method(
+    payment_method_id: str,
     db: db_dependency,
     jwt: jwt_dependency,
     request: Request
 ):
     """
-    Create a payment method from card details and attach it to the authenticated user's Stripe customer.
-    If the user doesn't have a Stripe customer ID, creates one first.
+    Delete a payment method for the authenticated user.
+    Verifies that the payment method belongs to the user's Stripe customer before deletion.
     """
     try:
         # Get the account from the database using the JWT account_id
@@ -174,68 +174,60 @@ async def create_payment_method(
                 detail="Account not found"
             )
         
-        # Check if the account has a Stripe customer ID, create one if not
+        # Check if the account has a Stripe customer ID
         if not account.stripe_customer_id:
-            try:
-                stripe_customer_id = create_stripe_customer(account.email)
-                account.stripe_customer_id = stripe_customer_id
-                db.commit()
-                db.refresh(account)
-                print(f"Created Stripe customer: {stripe_customer_id} for account: {account.id}")
-            except stripe.error.StripeError as e:
-                print(f"Failed to create Stripe customer: {str(e)}")
-                db.rollback()
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to create Stripe customer: {str(e)}"
-                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No Stripe customer associated with this account"
+            )
         
-        # Create payment method from card details
+        # Verify the payment method belongs to this customer
         try:
-            payment_method = create_payment_method_from_card(
-                card_number=request_body.card_number,
-                exp_month=request_body.exp_month,
-                exp_year=request_body.exp_year,
-                cvv=request_body.cvv,
-                cardholder_name=request_body.cardholder_name,
-                billing_zip=request_body.billing_zip
-            )
+            # Retrieve the payment method to verify it belongs to the customer
+            payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
             
-            # Attach the payment method to the Stripe customer
-            attach_payment_method(
-                account.stripe_customer_id,
-                payment_method["id"]
-            )
+            # Check if the payment method is attached to this customer
+            if payment_method.customer != account.stripe_customer_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Payment method does not belong to your account"
+                )
             
-            print(f"Created and attached payment method {payment_method['id']} to customer {account.stripe_customer_id}")
+            # Detach the payment method from the customer
+            detach_payment_method(payment_method_id)
+            
+            print(f"Detached payment method {payment_method_id} from customer {account.stripe_customer_id}")
             
             return {
                 "success": True,
-                "payment_method": payment_method,
-                "stripe_customer_id": account.stripe_customer_id,
-                "message": "Payment method created and added successfully"
+                "message": "Payment method deleted successfully",
+                "payment_method_id": payment_method_id
             }
-        except stripe.error.CardError as e:
-            # Card-specific errors (e.g., card declined, invalid card number)
-            print(f"Stripe card error: {str(e)}")
+            
+        except stripe.error.InvalidRequestError as e:
+            # Payment method not found or already detached
+            if "No such payment_method" in str(e) or "already been detached" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Payment method not found or already deleted"
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Card error: {e.user_message if hasattr(e, 'user_message') else str(e)}"
+                detail=f"Invalid payment method: {str(e)}"
             )
         except stripe.error.StripeError as e:
-            print(f"Stripe error creating payment method: {str(e)}")
+            print(f"Stripe error deleting payment method: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create payment method: {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete payment method: {str(e)}"
             )
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating payment method: {str(e)}")
-        db.rollback()
+        print(f"Error deleting payment method: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating payment method: {str(e)}"
+            detail=f"An error occurred while deleting payment method: {str(e)}"
         )
 
