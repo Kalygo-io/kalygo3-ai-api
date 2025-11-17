@@ -67,6 +67,19 @@ def create_access_token(email: str, user_id: int, expires_delta: timedelta):
 
 @router.post("/create-account", status_code=status.HTTP_201_CREATED)
 async def create_account(db: db_dependency, create_account_request: AccountCreateRequestBody, request: Request):
+    # ============================================================
+    # TEMPORARY DEVELOPMENT LIMIT: Maximum 50 accounts
+    # This is a hard-coded limit during early development stages.
+    # Remove this check before production deployment.
+    # ============================================================
+    account_count = db.query(Account).count()
+    if account_count >= 50:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account creation is currently limited. Maximum number of accounts reached."
+        )
+    # ============================================================
+    
     stripe_customer_id = None
     try:
         # Create Stripe customer first
