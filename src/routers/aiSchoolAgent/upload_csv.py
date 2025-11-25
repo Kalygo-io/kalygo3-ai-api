@@ -76,7 +76,7 @@ router = APIRouter()
 #             "error": f"Failed to upload files: {str(e)}"
 #         }
 
-@router.post("/upload-single")
+@router.post("/upload-csv-single")
 @limiter.limit("100/minute")
 async def upload_single_file(
     file: UploadFile = File(..., description="Single file to upload"),
