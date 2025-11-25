@@ -17,7 +17,7 @@ from datetime import datetime
 from fastapi.responses import StreamingResponse
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.callbacks import LangChainTracer
+# from langchain.callbacks import LangChainTracer
 from langsmith import Client
 import psycopg
 from src.deps import jwt_dependency, db_dependency
@@ -30,13 +30,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 callbacks = [
-  LangChainTracer(
-    project_name="persistent-memory",
-    client=Client(
-      api_url=os.getenv("LANGSMITH_ENDPOINT"),
-      api_key=os.getenv("LANGSMITH_API_KEY")
-    )
-  )
+#   LangChainTracer(
+#     project_name="persistent-memory",
+#     client=Client(
+#       api_url=os.getenv("LANGSMITH_ENDPOINT"),
+#       api_key=os.getenv("LANGSMITH_API_KEY")
+#     )
+#   )
 ]
 
 router = APIRouter()

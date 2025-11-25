@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List
 import uuid
 from fastapi import APIRouter, HTTPException, Request, status
+from langchain_ollama import ChatOllama
 
 from src.db.models import ChatAppMessage, ChatAppSession, Account
 from src.clients.stripe_client import get_payment_methods
@@ -18,12 +19,13 @@ import os
 
 from fastapi.responses import StreamingResponse
 
-from langchain.callbacks import LangChainTracer
+# from langchain.callbacks import LangChainTracer
 from langsmith import Client
 
 from langchain import hub
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
+# from langchain_ollama import ChatOllama
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
@@ -41,13 +43,13 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 
 callbacks = [
-  LangChainTracer(
-    project_name="ai-school-agent",
-    client=Client(
-      api_url=os.getenv("LANGSMITH_ENDPOINT"),
-      api_key=os.getenv("LANGSMITH_API_KEY")
-    )
-  )
+#   LangChainTracer(
+#     project_name="ai-school-agent",
+#     client=Client(
+#       api_url=os.getenv("LANGSMITH_ENDPOINT"),
+#       api_key=os.getenv("LANGSMITH_API_KEY")
+#     )
+#   )
 ]
 
 router = APIRouter()
@@ -133,11 +135,17 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         )
     # ============================================================
     
-    llm = ChatOpenAI(
-        temperature=0, 
-        streaming=True, 
-        stream_usage=True,  # Enable token usage tracking during streaming
-        model="gpt-4o-mini",
+    # llm = ChatOpenAI(
+    #     temperature=0, 
+    #     streaming=True, 
+    #     stream_usage=True,  # Enable token usage tracking during streaming
+    #     model="gpt-4o-mini",
+    # )
+    
+    llm = ChatOllama(
+        model="gemma3:4b",  # Change this to your preferred Ollama model
+        temperature=0,
+        base_url="http://localhost:11434",  # Default Ollama URL
     )
 
     #v#v#v#

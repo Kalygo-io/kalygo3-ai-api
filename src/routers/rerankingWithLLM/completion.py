@@ -9,7 +9,7 @@ import os
 from fastapi.responses import StreamingResponse
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_postgres import PostgresChatMessageHistory
-from langchain.callbacks import LangChainTracer
+# from langchain.callbacks import LangChainTracer
 from langsmith import Client
 from src.core.clients import pc
 from dotenv import load_dotenv
@@ -25,13 +25,13 @@ limiter = Limiter(key_func=get_remote_address)
 load_dotenv()
 
 callbacks = [
-    LangChainTracer(
-    project_name="search-with-reranking",
-    client=Client(
-        api_url=os.getenv("LANGSMITH_ENDPOINT"),
-        api_key=os.getenv("LANGSMITH_API_KEY"),
-    )
-    )
+    # LangChainTracer(
+        # project_name="search-with-reranking",
+        # client=Client(
+        #     api_url=os.getenv("LANGSMITH_ENDPOINT"),
+        #     api_key=os.getenv("LANGSMITH_API_KEY"),
+        # )
+    # )
 ]
 
 router = APIRouter()

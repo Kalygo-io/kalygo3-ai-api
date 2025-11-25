@@ -78,10 +78,10 @@ app.include_router(
     prefix="/api/basic-memory",
 )
 
-app.include_router(
-    persistentMemory.router,
-    prefix="/api/persistent-memory",
-)
+# app.include_router(
+#     persistentMemory.router,
+#     prefix="/api/persistent-memory",
+# )
 
 app.include_router(
     rerankingWithLLM.router,

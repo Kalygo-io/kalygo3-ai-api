@@ -15,7 +15,7 @@ import os
 
 from fastapi.responses import StreamingResponse
 
-from langchain.callbacks import LangChainTracer
+# from langchain.callbacks import LangChainTracer
 from langsmith import Client
 
 from langchain import hub
@@ -37,13 +37,13 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 
 callbacks = [
-  LangChainTracer(
-    project_name="agentic-rag-agent",
-    client=Client(
-      api_url=os.getenv("LANGSMITH_ENDPOINT"),
-      api_key=os.getenv("LANGSMITH_API_KEY")
-    )
-  )
+#   LangChainTracer(
+#     project_name="agentic-rag-agent",
+#     client=Client(
+#       api_url=os.getenv("LANGSMITH_ENDPOINT"),
+#       api_key=os.getenv("LANGSMITH_API_KEY")
+#     )
+#   )
 ]
 
 router = APIRouter()
