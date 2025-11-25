@@ -8,6 +8,11 @@ Kalygo 3.0 A.I. API (powered by FastAPI)
 - `docker network create agent-network`
 - In Cursor or VSCode (SHIFT + CMD + P -> `Build and Open in Container`)
 
+## Alternate technique
+
+- `docker build -f Dockerfile.dev -t kalygo-ai-api .`
+- `docker run -p 4000:4000 kalygo-ai-api`
+
 ## How to run the FastAPI
 
 - `pip install -r requirements.txt`
