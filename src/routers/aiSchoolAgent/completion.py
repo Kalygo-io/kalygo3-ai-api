@@ -24,6 +24,7 @@ from langsmith import Client
 from langchain import hub
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
@@ -61,7 +62,7 @@ def get_prompt_template(current_date_time: str):
     print("Using default prompt template instead.")
     # Default prompt template for OpenAI tools agent
     return ChatPromptTemplate.from_messages([
-        ("system", f"You are a helpful assistant. Use the provided tools to answer questions. The current date and time is {current_date_time}."),
+        ("system", f"You are a helpful assistant. Use the provided tools to answer questions. Do not hallucinate. Ground your knowledge deeply in the knowledge base, and if you are unsure When responding to inputs, ask for clarification. The current date and time is {current_date_time}."),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -139,6 +140,12 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         stream_usage=True,  # Enable token usage tracking during streaming
         model="gpt-4o-mini",
     )
+
+    # llm = ChatOllama(
+    #     model="qwen2.5:3b",  # The model name as shown in `ollama list`
+    #     base_url="http://host.docker.internal:11434",  # Default Ollama server URL
+    #     temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
+    # )
 
     #v#v#v#
     try:
@@ -221,6 +228,9 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     print("--------------------------------")
 
     tools = [ai_school_reranking_tool]
+
+    llm.bind_tools(tools)
+    
     retrieval_calls = [] # Track retrieval calls
 
     agent = create_openai_tools_agent(

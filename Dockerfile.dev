@@ -2,12 +2,15 @@ FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y curl git build-essential net-tools iproute2 libpq-dev
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 # set the working directory
 WORKDIR /code
 
-# install dependencies
-COPY ./requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# install dependencies using uv
+COPY ./pyproject.toml ./
+RUN uv pip install --system --no-cache .
 
 # copy the src to the folder
 COPY .vscode/launch.json ./.vscode/launch.json

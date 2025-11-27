@@ -1,6 +1,6 @@
-from langchain.tools.base import StructuredTool
+from langchain_core.tools import StructuredTool
 from langchain_community.utilities import GoogleSerperAPIWrapper
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 class SearchQuery(BaseModel):
     query: str = Field()
