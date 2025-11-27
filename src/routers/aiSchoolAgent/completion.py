@@ -34,6 +34,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 load_dotenv()
 
@@ -53,26 +54,92 @@ callbacks = [
 
 router = APIRouter()
 
-def get_prompt_template(current_date_time: str):
-    """Get the prompt template from LangChain Hub with fallback to default."""
+async def summarize_messages(llm, messages: List, max_tokens: int = 2000):
+    """Summarize a list of messages, clipping oldest if needed to fit context window."""
+    if not messages:
+        return ""
+    
+    # Convert messages to text format for summarization
+    conversation_text = ""
+    for msg in messages:
+        role = "User" if isinstance(msg, HumanMessage) or (hasattr(msg, 'type') and msg.type == 'human') else "Assistant"
+        content = msg.content if hasattr(msg, 'content') else str(msg)
+        conversation_text += f"{role}: {content}\n\n"
+    
+    # Estimate tokens (rough: 1 token ≈ 4 characters)
+    estimated_tokens = len(conversation_text) // 4
+    
+    # If exceeds max_tokens, clip from the beginning
+    if estimated_tokens > max_tokens:
+        # Keep only the most recent messages that fit
+        clipped_text = ""
+        for msg in reversed(messages):
+            role = "User" if isinstance(msg, HumanMessage) or (hasattr(msg, 'type') and msg.type == 'human') else "Assistant"
+            content = msg.content if hasattr(msg, 'content') else str(msg)
+            new_text = f"{role}: {content}\n\n" + clipped_text
+            if len(new_text) // 4 <= max_tokens:
+                clipped_text = new_text
+            else:
+                break
+        conversation_text = clipped_text
+    
+    # Create summarization prompt
+    summary_prompt = f"""Please provide a concise summary of the following conversation history. 
+Focus on key topics, decisions, and important information that would be useful for future context.
+
+Conversation:
+{conversation_text}
+
+Summary:"""
+    
+    try:
+        response = await llm.ainvoke([HumanMessage(content=summary_prompt)])
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        print(f"Error summarizing messages: {e}")
+        return f"Previous conversation context (summarization failed): {len(messages)} messages"
+
+def get_prompt_template(current_date_time: str, short_term_memory: List = None, medium_term_memory: str = ""):
+    """Get the prompt template with short-term and medium-term memory."""
     # try:
     #     return hub.pull("hwchase17/openai-tools-agent")
     # except Exception as e:
     # print(f"Warning: Failed to pull prompt from LangChain Hub: {e}")
     print("Using default prompt template instead.")
-    # Default prompt template for OpenAI tools agent
-    return ChatPromptTemplate.from_messages([
-        ("system", f"""You are a helpful assistant.
+    
+    # Build system message with memory sections
+    system_parts = [
+        f"""You are a helpful assistant.
 Use the provided tools to answer questions.
 Do not hallucinate.
 Ground your knowledge deeply in the knowledge base.
 If you are unsure then ask for clarification.
 It is better to ask for clarification than to make up information.
-For context the current date and time is {current_date_time}."""),
-        MessagesPlaceholder(variable_name="chat_history"),
+For context the current date and time is {current_date_time}."""
+    ]
+    
+    # Add medium-term memory if available
+    if medium_term_memory:
+        system_parts.append(f"\n\n## Medium-term Memory (Previous Conversation Summary):\n{medium_term_memory}")
+    
+    system_message = "".join(system_parts)
+    
+    # Build messages list
+    messages = [
+        ("system", system_message),
+    ]
+    
+    # Add short-term memory using MessagesPlaceholder (populated by ConversationBufferMemory)
+    # The short_term_memory parameter is kept for reference/logging but ConversationBufferMemory handles it
+    messages.append(MessagesPlaceholder(variable_name="chat_history"))
+    
+    # Add current input and agent scratchpad
+    messages.extend([
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ])
+    
+    return ChatPromptTemplate.from_messages(messages)
 
 async def generator(sessionId: str, prompt: str, db, jwt):
     # ============================================================
@@ -140,13 +207,6 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         )
     # ============================================================
     
-    llm = ChatOpenAI(
-        temperature=0, 
-        streaming=True, 
-        stream_usage=True,  # Enable token usage tracking during streaming
-        model="gpt-4o-mini",
-    )
-
     # llm = ChatOllama(
     #     model="qwen2.5:3b",  # The model name as shown in `ollama list`
     #     base_url="http://host.docker.internal:11434",  # Default Ollama server URL
@@ -204,28 +264,64 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     #^#^#
 
     #v#v#v#
-    message_history = ChatMessageHistory()
+    # Process messages into short-term and medium-term memory
+    all_messages = []
     for msg in db_messages:
         message_data = msg.message
-        # Assuming message structure has 'role' and 'content' fields
         if isinstance(message_data, dict) and 'role' in message_data and 'content' in message_data:
-            message_history.add_message(
-                {"role": message_data['role'], "content": message_data['content']}
-            )
+            all_messages.append({
+                'role': message_data['role'],
+                'content': message_data['content']
+            })
     
     # Prevent duplicate: Remove the last message if it matches the current prompt
-    # ConversationBufferMemory will automatically add the current input, so we don't want it duplicated
-    if message_history.messages:
-        last_message = message_history.messages[-1]
-        # Check if last message is a human message with the same content as current prompt
-        if (hasattr(last_message, 'content') and last_message.content == prompt and 
-            hasattr(last_message, 'type') and last_message.type == 'human'):
-            # Remove the duplicate - ConversationBufferMemory will add it when agent_executor runs
-            message_history.messages.pop()
-            print(f"Removed duplicate prompt from memory: {prompt[:50]}...")
+    if all_messages and all_messages[-1].get('content') == prompt and all_messages[-1].get('role') == 'human':
+        all_messages.pop()
+        print(f"Removed duplicate prompt from memory: {prompt[:50]}...")
+    
+    # Split messages into short-term (last 10) and medium-term (11-40)
+    total_messages = len(all_messages)
+    short_term_messages = all_messages[-10:] if total_messages > 10 else all_messages
+    medium_term_messages = all_messages[-40:-10] if total_messages > 10 else []
+    
+    print(f"Memory breakdown: {len(short_term_messages)} short-term, {len(medium_term_messages)} medium-term messages")
     #^#^#^#
+    
+    # Create LLM instance (needed for summarization)
+    llm = ChatOpenAI(
+        temperature=0, 
+        streaming=True, 
+        stream_usage=True,  # Enable token usage tracking during streaming
+        model="gpt-4o-mini",
+    )
 
-    prompt_template = get_prompt_template(current_date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    # Summarize medium-term memory if there are messages
+    medium_term_summary = ""
+    if medium_term_messages:
+        # Convert to LangChain message format for summarization
+        langchain_messages = []
+        for msg in medium_term_messages:
+            if msg['role'] == 'human':
+                langchain_messages.append(HumanMessage(content=msg['content']))
+            elif msg['role'] == 'ai':
+                langchain_messages.append(AIMessage(content=msg['content']))
+        
+        medium_term_summary = await summarize_messages(llm, langchain_messages)
+        print(f"Generated medium-term memory summary ({len(medium_term_summary)} chars)")
+    
+    # Create message history for short-term memory (used by ConversationBufferMemory)
+    message_history = ChatMessageHistory()
+    for msg in short_term_messages:
+        message_history.add_message({
+            "role": msg['role'],
+            "content": msg['content']
+        })
+
+    prompt_template = get_prompt_template(
+        current_date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        short_term_memory=short_term_messages,
+        medium_term_memory=medium_term_summary
+    )
 
     print("--------------------------------")
     print("--------------------------------")
