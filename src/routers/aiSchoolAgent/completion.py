@@ -18,14 +18,14 @@ import os
 
 from fastapi.responses import StreamingResponse
 
-from langchain.callbacks import LangChainTracer
+from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 
-from langchain import hub
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_classic import hub
+from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
-from langchain.memory import ConversationBufferMemory
+from langchain_classic.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
 from src.deps import db_dependency, jwt_dependency
@@ -62,7 +62,13 @@ def get_prompt_template(current_date_time: str):
     print("Using default prompt template instead.")
     # Default prompt template for OpenAI tools agent
     return ChatPromptTemplate.from_messages([
-        ("system", f"You are a helpful assistant. Use the provided tools to answer questions. Do not hallucinate. Ground your knowledge deeply in the knowledge base, and if you are unsure When responding to inputs, ask for clarification. The current date and time is {current_date_time}."),
+        ("system", f"""You are a helpful assistant.
+Use the provided tools to answer questions.
+Do not hallucinate.
+Ground your knowledge deeply in the knowledge base.
+If you are unsure then ask for clarification.
+It is better to ask for clarification than to make up information.
+For context the current date and time is {current_date_time}."""),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),

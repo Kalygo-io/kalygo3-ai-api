@@ -15,12 +15,12 @@ import os
 
 from fastapi.responses import StreamingResponse
 
-from langchain.callbacks import LangChainTracer
+from langchain_core.tracers import LangChainTracer
 from langsmith import Client
-from langchain import hub
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_classic import hub
+from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
+from langchain_classic.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
 from .tools.calculator_tool import calculator_tool

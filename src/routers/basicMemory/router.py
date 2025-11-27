@@ -16,7 +16,7 @@ import os
 from fastapi.responses import StreamingResponse
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.callbacks import LangChainTracer
+from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 import psycopg
 from src.deps import jwt_dependency

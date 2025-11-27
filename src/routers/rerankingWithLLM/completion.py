@@ -9,7 +9,7 @@ import os
 from fastapi.responses import StreamingResponse
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_postgres import PostgresChatMessageHistory
-from langchain.callbacks import LangChainTracer
+from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 from src.core.clients import pc
 from dotenv import load_dotenv

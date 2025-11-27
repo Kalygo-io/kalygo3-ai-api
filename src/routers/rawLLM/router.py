@@ -7,7 +7,7 @@ import json
 import os
 from fastapi.responses import StreamingResponse
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.callbacks import LangChainTracer
+from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 from src.deps import jwt_dependency
 
