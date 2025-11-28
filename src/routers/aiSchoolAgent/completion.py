@@ -111,7 +111,9 @@ def get_prompt_template(current_date_time: str, short_term_memory: List = None, 
     system_parts = [
         f"""You are a helpful assistant.
 Use the provided tools to answer questions.
-Do not hallucinate.
+Do not hallucinate. Do not make up information.
+When deducing information, cite the source of your information.
+When deducing information, explicitly state the chain of thought process you used to deduce the information.
 Ground your knowledge deeply in the knowledge base.
 If you are unsure then ask for clarification.
 It is better to ask for clarification than to make up information.
