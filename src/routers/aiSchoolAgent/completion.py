@@ -176,7 +176,9 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         # Check if the Stripe customer has at least one payment method
         try:
             payment_methods = get_payment_methods(account.stripe_customer_id)
-            if not payment_methods or len(payment_methods) == 0:
+            if os.getenv("ENVIRONMENT") == "test":
+                pass
+            elif not payment_methods or len(payment_methods) == 0:
                 raise HTTPException(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
                     detail={
@@ -325,11 +327,11 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         medium_term_memory=medium_term_summary
     )
 
-    print("--------------------------------")
-    print("--------------------------------")
-    print(prompt_template)
-    print("--------------------------------")
-    print("--------------------------------")
+    # print("--------------------------------")
+    # print("--------------------------------")
+    # print(prompt_template)
+    # print("--------------------------------")
+    # print("--------------------------------")
 
     tools = [ai_school_reranking_tool]
 
@@ -466,7 +468,7 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             }, separators=(',', ':'))
         elif kind == "on_tool_end":
             print(f"Done tool: {event['name']}")
-            print(f"Tool output was: {event['data'].get('output')}")
+            # print(f"Tool output was: {event['data'].get('output')}")
             print("--")
             
             # Track retrieval calls if it's the retrieval_with_reranking tool

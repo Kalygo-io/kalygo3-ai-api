@@ -34,3 +34,32 @@ Kalygo 3.0 A.I. API (powered by FastAPI)
 python -m venv .venv
 source .venv/bin/activate
 ```
+
+## Running Evaluations
+
+### AI School Agent Q&A Evaluation
+
+Evaluate the AI School Agent using a CSV dataset with questions and ground truth answers:
+
+```bash
+# Run evaluation with a CSV file
+ENVIRONMENT=test uv run eval-ai-school-agent --csv evals/ai_school_agent/data/ai_school_kb_qa_concise_dataset.csv
+
+# Specify a custom dataset name
+ENVIRONMENT=test uv run eval-ai-school-agent --csv evals/ai_school_agent/data/ai_school_kb_qa_concise_dataset.csv --dataset-name ai-school-agent-qa-20251128-205205
+
+ENVIRONMENT=test uv run eval-ai-school-agent --use-existing-dataset --dataset-name ai-school-agent-qa-20251128-205205
+```
+
+**Requirements:**
+- `LANGSMITH_API_KEY`: Required for logging results to LangSmith
+- `OPENAI_API_KEY`: Required for LLM-as-a-Judge evaluation
+- Database access: The script will create a test account if needed
+
+**CSV Format:**
+```csv
+question,ground_truth,category,difficulty,metadata
+"What is Python?","Python is a programming language.","programming","easy","{}"
+```
+
+See `evals/ai_school_agent/README.md` for more details.

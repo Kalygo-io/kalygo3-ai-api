@@ -413,8 +413,8 @@ def main():
             print("⚠️  Warning: OPENAI_API_KEY not set. LLM-as-judge evaluations will not work.")
             print("   Set it to run full advanced evaluations.")
         
-        if not os.getenv("LANGSMITH_API_KEY"):
-            print("⚠️  Warning: LANGSMITH_API_KEY not set. Some features may not work.")
+        if not os.getenv("LANGCHAIN_API_KEY"):
+            print("⚠️  Warning: LANGCHAIN_API_KEY not set. Some features may not work.")
             print("   Set it to run full evaluations with LangSmith.")
         
         # Create advanced dataset

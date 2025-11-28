@@ -80,3 +80,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
+[project.scripts]
+eval-ai-school-agent = "evals.ai_school_agent.qa_eval:main"
+
