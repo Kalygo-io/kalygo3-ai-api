@@ -15,7 +15,7 @@ Kalygo 3.0 A.I. API (powered by FastAPI)
 
 ## How to run the FastAPI
 
-- `pip install -r requirements.txt`
+- `uv sync`
 - `uvicorn src.main:app --host 0.0.0.0 --port 4000 --proxy-headers --reload`
 
 ## How to kill the API running on port 4000
