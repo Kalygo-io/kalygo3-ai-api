@@ -31,8 +31,6 @@ async def get_current_user(request: Request):
             print('--- No JWT token found in cookies ---')
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated - no JWT token found in cookies")
 
-        print(f'--- JWT token found: {token[:50]}... ---')
-        
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
         email: str | None = payload.get('sub')

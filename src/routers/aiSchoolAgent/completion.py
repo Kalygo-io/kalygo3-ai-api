@@ -7,7 +7,7 @@ from src.db.models import ChatAppMessage, ChatAppSession, Account
 from src.clients.stripe_client import get_payment_methods
 import stripe
 
-from .tools import ai_school_reranking_tool
+from .tools import ai_school_reranking_tool, local_retrieval_with_local_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -332,7 +332,8 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     # print("--------------------------------")
     # print("--------------------------------")
 
-    tools = [ai_school_reranking_tool]
+    # tools = [ai_school_reranking_tool, local_retrieval_with_local_reranking_tool]
+    tools = [local_retrieval_with_local_reranking_tool]
 
     llm.bind_tools(tools)
     
@@ -470,8 +471,8 @@ async def generator(sessionId: str, prompt: str, db, jwt):
             # print(f"Tool output was: {event['data'].get('output')}")
             print("--")
             
-            # Track retrieval calls if it's the retrieval_with_reranking tool
-            if event['name'] == "ai_school_reranking_tool":
+            # Track retrieval calls if it's a retrieval tool
+            if event['name'] in ["ai_school_reranking_tool", "local_retrieval_with_local_reranking"]:
                 tool_input = event['data'].get('input', {})
                 tool_output = event['data'].get('output', {})
                 
