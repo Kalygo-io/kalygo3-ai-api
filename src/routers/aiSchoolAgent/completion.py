@@ -211,10 +211,17 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         )
     # ============================================================
     
-    # llm = ChatOllama(
-    #     model="qwen2.5:3b",  # The model name as shown in `ollama list`
-    #     base_url="http://host.docker.internal:11434",  # Default Ollama server URL
-    #     temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
+    llm = ChatOllama(
+        model="qwen2.5:3b",  # The model name as shown in `ollama list`
+        base_url="http://host.docker.internal:11434",  # Default Ollama server URL
+        temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
+    )
+
+    # llm = ChatOpenAI(
+    #     temperature=0, 
+    #     streaming=True, 
+    #     stream_usage=True,  # Enable token usage tracking during streaming
+    #     model="gpt-4o-mini",
     # )
 
     #v#v#v#
@@ -291,14 +298,6 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     print(f"Memory breakdown: {len(short_term_messages)} short-term, {len(medium_term_messages)} medium-term messages")
     #^#^#^#
     
-    # Create LLM instance (needed for summarization)
-    llm = ChatOpenAI(
-        temperature=0, 
-        streaming=True, 
-        stream_usage=True,  # Enable token usage tracking during streaming
-        model="gpt-4o-mini",
-    )
-
     # Summarize medium-term memory if there are messages
     medium_term_summary = ""
     if medium_term_messages:
