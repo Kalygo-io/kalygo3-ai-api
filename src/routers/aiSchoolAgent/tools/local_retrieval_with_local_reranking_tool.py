@@ -6,25 +6,11 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import os
 
-from FlagEmbedding import FlagReranker
-
 from src.core.clients import pc
-
-# Initialize the reranker model (lazy loading - will be initialized on first use)
-_reranker = None
-
-def get_reranker():
-    """Get or initialize the FlagReranker instance."""
-    global _reranker
-    if _reranker is None:
-        # Use BAAI/bge-reranker-v2-m3 model (multilingual, lightweight cross-encoder)
-        # use_fp16=True speeds up computation with slight performance degradation
-        _reranker = FlagReranker('BAAI/bge-reranker-v2-m3', use_fp16=True)
-    return _reranker
 
 async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
     """
-    Perform retrieval with reranking using vector embeddings and local BGE reranker (bge-reranker-v2-m3) via FlagEmbedding.
+    Perform retrieval with reranking using vector embeddings and a remote reranker microservice.
     """
     try:
         print(f"INSIDE Local retrieval with local reranking: {query}")
@@ -89,27 +75,77 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             doc_metadatas.append(r['metadata'])
             similarity_scores.append(r['score'])
         
-        print(f"Prepared {len(docs)} documents for local re-ranking with BGE reranker")
+        print(f"Prepared {len(docs)} documents for reranking via reranker microservice")
         
-        # Use FlagReranker for reranking
-        # BGE reranker is a cross-encoder that takes query-document pairs and outputs relevance scores
+        # Call reranker microservice for reranking
+        reranker_api_url = os.getenv("RERANKER_API_URL")
+        if not reranker_api_url:
+            print("Warning: RERANKER_API_URL not set, falling back to similarity search only")
+            fallback_results = []
+            for r in results['matches']:
+                fallback_results.append({
+                    'metadata': r['metadata'], 
+                    'similarity_score': r['score'],
+                    'relevance_score': r['score']  # Use similarity score as fallback
+                })
+            return {
+                "message": "RERANKER_API_URL not configured, using similarity search only",
+                "reranked_results": fallback_results[:top_k_for_rerank],
+            }
+        
         try:
-            reranker = get_reranker()
+            # Prepare payload for reranker microservice
+            # Expected format: {"query": query, "documents": [doc1, doc2, ...]}
+            rerank_payload = {
+                "query": query,
+                "documents": docs
+            }
             
-            # Create query-document pairs for reranking
-            # Format: [[query, doc1], [query, doc2], ...]
-            query_doc_pairs = [[query, doc] for doc in docs]
+            # Call reranker microservice
+            reranker_endpoint = f"{reranker_api_url.rstrip('/')}/huggingface/rerank"
+            print(f"Calling reranker microservice at {reranker_endpoint} with {len(docs)} documents...")
             
-            # Compute relevance scores using the reranker
-            # Scores can be negative or positive, higher is better
-            print(f"Computing relevance scores for {len(query_doc_pairs)} query-document pairs...")
-            relevance_scores = reranker.compute_score(query_doc_pairs)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    reranker_endpoint,
+                    json=rerank_payload,
+                    timeout=aiohttp.ClientTimeout(total=60)  # 60 second timeout for reranking
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        print(f"Reranker microservice error: HTTP {response.status} - {error_text}")
+                        raise aiohttp.ClientError(f"Reranker API returned status {response.status}: {error_text}")
+                    
+                    rerank_result = await response.json()
             
-            # Convert to list if it's a numpy array
-            if hasattr(relevance_scores, 'tolist'):
-                relevance_scores = relevance_scores.tolist()
-            elif not isinstance(relevance_scores, list):
-                relevance_scores = list(relevance_scores)
+            # Parse reranker response
+            # Expected response formats:
+            # 1. {"scores": [score1, score2, ...]} - array of scores in same order as documents
+            # 2. {"results": [{"index": idx, "relevance_score": score}, ...]} - results with indices
+            # 3. {"results": [{"index": idx, "score": score}, ...]} - alternative format
+            
+            relevance_scores = []
+            
+            if "scores" in rerank_result:
+                # Format 1: Direct scores array
+                relevance_scores = rerank_result["scores"]
+                if len(relevance_scores) != len(docs):
+                    raise ValueError(f"Number of scores ({len(relevance_scores)}) doesn't match number of documents ({len(docs)})")
+            elif "results" in rerank_result:
+                # Format 2 or 3: Results with indices
+                results_list = rerank_result["results"]
+                # Initialize scores array with zeros
+                relevance_scores = [0.0] * len(docs)
+                
+                for item in results_list:
+                    idx = item.get("index")
+                    score = item.get("relevance_score") or item.get("score")
+                    if idx is not None and score is not None and 0 <= idx < len(docs):
+                        relevance_scores[idx] = float(score)
+                    else:
+                        print(f"Warning: Invalid result item: {item}")
+            else:
+                raise ValueError(f"Unexpected reranker response format: {list(rerank_result.keys())}")
             
             # Create reranked matches with both relevance and similarity scores
             reranked_matches = []
@@ -125,20 +161,20 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             
             # Sort by relevance score (highest first) to show re-ranking effect
             reranked_matches.sort(key=lambda x: x['relevance_score'], reverse=True)
-            print(f"After local reranking: {len(reranked_matches)} candidates")
+            print(f"After reranking via microservice: {len(reranked_matches)} candidates")
             
             # Take only the top_k_for_rerank results after re-ranking
             final_reranked_results = reranked_matches[:top_k_for_rerank]
             
             return {
-                "message": f"Retrieved {len(final_reranked_results)} relevant documents using local BGE reranking",
+                "message": f"Retrieved {len(final_reranked_results)} relevant documents using reranker microservice",
                 "reranked_results": final_reranked_results,
                 "query": query,
                 "namespace": namespace
             }
             
-        except Exception as e:
-            print(f"BGE reranking error: {e}")
+        except aiohttp.ClientError as e:
+            print(f"Reranker microservice HTTP error: {e}")
             import traceback
             print(f"Full traceback: {traceback.format_exc()}")
             # Fallback to original results if reranking fails
@@ -150,7 +186,23 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
                     'relevance_score': r['score']  # Use similarity score as fallback
                 })
             return {
-                "message": f"BGE reranking failed: {str(e)}, using similarity search only",
+                "message": f"Reranker microservice failed: {str(e)}, using similarity search only",
+                "reranked_results": fallback_results[:top_k_for_rerank],
+            }
+        except Exception as e:
+            print(f"Reranker microservice error: {e}")
+            import traceback
+            print(f"Full traceback: {traceback.format_exc()}")
+            # Fallback to original results if reranking fails
+            fallback_results = []
+            for r in results['matches']:
+                fallback_results.append({
+                    'metadata': r['metadata'], 
+                    'similarity_score': r['score'],
+                    'relevance_score': r['score']  # Use similarity score as fallback
+                })
+            return {
+                "message": f"Reranker microservice failed: {str(e)}, using similarity search only",
                 "reranked_results": fallback_results[:top_k_for_rerank],
             }
         
@@ -172,7 +224,7 @@ class LocalRetrievalQuery(BaseModel):
 
 local_retrieval_with_local_reranking_tool = StructuredTool(
     name="local_retrieval_with_local_reranking",
-    description="A tool for retrieving relevant information in the AI School knowledge base using vector similarity search with local BGE reranking (bge-reranker-v2-m3 via FlagEmbedding) for improved relevance. Use this when you need to find specific information from the AI School knowledge base with local reranking.",
+    description="A tool for retrieving relevant information in the AI School knowledge base using vector similarity search with reranking via a remote reranker microservice for improved relevance. Use this when you need to find specific information from the AI School knowledge base with reranking.",
     func=local_retrieval_with_local_reranking_impl,
     coroutine=local_retrieval_with_local_reranking_impl,
     args_schema=LocalRetrievalQuery,
