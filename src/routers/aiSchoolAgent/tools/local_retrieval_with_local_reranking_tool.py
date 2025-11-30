@@ -39,7 +39,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
                     result = await response.json()
                     embedding = result['embedding']
             except aiohttp.ClientError as e:
-                print(f"Error occurred during API request: {e}")
+                print(f"---> Error occurred during API request <---: {e}")
                 return {"error": f"Failed to generate embedding: {str(e)}"}
         
         # Get Pinecone index
