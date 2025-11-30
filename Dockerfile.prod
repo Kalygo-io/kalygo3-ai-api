@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y curl git build-essential net-tools ipro
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-ENV PYTHONUNBUFFERED True
+ENV PYTHONUNBUFFERED=True
 
 # set the working directory
 WORKDIR /code
