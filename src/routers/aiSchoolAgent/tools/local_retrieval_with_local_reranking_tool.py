@@ -2,11 +2,15 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from typing import Any, Dict, List, Optional
+from contextvars import ContextVar
 
 import aiohttp
 import os
 
 from src.core.clients import pc
+
+# Context variable to store JWT token for tool execution
+_jwt_token: ContextVar[Optional[str]] = ContextVar('jwt_token', default=None)
 
 async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
     """
@@ -15,6 +19,12 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
     try:
         print(f"INSIDE Local retrieval with local reranking: {query}")
 
+        # Get JWT token from context
+        jwt_token = _jwt_token.get()
+        cookies = {}
+        if jwt_token:
+            cookies["jwt"] = jwt_token
+
         # Get embedding for the query (using the same embedding service as before)
         embedding = {}
         async with aiohttp.ClientSession() as session:
@@ -22,7 +32,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             payload = {"input": query}
             
             try:
-                async with session.post(url, json=payload) as response:
+                async with session.post(url, json=payload, cookies=cookies) as response:
                     if response.status != 200:
                         raise aiohttp.ClientError(f"Request failed with status code {response.status}: {await response.text()}")
                     
@@ -37,7 +47,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
         
         # Perform initial similarity search with a larger pool for reranking
         # We want to show top_k_for_similarity results, but rerank from a broader pool
-        rerank_pool_size = max(top_k_for_similarity * 3, 20)  # Get 3x more candidates for reranking
+        rerank_pool_size = 20  # Get 3x more candidates for reranking
         
         print(f"Performing similarity search with a larger pool for reranking: {rerank_pool_size}")
 
@@ -105,11 +115,17 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             reranker_endpoint = f"{reranker_api_url.rstrip('/')}/huggingface/rerank"
             print(f"Calling reranker microservice at {reranker_endpoint} with {len(docs)} documents...")
             
+            # Use JWT token from context for reranker API call (as cookie)
+            reranker_cookies = {}
+            if jwt_token:
+                reranker_cookies["jwt"] = jwt_token
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     reranker_endpoint,
                     json=rerank_payload,
-                    timeout=aiohttp.ClientTimeout(total=60)  # 60 second timeout for reranking
+                    cookies=reranker_cookies,
+                    timeout=aiohttp.ClientTimeout(total=120)  # 60 second timeout for reranking
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()

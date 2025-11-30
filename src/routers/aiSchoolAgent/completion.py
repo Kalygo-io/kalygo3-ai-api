@@ -8,6 +8,7 @@ from src.clients.stripe_client import get_payment_methods
 import stripe
 
 from .tools import ai_school_reranking_tool, local_retrieval_with_local_reranking_tool
+from .tools.local_retrieval_with_local_reranking_tool import _jwt_token
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -143,7 +144,7 @@ For context the current date and time is {current_date_time}."""
     
     return ChatPromptTemplate.from_messages(messages)
 
-async def generator(sessionId: str, prompt: str, db, jwt):
+async def generator(sessionId: str, prompt: str, db, jwt, request: Request = None):
     # ============================================================
     # Payment verification: Check for Stripe customer ID and payment method
     # ============================================================
@@ -332,6 +333,11 @@ async def generator(sessionId: str, prompt: str, db, jwt):
     # print("--------------------------------")
     # print("--------------------------------")
 
+    # Set JWT token in context for tool execution
+    raw_jwt = request.cookies.get("jwt") if request else None
+    if raw_jwt:
+        _jwt_token.set(raw_jwt)
+    
     # tools = [ai_school_reranking_tool, local_retrieval_with_local_reranking_tool]
     tools = [local_retrieval_with_local_reranking_tool]
 
@@ -509,4 +515,4 @@ async def generator(sessionId: str, prompt: str, db, jwt):
 @router.post("/completion")
 @limiter.limit("10/minute")
 def prompt(prompt: ChatSessionPrompt, jwt: jwt_dependency, db: db_dependency, request: Request):
-    return StreamingResponse(generator(prompt.sessionId, prompt.prompt, db, jwt), media_type='text/event-stream')
+    return StreamingResponse(generator(prompt.sessionId, prompt.prompt, db, jwt, request), media_type='text/event-stream')
