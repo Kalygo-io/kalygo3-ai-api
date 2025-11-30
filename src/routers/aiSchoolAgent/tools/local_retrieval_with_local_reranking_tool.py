@@ -21,9 +21,9 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
 
         # Get JWT token from context
         jwt_token = _jwt_token.get()
-        cookies = {}
+        headers = {}
         if jwt_token:
-            cookies["jwt"] = jwt_token
+            headers["Authorization"] = f"Bearer {jwt_token}"
 
         # Get embedding for the query (using the same embedding service as before)
         embedding = {}
@@ -32,7 +32,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             payload = {"input": query}
             
             try:
-                async with session.post(url, json=payload, cookies=cookies) as response:
+                async with session.post(url, json=payload, headers=headers) as response:
                     if response.status != 200:
                         raise aiohttp.ClientError(f"Request failed with status code {response.status}: {await response.text()}")
                     
@@ -115,17 +115,17 @@ async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_simila
             reranker_endpoint = f"{reranker_api_url.rstrip('/')}/huggingface/rerank"
             print(f"Calling reranker microservice at {reranker_endpoint} with {len(docs)} documents...")
             
-            # Use JWT token from context for reranker API call (as cookie)
-            reranker_cookies = {}
+            # Use JWT token from context for reranker API call (as Authorization Bearer header)
+            reranker_headers = {}
             if jwt_token:
-                reranker_cookies["jwt"] = jwt_token
+                reranker_headers["Authorization"] = f"Bearer {jwt_token}"
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     reranker_endpoint,
                     json=rerank_payload,
-                    cookies=reranker_cookies,
-                    timeout=aiohttp.ClientTimeout(total=120)  # 60 second timeout for reranking
+                    headers=reranker_headers,
+                    timeout=aiohttp.ClientTimeout(total=120)  # 120 second timeout for reranking
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
