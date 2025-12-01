@@ -24,7 +24,9 @@ from .routers import (
   chatAppSessions,
   aiSchoolAgent,
   payments,
-  jwtAgent
+  jwtAgent,
+  localAgent,
+  remoteAgent
 )
 
 from src.db.database import Base, engine
@@ -101,6 +103,16 @@ app.include_router(
 app.include_router(
     aiSchoolAgent.router,
     prefix="/api/ai-school-agent",
+)
+
+app.include_router(
+    remoteAgent.router,
+    prefix="/api/remote-agent",
+)
+
+app.include_router(
+    localAgent.router,
+    prefix="/api/local-agent",
 )
 
 app.include_router(

@@ -129,10 +129,17 @@ async def generator(sessionId: str, prompt: str, db, jwt):
         memory_key="chat_history", chat_memory=message_history, return_messages=True, output_key="output"
     )
 
+    # Extract user email from JWT for LangSmith tracing
+    user_email = jwt.get('email', 'unknown')
+    
     agent_executor = AgentExecutor(agent=agent, tools=tools, memory=memory, max_iterations=10).with_config(
         {
             "run_name": "Agent",
-            "callbacks": callbacks
+            "callbacks": callbacks,
+            "metadata": {
+                "user_email": user_email
+            },
+            "tags": [f"user:{user_email}"]
         }
     )
 

@@ -45,7 +45,7 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
 
 callbacks = [
   LangChainTracer(
-    project_name="ai-school-agent",
+    project_name="remote-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")

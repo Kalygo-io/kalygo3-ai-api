@@ -45,7 +45,7 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
 
 callbacks = [
   LangChainTracer(
-    project_name="ai-school-agent",
+    project_name="local-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")
@@ -212,18 +212,18 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
         )
     # ============================================================
     
-    # llm = ChatOllama(
-    #     model="qwen2.5:3b",  # The model name as shown in `ollama list`
-    #     base_url="http://host.docker.internal:11434",  # Default Ollama server URL
-    #     temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
-    # )
-
-    llm = ChatOpenAI(
-        temperature=0, 
-        streaming=True, 
-        stream_usage=True,  # Enable token usage tracking during streaming
-        model="gpt-4o-mini",
+    llm = ChatOllama(
+        model="qwen2.5:3b",  # The model name as shown in `ollama list`
+        base_url="http://host.docker.internal:11434",  # Default Ollama server URL
+        temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
     )
+
+    # llm = ChatOpenAI(
+    #     temperature=0, 
+    #     streaming=True, 
+    #     stream_usage=True,  # Enable token usage tracking during streaming
+    #     model="gpt-4o-mini",
+    # )
 
     #v#v#v#
     try:
