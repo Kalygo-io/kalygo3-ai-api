@@ -7,7 +7,6 @@ from src.db.models import ChatAppMessage, ChatAppSession, Account
 from src.clients.stripe_client import get_payment_methods
 import stripe
 
-from .tools import ai_school_reranking_tool
 from .tools.local_retrieval_with_local_reranking_tool import create_local_retrieval_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
@@ -24,7 +23,6 @@ from langsmith import Client
 
 from langchain_classic import hub
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
-from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
