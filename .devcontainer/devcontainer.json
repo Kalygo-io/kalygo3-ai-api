@@ -1,24 +1,25 @@
 {
-  "name": "Kalygo API",
-  "build": {
-    "dockerfile": "../Dockerfile.dev"
-  },
+  "name": "Kalygo3 AI API Dev Container",
+  "image": "kalygo3-ai-api:latest",
+  "workspaceFolder": "/code",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/code,type=bind,consistency=delegated",
+  "runArgs": ["--name", "kalygo3-ai-api"],
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-python.black-formatter",
-        "ms-python.debugpy",
-        "ms-azuretools.vscode-docker",
-        "shd101wyy.markdown-preview-enhanced"
+        "ms-python.debugpy"
       ],
-      "settings": {}
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.formatting.provider": "black"
+      }
     }
   },
-  "forwardPorts": [4000],
-  "appPort": 4000,
-  "workspaceMount": "source=${localWorkspaceFolder},target=/code,type=bind,consistency=delegated",
-  "workspaceFolder": "/code",
-  "runArgs": ["--network=agent-network"]
+  "forwardPorts": [4000, 5678],
+  "postCreateCommand": "uv sync",
+  "remoteUser": "root"
 }
