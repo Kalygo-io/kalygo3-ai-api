@@ -106,7 +106,7 @@ def get_prompt_template(current_date_time: str, short_term_memory: List = None, 
     #     return hub.pull("hwchase17/openai-tools-agent")
     # except Exception as e:
     # print(f"Warning: Failed to pull prompt from LangChain Hub: {e}")
-    print("Using default prompt template instead.")
+    
     
     # Build system message with memory sections
     system_parts = [
