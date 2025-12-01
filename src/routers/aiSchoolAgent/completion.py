@@ -7,8 +7,8 @@ from src.db.models import ChatAppMessage, ChatAppSession, Account
 from src.clients.stripe_client import get_payment_methods
 import stripe
 
-from .tools import ai_school_reranking_tool, local_retrieval_with_local_reranking_tool
-from .tools.local_retrieval_with_local_reranking_tool import _jwt_token
+from .tools import ai_school_reranking_tool
+from .tools.local_retrieval_with_local_reranking_tool import create_local_retrieval_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -333,13 +333,10 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
     # print("--------------------------------")
     # print("--------------------------------")
 
-    # Set JWT token in context for tool execution
+    # Create tools with JWT token captured in closure for thread/async safety
+    # This ensures each request gets its own tool instance with the correct JWT
     raw_jwt = request.cookies.get("jwt") if request else None
-    if raw_jwt:
-        _jwt_token.set(raw_jwt)
-    
-    # tools = [ai_school_reranking_tool, local_retrieval_with_local_reranking_tool]
-    tools = [local_retrieval_with_local_reranking_tool]
+    tools = [create_local_retrieval_tool(raw_jwt)]
 
     llm.bind_tools(tools)
     

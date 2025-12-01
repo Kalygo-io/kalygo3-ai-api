@@ -9,19 +9,23 @@ import requests
 
 from src.core.clients import pc
 
-async def ai_school_reranking_tool_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
+async def ai_school_reranking_tool_impl(query: str, jwt_token: Optional[str], top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
     """
     Perform retrieval with reranking using vector embeddings and Cohere Rerank 3.5.
     """
     try:
         # Get embedding for the query
         embedding = {}
+        headers = {}
+        if jwt_token:
+            headers["Authorization"] = f"Bearer {jwt_token}"
+        
         async with aiohttp.ClientSession() as session:
             url = f"{os.getenv('EMBEDDINGS_API_URL')}/huggingface/embedding"
             payload = {"input": query}
             
             try:
-                async with session.post(url, json=payload) as response:
+                async with session.post(url, json=payload, headers=headers) as response:
                     if response.status != 200:
                         raise aiohttp.ClientError(f"Request failed with status code {response.status}: {await response.text()}")
                     
@@ -168,10 +172,23 @@ class RetrievalQuery(BaseModel):
     top_k_for_similarity: int = Field(default=10, description="Number of similarity search results to return")
     top_k_for_rerank: int = Field(default=10, description="Number of reranked results to return")
 
-ai_school_reranking_tool = StructuredTool(
-    name="ai_school_reranking_tool",
-    description="A tool for retrieving relevant information in the AI School knowledge base using vector similarity search with Cohere reranking for improved relevance. Use this when you need to find specific information from the AI Schoolknowledge base.",
-    func=ai_school_reranking_tool_impl,
-    coroutine=ai_school_reranking_tool_impl,
-    args_schema=RetrievalQuery,
-)
+def create_ai_school_reranking_tool(jwt_token: Optional[str]) -> StructuredTool:
+    """
+    Factory function to create an AI school reranking tool with JWT token captured in closure.
+    This ensures each request gets its own tool instance with the correct JWT, preventing
+    cross-request contamination when multiple users access the endpoint concurrently.
+    """
+    async def tool_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
+        # jwt_token is captured from the closure, ensuring thread/async safety
+        return await ai_school_reranking_tool_impl(query, jwt_token, top_k_for_similarity, top_k_for_rerank, namespace)
+    
+    return StructuredTool(
+        name="ai_school_reranking_tool",
+        description="A tool for retrieving relevant information in the AI School knowledge base using vector similarity search with Cohere reranking for improved relevance. Use this when you need to find specific information from the AI Schoolknowledge base.",
+        func=tool_impl,
+        coroutine=tool_impl,
+        args_schema=RetrievalQuery,
+    )
+
+# Default tool instance (for backward compatibility, but should use create_ai_school_reranking_tool instead)
+ai_school_reranking_tool = create_ai_school_reranking_tool(None)

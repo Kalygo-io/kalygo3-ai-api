@@ -2,25 +2,20 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from typing import Any, Dict, List, Optional
-from contextvars import ContextVar
 
 import aiohttp
 import os
 
 from src.core.clients import pc
 
-# Context variable to store JWT token for tool execution
-_jwt_token: ContextVar[Optional[str]] = ContextVar('jwt_token', default=None)
-
-async def local_retrieval_with_local_reranking_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
+async def local_retrieval_with_local_reranking_impl(query: str, jwt_token: Optional[str], top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
     """
     Perform retrieval with reranking using vector embeddings and a remote reranker microservice.
     """
     try:
         print(f"INSIDE Local retrieval with local reranking: {query}")
 
-        # Get JWT token from context
-        jwt_token = _jwt_token.get()
+        # Use JWT token passed as parameter (captured in closure)
         headers = {}
         if jwt_token:
             headers["Authorization"] = f"Bearer {jwt_token}"
@@ -238,11 +233,24 @@ class LocalRetrievalQuery(BaseModel):
     top_k_for_similarity: int = Field(default=10, description="Number of similarity search results to return")
     top_k_for_rerank: int = Field(default=10, description="Number of reranked results to return")
 
-local_retrieval_with_local_reranking_tool = StructuredTool(
-    name="local_retrieval_with_local_reranking",
-    description="A tool for retrieving information from the Miami AI School knowledge base using vector search. Use this when you need to find information related to Miami AI School.",
-    func=local_retrieval_with_local_reranking_impl,
-    coroutine=local_retrieval_with_local_reranking_impl,
-    args_schema=LocalRetrievalQuery,
-)
+def create_local_retrieval_tool(jwt_token: Optional[str]) -> StructuredTool:
+    """
+    Factory function to create a local retrieval tool with JWT token captured in closure.
+    This ensures each request gets its own tool instance with the correct JWT, preventing
+    cross-request contamination when multiple users access the endpoint concurrently.
+    """
+    async def tool_impl(query: str, top_k_for_similarity: int = 10, top_k_for_rerank: int = 8, namespace: str = "ai_school_kb") -> Dict:
+        # jwt_token is captured from the closure, ensuring thread/async safety
+        return await local_retrieval_with_local_reranking_impl(query, jwt_token, top_k_for_similarity, top_k_for_rerank, namespace)
+    
+    return StructuredTool(
+        name="local_retrieval_with_local_reranking",
+        description="A tool for retrieving information from the Miami AI School knowledge base using vector search. Use this when you need to find information related to Miami AI School.",
+        func=tool_impl,
+        coroutine=tool_impl,
+        args_schema=LocalRetrievalQuery,
+    )
+
+# Default tool instance (for backward compatibility, but should use create_local_retrieval_tool instead)
+local_retrieval_with_local_reranking_tool = create_local_retrieval_tool(None)
 
