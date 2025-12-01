@@ -240,7 +240,7 @@ class LocalRetrievalQuery(BaseModel):
 
 local_retrieval_with_local_reranking_tool = StructuredTool(
     name="local_retrieval_with_local_reranking",
-    description="A tool for retrieving relevant information in the AI School knowledge base using vector similarity search with reranking via a remote reranker microservice for improved relevance. Use this when you need to find specific information from the AI School knowledge base with reranking.",
+    description="A tool for retrieving information from the Miami AI School knowledge base using vector search. Use this when you need to find information related to Miami AI School.",
     func=local_retrieval_with_local_reranking_impl,
     coroutine=local_retrieval_with_local_reranking_impl,
     args_schema=LocalRetrievalQuery,

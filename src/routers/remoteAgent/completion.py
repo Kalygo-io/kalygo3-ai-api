@@ -7,8 +7,9 @@ from src.db.models import ChatAppMessage, ChatAppSession, Account
 from src.clients.stripe_client import get_payment_methods
 import stripe
 
-from .tools import ai_school_reranking_tool, local_retrieval_with_local_reranking_tool
-from .tools.local_retrieval_with_local_reranking_tool import _jwt_token
+from src.routers.remoteAgent.tools.retrieval_with_reranking_tool import retrieval_with_reranking_tool
+
+from .tools import ai_school_reranking_tool
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 
 from slowapi import Limiter
@@ -211,12 +212,6 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
             }
         )
     # ============================================================
-    
-    # llm = ChatOllama(
-    #     model="qwen2.5:3b",  # The model name as shown in `ollama list`
-    #     base_url="http://host.docker.internal:11434",  # Default Ollama server URL
-    #     temperature=0,  # Control randomness (0 = deterministic, higher = more creative)
-    # )
 
     llm = ChatOpenAI(
         temperature=0, 
@@ -338,8 +333,7 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
     if raw_jwt:
         _jwt_token.set(raw_jwt)
     
-    # tools = [ai_school_reranking_tool, local_retrieval_with_local_reranking_tool]
-    tools = [local_retrieval_with_local_reranking_tool]
+    tools = [ai_school_reranking_tool]
 
     llm.bind_tools(tools)
     
@@ -485,7 +479,7 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
             print("--")
             
             # Track retrieval calls if it's a retrieval tool
-            if event['name'] in ["ai_school_reranking_tool", "local_retrieval_with_local_reranking"]:
+            if event['name'] in ["ai_school_reranking_tool"]:
                 tool_input = event['data'].get('input', {})
                 tool_output = event['data'].get('output', {})
                 
