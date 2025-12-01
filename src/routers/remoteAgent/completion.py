@@ -24,7 +24,6 @@ from langsmith import Client
 from langchain_classic import hub
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
