@@ -81,5 +81,5 @@ build-backend = "hatchling.build"
 packages = ["src"]
 
 [project.scripts]
-eval-ai-school-agent = "evals.ai_school_agent.qa_eval:main"
+eval_remote_vs_local_agent_agent = "evals.remote_vs_local_agent.qa_eval:main"
 

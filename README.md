@@ -43,12 +43,16 @@ Evaluate the AI School Agent using a CSV dataset with questions and ground truth
 
 ```bash
 # Run evaluation with a CSV file
-ENVIRONMENT=test uv run eval-ai-school-agent --csv evals/ai_school_agent/data/ai_school_kb_qa_concise_dataset.csv
+ENVIRONMENT=test uv run eval_remote_vs_local_agent_agent --csv evals/remote_vs_local_agent/data/ai_school_kb_qa_concise_dataset.csv
 
 # Specify a custom dataset name
-ENVIRONMENT=test uv run eval-ai-school-agent --csv evals/ai_school_agent/data/ai_school_kb_qa_concise_dataset.csv --dataset-name ai-school-agent-qa-20251128-205205
+ENVIRONMENT=test uv run eval_remote_vs_local_agent_agent --csv evals/remote_vs_local_agent/data/ai_school_kb_qa_full_dataset.csv --dataset-name ai-school-agent-qa-20251201-053011
 
-ENVIRONMENT=test uv run eval-ai-school-agent --use-existing-dataset --dataset-name ai-school-agent-qa-20251128-205205
+# Use existing dataset
+ENVIRONMENT=test uv run eval_remote_vs_local_agent_agent --use-existing-dataset --dataset-name ai-school-agent-qa-20251201-053011
+
+# Switch the Remote for the local agent - lines 115/116 & 568 
+
 ```
 
 **Requirements:**

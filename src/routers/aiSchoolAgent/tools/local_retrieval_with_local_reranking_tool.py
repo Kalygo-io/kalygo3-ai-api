@@ -19,6 +19,8 @@ async def local_retrieval_with_local_reranking_impl(query: str, jwt_token: Optio
         headers = {}
         if jwt_token:
             headers["Authorization"] = f"Bearer {jwt_token}"
+        else:
+            print(f"WARNING: JWT token is None for query: {query}")
 
         # Get embedding for the query (using the same embedding service as before)
         embedding = {}
@@ -110,7 +112,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, jwt_token: Optio
             reranker_endpoint = f"{reranker_api_url.rstrip('/')}/huggingface/rerank"
             print(f"Calling reranker microservice at {reranker_endpoint} with {len(docs)} documents...")
             
-            # Use JWT token from context for reranker API call (as Authorization Bearer header)
+            # Use JWT token for reranker API call (as Authorization Bearer header)
             reranker_headers = {}
             if jwt_token:
                 reranker_headers["Authorization"] = f"Bearer {jwt_token}"
@@ -120,7 +122,7 @@ async def local_retrieval_with_local_reranking_impl(query: str, jwt_token: Optio
                     reranker_endpoint,
                     json=rerank_payload,
                     headers=reranker_headers,
-                    timeout=aiohttp.ClientTimeout(total=120)  # 120 second timeout for reranking
+                    timeout=aiohttp.ClientTimeout(total=240)  # 120 second timeout for reranking
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()

@@ -20,7 +20,7 @@ import csv
 import json
 import uuid
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
 
 # Add project root to path
@@ -43,7 +43,6 @@ client = Client(
 )
 # LLM for evaluating ground truth match
 evaluator_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
 
 def load_qa_dataset(csv_path: str) -> List[Dict[str, Any]]:
     """
@@ -103,19 +102,20 @@ def load_qa_dataset(csv_path: str) -> List[Dict[str, Any]]:
     
     return examples
 
-
-async def call_ai_school_agent(question: str, session_id: str = None) -> str:
+async def call_agent(question: str, session_id: str = None) -> str:
     """
-    Call the AI School Agent with a question.
+    Call the Agent with a question.
     
     This function directly imports and calls the agent generator function
     to avoid HTTP overhead during evaluation.
     """
     # Import here to avoid circular dependencies
     from src.db.database import SessionLocal
-    from src.routers.aiSchoolAgent.completion import generator
+    # from src.routers.aiSchoolAgent.completion import generator
+    from src.routers.remoteAgent.completion import generator
+    # from src.routers.localAgent.completion import generator
     from src.db.models import Account, ChatAppSession
-    
+
     # Get database session
     db = SessionLocal()
     
@@ -171,15 +171,39 @@ async def call_ai_school_agent(question: str, session_id: str = None) -> str:
             db.commit()
             db.refresh(session)
         
-        # Create mock JWT
+        # Create mock JWT (decoded payload for auth checks)
         mock_jwt = {
             'id': test_account.id,
             'email': test_account.email
         }
         
+        # Create actual JWT token string for API calls
+        from src.routers.auth.router import create_access_token
+        from datetime import timedelta
+        
+        raw_jwt_token = create_access_token(test_account.email, test_account.id, timedelta(hours=12))
+        
+        # Create a simple mock Request object with JWT cookie for the generator
+        # This allows the generator to extract the JWT token for tool authentication
+        # The generator accesses it as: request.cookies.get("jwt")
+        class MockCookies:
+            def __init__(self, jwt_token: str):
+                self._jwt = jwt_token
+            
+            def get(self, key, default=None):
+                if key == "jwt":
+                    return self._jwt
+                return default
+        
+        class MockRequest:
+            def __init__(self, jwt_token: str):
+                self.cookies = MockCookies(jwt_token)
+        
+        mock_request = MockRequest(raw_jwt_token)
+        
         # Collect the full response from the streaming generator
         full_response = ""
-        async for chunk in generator(session_id, question, db, mock_jwt):
+        async for chunk in generator(session_id, question, db, mock_jwt, request=mock_request):
             # Parse the JSON chunks from the stream
             try:
                 chunk_data = json.loads(chunk)
@@ -422,7 +446,7 @@ async def run_evaluation(csv_path: str = None, dataset_name: str = None, use_exi
         session_id = str(uuid.uuid4())
         
         print(f"  🤖 Processing: {question[:50]}...")
-        answer = await call_ai_school_agent(question, session_id)
+        answer = await call_agent(question, session_id)
         
         return {"output": answer}
     
@@ -562,9 +586,10 @@ Return only valid JSON, no other text."""
         # Use async evaluate() which handles async functions
         # Use dataset name for evaluation
         eval_dataset_name = dataset.name
-        
+
         # Construct project name from experiment prefix
-        project_name = f"ai-school-agent-qa-{datetime.now().strftime('%Y%m%d')}"
+        project_name = f"remote-agent-on-ai-school-qnas-{datetime.now().strftime('%Y%m%d')}"
+        # project_name = f"local-agent-on-ai-school-qnas-{datetime.now().strftime('%Y%m%d')}"
         
         print(f"  📋 Project name will be: {project_name}")
         print(f"  ⏳ Running evaluation (this may take a while)...")

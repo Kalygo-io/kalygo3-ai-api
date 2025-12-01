@@ -19,6 +19,8 @@ async def ai_school_reranking_tool_impl(query: str, jwt_token: Optional[str], to
         headers = {}
         if jwt_token:
             headers["Authorization"] = f"Bearer {jwt_token}"
+        else:
+            print(f"WARNING: JWT token is None for query: {query}")
         
         async with aiohttp.ClientSession() as session:
             url = f"{os.getenv('EMBEDDINGS_API_URL')}/huggingface/embedding"
