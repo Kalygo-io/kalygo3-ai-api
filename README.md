@@ -51,16 +51,18 @@ ENVIRONMENT=test uv run eval_remote_vs_local_agent_agent --csv evals/remote_vs_l
 # Use existing dataset
 ENVIRONMENT=test uv run eval_remote_vs_local_agent_agent --use-existing-dataset --dataset-name ai-school-agent-qa-20251201-053011
 
-# Switch the Remote for the local agent - lines 115/116 & 568 
+# Switch the Remote for the local agent - lines 115/116 & 568
 
 ```
 
 **Requirements:**
+
 - `LANGSMITH_API_KEY`: Required for logging results to LangSmith
 - `OPENAI_API_KEY`: Required for LLM-as-a-Judge evaluation
 - Database access: The script will create a test account if needed
 
 **CSV Format:**
+
 ```csv
 question,ground_truth,category,difficulty,metadata
 "What is Python?","Python is a programming language.","programming","easy","{}"
@@ -68,3 +70,6 @@ question,ground_truth,category,difficulty,metadata
 
 See `evals/ai_school_agent/README.md` for more details.
 
+## For triggering CICD
+
+1
