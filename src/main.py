@@ -26,7 +26,7 @@ from .routers import (
   payments,
   jwtAgent,
   localAgent,
-  remoteAgent,
+  kalygoAgent,
   credentials
 )
 
@@ -107,8 +107,8 @@ app.include_router(
 )
 
 app.include_router(
-    remoteAgent.router,
-    prefix="/api/remote-agent",
+    kalygoAgent.router,
+    prefix="/api/kalygo-agent",
 )
 
 app.include_router(

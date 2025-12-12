@@ -3,8 +3,10 @@ from typing import List
 import uuid
 from fastapi import APIRouter, HTTPException, Request, status
 
-from src.db.models import ChatAppMessage, ChatAppSession, Account
+from src.db.models import ChatAppMessage, ChatAppSession, Account, Credential
+from src.db.service_name import ServiceName
 from src.clients.stripe_client import get_payment_methods
+from src.routers.credentials.encryption import decrypt_api_key
 import stripe
 
 from .tools.ai_school_reranking_tool import create_ai_school_reranking_tool
@@ -43,7 +45,7 @@ if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
 
 callbacks = [
   LangChainTracer(
-    project_name="remote-agent",
+    project_name="kalygo-agent",
     client=Client(
       api_url=os.getenv("LANGSMITH_ENDPOINT"),
       api_key=os.getenv("LANGSMITH_API_KEY")
@@ -209,10 +211,57 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
             }
         )
     # ============================================================
+    
+    # ============================================================
+    # Fetch user's OpenAI API key from credentials
+    # ============================================================
+    openai_api_key = None
+    try:
+        # Try to fetch the user's OpenAI API key from credentials
+        credential = db.query(Credential).filter(
+            Credential.account_id == account_id,
+            Credential.service_name == ServiceName.OPENAI_API_KEY
+        ).first()
+        
+        if credential:
+            # Decrypt the API key
+            openai_api_key = decrypt_api_key(credential.encrypted_api_key)
+            print(f"Using user's OpenAI API key from credentials (credential ID: {credential.id})")
+        else:
+            # # Fallback to environment variable if user hasn't set up their own key
+            # openai_api_key = os.getenv("OPENAI_API_KEY")
+            # if openai_api_key:
+            #     print("Using system OpenAI API key from environment variable")
+            # else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "OpenAI API key required",
+                    "message": "Please add your OpenAI API key in your account settings, or contact support.",
+                    "hint": "You can add your API key via the /api/credentials endpoint."
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching OpenAI API key: {str(e)}")
+        # Fallback to environment variable on error
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "Failed to retrieve OpenAI API key",
+                    "message": "Unable to retrieve your OpenAI API key. Please try again or contact support.",
+                    "hint": str(e)
+                }
+            )
+    # ============================================================
 
     llm = ChatOpenAI(
         temperature=0, 
-        streaming=True, 
+        streaming=True,
+        api_key=openai_api_key,
         stream_usage=True,  # Enable token usage tracking during streaming
         model="gpt-4o-mini",
     )
