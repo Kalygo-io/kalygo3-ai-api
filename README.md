@@ -70,6 +70,19 @@ question,ground_truth,category,difficulty,metadata
 
 See `evals/ai_school_agent/README.md` for more details.
 
+## How to add a new environment variable in GCR
+
+```sh
+echo -n "<ENV_VAR_VALUE_HERE>" | gcloud secrets create <ENV_VAR_NAME_HERE> --data-file=-
+gcloud auth login
+gcloud config list
+gcloud secrets add-iam-policy-binding <ENV_VAR_NAME_HERE> \
+  --member="serviceAccount:830723611668-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+- And then add a reference to this new env var in the service.yaml file
+
 ## For triggering CICD
 
 1

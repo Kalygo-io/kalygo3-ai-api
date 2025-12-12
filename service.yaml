@@ -171,5 +171,11 @@ spec:
                   name: RERANKER_API_URL
                   key: latest
 
+            - name: CREDENTIALS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: CREDENTIALS_ENCRYPTION_KEY
+                  key: latest
+
           ports:
             - containerPort: 8080
