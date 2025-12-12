@@ -71,55 +71,55 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(healthcheck.router, prefix="")
 
-app.include_router(
-    rawLLM.router,
-    prefix="/api/raw-llm",
-)
+# app.include_router(
+#     rawLLM.router,
+#     prefix="/api/raw-llm",
+# )
 
-app.include_router(
-    basicMemory.router,
-    prefix="/api/basic-memory",
-)
+# app.include_router(
+#     basicMemory.router,
+#     prefix="/api/basic-memory",
+# )
 
-app.include_router(
-    persistentMemory.router,
-    prefix="/api/persistent-memory",
-)
+# app.include_router(
+#     persistentMemory.router,
+#     prefix="/api/persistent-memory",
+# )
 
-app.include_router(
-    rerankingWithLLM.router,
-    prefix="/api/reranking-with-llm",
-)
+# app.include_router(
+#     rerankingWithLLM.router,
+#     prefix="/api/reranking-with-llm",
+# )
 
-app.include_router(
-    reActAgent.router,
-    prefix="/api/react-agent",
-)
+# app.include_router(
+#     reActAgent.router,
+#     prefix="/api/react-agent",
+# )
 
-app.include_router(
-    agenticRagAgent.router,
-    prefix="/api/agentic-rag-agent",
-)
+# app.include_router(
+#     agenticRagAgent.router,
+#     prefix="/api/agentic-rag-agent",
+# )
 
-app.include_router(
-    aiSchoolAgent.router,
-    prefix="/api/ai-school-agent",
-)
+# app.include_router(
+#     aiSchoolAgent.router,
+#     prefix="/api/ai-school-agent",
+# )
 
 app.include_router(
     kalygoAgent.router,
     prefix="/api/kalygo-agent",
 )
 
-app.include_router(
-    localAgent.router,
-    prefix="/api/local-agent",
-)
+# app.include_router(
+#     localAgent.router,
+#     prefix="/api/local-agent",
+# )
 
-app.include_router(
-    jwtAgent.router,
-    prefix="/api/jwt-agent",
-)
+# app.include_router(
+#     jwtAgent.router,
+#     prefix="/api/jwt-agent",
+# )
 
 app.include_router(
     auth.router,
@@ -139,23 +139,23 @@ app.include_router(
     tags=['logins'],
 )
 
-app.include_router(
-    multimodal.router,
-    prefix="/api/multi-modal",
-    tags=['multimodal'],
-)
+# app.include_router(
+#     multimodal.router,
+#     prefix="/api/multi-modal",
+#     tags=['multimodal'],
+# )
 
-app.include_router(
-    similaritySearch.router,
-    prefix="/api/similarity-search",
-    tags=['Similarity Search'],
-)
+# app.include_router(
+#     similaritySearch.router,
+#     prefix="/api/similarity-search",
+#     tags=['Similarity Search'],
+# )
 
-app.include_router(
-    reranking.router,
-    prefix="/api/reranking",
-    tags=['Reranking'],
-)
+# app.include_router(
+#     reranking.router,
+#     prefix="/api/reranking",
+#     tags=['Reranking'],
+# )
 
 app.include_router(
     chatAppSessions.router,
