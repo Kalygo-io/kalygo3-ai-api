@@ -26,7 +26,8 @@ from .routers import (
   payments,
   jwtAgent,
   localAgent,
-  remoteAgent
+  remoteAgent,
+  credentials
 )
 
 from src.db.database import Base, engine
@@ -166,4 +167,10 @@ app.include_router(
     payments.router,
     prefix="/api/payments",
     tags=['Payments'],
+)
+
+app.include_router(
+    credentials.router,
+    prefix="/api/credentials",
+    tags=['Credentials'],
 )

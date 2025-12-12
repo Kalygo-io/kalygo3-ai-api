@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
+from .service_name import ServiceName
 import datetime
 
 class Account(Base):
@@ -14,6 +15,7 @@ class Account(Base):
     logins = relationship('Logins', back_populates='account')
     chat_app_sessions = relationship('ChatAppSession', back_populates='account')
     usage_credits = relationship('UsageCredits', back_populates='account')
+    credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -90,3 +92,17 @@ class UsageCredits(Base):
     
     def __repr__(self):
         return f'<UsageCredits {self.account_id}: ${self.amount}>'
+
+class Credential(Base):
+    __tablename__ = 'credentials'
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    service_name = Column(Enum(ServiceName, name='service_name_enum'), nullable=False, index=True)
+    encrypted_api_key = Column(String, nullable=False)  # Encrypted API key
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    
+    account = relationship('Account', back_populates='credentials')
+    
+    def __repr__(self):
+        return f'<Credential {self.service_name} for account {self.account_id}>'
