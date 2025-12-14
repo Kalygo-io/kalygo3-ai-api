@@ -8,26 +8,15 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
 from .routers import (
-  basicMemory,
-  persistentMemory,
-  rerankingWithLLM,
-  agenticRagAgent,
-  reActAgent,
   healthcheck,
   auth,
   logins,
-  multimodal,
   waitlist,
-  rawLLM,
-  similaritySearch,
-  reranking,
   chatAppSessions,
-  aiSchoolAgent,
   payments,
-  jwtAgent,
-  localAgent,
   kalygoAgent,
-  credentials
+  credentials,
+  vectorStores
 )
 
 from src.db.database import Base, engine
@@ -173,4 +162,10 @@ app.include_router(
     credentials.router,
     prefix="/api/credentials",
     tags=['Credentials'],
+)
+
+app.include_router(
+    vectorStores.router,
+    prefix="/api/vector-stores",
+    tags=['Vector Stores'],
 )
