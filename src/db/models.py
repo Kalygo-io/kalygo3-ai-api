@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from .database import Base
 from .service_name import ServiceName
 import datetime
+import uuid
 
 class Account(Base):
     __tablename__ = 'accounts'
@@ -16,6 +18,7 @@ class Account(Base):
     chat_app_sessions = relationship('ChatAppSession', back_populates='account')
     usage_credits = relationship('UsageCredits', back_populates='account')
     credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
+    vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -106,3 +109,71 @@ class Credential(Base):
     
     def __repr__(self):
         return f'<Credential {self.service_name} for account {self.account_id}>'
+
+
+class OperationType(str, Enum):
+    """Enumeration of vector database operation types."""
+    INGEST = "INGEST"
+    DELETE = "DELETE"
+    UPDATE = "UPDATE"
+
+
+class OperationStatus(str, Enum):
+    """Enumeration of vector database operation statuses."""
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    PARTIAL = "PARTIAL"
+    PENDING = "PENDING"
+
+
+class VectorDbIngestionLog(Base):
+    __tablename__ = 'vector_db_ingestion_log'
+    
+    # Primary Key (UUID)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    
+    # Operation Details
+    # Note: Enum types are created in migration, using create_type=False here
+    operation_type = Column(
+        PG_ENUM('INGEST', 'DELETE', 'UPDATE', name='operation_type_enum', create_type=False),
+        nullable=False,
+        index=True
+    )
+    status = Column(
+        PG_ENUM('SUCCESS', 'FAILED', 'PARTIAL', 'PENDING', name='operation_status_enum', create_type=False),
+        nullable=False,
+        index=True
+    )
+    
+    # User/Account
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    
+    # Vector Database Info
+    provider = Column(String, nullable=False)  # 'pinecone', 'chroma', etc.
+    index_name = Column(String, nullable=False, index=True)
+    namespace = Column(String, nullable=True, index=True)
+    
+    # File Information
+    filenames = Column(JSON, nullable=True)  # Array of filenames
+    comment = Column(Text, nullable=True)
+    
+    # Vector Counts
+    vectors_added = Column(Integer, default=0)
+    vectors_deleted = Column(Integer, default=0)
+    vectors_failed = Column(Integer, default=0)
+    
+    # Error Handling
+    error_message = Column(Text, nullable=True)
+    error_code = Column(String, nullable=True)
+    
+    # Batch Grouping
+    batch_number = Column(String, nullable=True, index=True)  # UUID for grouping related operations
+    
+    # Relationships
+    account = relationship('Account', back_populates='vector_db_logs')
+    
+    def __repr__(self):
+        return f'<VectorDbIngestionLog {self.id} - {self.operation_type.value} - {self.status.value}>'
