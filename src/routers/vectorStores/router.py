@@ -15,6 +15,8 @@ from slowapi.util import get_remote_address
 
 # Import ingestion logs router
 from .ingestion_logs import router as ingestion_logs_router
+# Import upload router
+from .upload import router as upload_router
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -22,6 +24,8 @@ router = APIRouter()
 
 # Include ingestion logs router
 router.include_router(ingestion_logs_router)
+# Include upload router
+router.include_router(upload_router)
 
 class CreateIndexRequest(BaseModel):
     name: str
