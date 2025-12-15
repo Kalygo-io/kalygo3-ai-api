@@ -3,4 +3,3 @@ steps:
     args: ['build', '-f', 'Dockerfile.prod', '-t', 'us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi:latest', '.']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi:latest']
-
