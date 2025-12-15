@@ -13,10 +13,15 @@ from pinecone import Pinecone
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+# Import ingestion logs router
+from .ingestion_logs import router as ingestion_logs_router
+
 limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
+# Include ingestion logs router
+router.include_router(ingestion_logs_router)
 
 class CreateIndexRequest(BaseModel):
     name: str
