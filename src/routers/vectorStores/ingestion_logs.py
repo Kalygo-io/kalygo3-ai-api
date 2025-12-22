@@ -191,6 +191,49 @@ async def list_ingestion_logs(
         )
 
 
+@router.get("/indexes/{index_name}/ingestion-logs", response_model=IngestionLogsListResponse)
+@limiter.limit("30/minute")
+async def list_ingestion_logs_by_index(
+    index_name: str,
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+    # Filter parameters
+    namespace: Optional[str] = Query(None, description="Filter by namespace"),
+    operation_type: Optional[str] = Query(None, description="Filter by operation type (INGEST, DELETE, UPDATE)"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (SUCCESS, FAILED, PARTIAL, PENDING)"),
+    provider: Optional[str] = Query(None, description="Filter by provider"),
+    batch_number: Optional[str] = Query(None, description="Filter by batch number"),
+    # Date range filters
+    start_date: Optional[datetime] = Query(None, description="Filter logs created after this date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="Filter logs created before this date (ISO format)"),
+    # Pagination
+    limit: int = Query(50, ge=1, le=500, description="Number of logs to return"),
+    offset: int = Query(0, ge=0, description="Number of logs to skip"),
+):
+    """
+    List ingestion logs for a specific index.
+    This is a convenience endpoint that automatically filters by index_name.
+    Equivalent to GET /ingestion-logs?index_name={index_name}
+    """
+    # Call the main list function with index_name pre-filled
+    return await list_ingestion_logs(
+        db=db,
+        jwt=jwt,
+        request=request,
+        index_name=index_name,
+        namespace=namespace,
+        operation_type=operation_type,
+        status_filter=status_filter,
+        provider=provider,
+        batch_number=batch_number,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset
+    )
+
+
 @router.get("/ingestion-logs/{log_id}", response_model=IngestionLogResponse)
 @limiter.limit("30/minute")
 async def get_ingestion_log(
