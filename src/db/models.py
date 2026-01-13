@@ -177,3 +177,15 @@ class VectorDbIngestionLog(Base):
     
     def __repr__(self):
         return f'<VectorDbIngestionLog {self.id} - {self.operation_type.value} - {self.status.value}>'
+
+
+class Agent(Base):
+    __tablename__ = 'agents'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    system_prompt = Column(Text, nullable=True)
+    config = Column(JSON, nullable=True)  # JSONB in PostgreSQL, JSON in SQLAlchemy
+    
+    def __repr__(self):
+        return f'<Agent {self.id}: {self.name}>'
