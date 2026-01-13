@@ -189,3 +189,38 @@ class Agent(Base):
     
     def __repr__(self):
         return f'<Agent {self.id}: {self.name}>'
+
+
+class JsonSchema(Base):
+    """
+    Stores JSON schemas and their versions for validation across the Kalygo ecosystem.
+    
+    Example usage:
+    - schema_name: "agent_config"
+    - version: 1
+    - schema_definition: { JSON schema definition }
+    
+    JSON blobs can reference schemas using:
+    {
+      "schema": "agent_config",
+      "version": 1,
+      "data": { ... }
+    }
+    """
+    __tablename__ = 'json_schemas'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    schema_name = Column(String, nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    schema_definition = Column(JSON, nullable=False)  # JSONB in PostgreSQL
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Unique constraint on (schema_name, version) is handled in migration
+    __table_args__ = (
+        {'comment': 'Stores JSON schemas and their versions for validation across the Kalygo ecosystem'}
+    )
+    
+    def __repr__(self):
+        return f'<JsonSchema {self.schema_name} v{self.version}>'
