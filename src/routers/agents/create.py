@@ -28,11 +28,11 @@ async def create_agent(
     
     The agent will have:
     - name: The name of the agent (required)
-    - description: Optional description/system prompt for the agent (maps to system_prompt in DB)
-    - knowledge_bases: Optional list of knowledge bases to associate with the agent
+    - systemPrompt: The system prompt for the agent (required, maps to system_prompt in DB)
+    - knowledgeBases: List of knowledge bases to associate with the agent (required)
     
-    The request body is validated against the agent_config v1 JSON schema.
-    The knowledge_bases will be transformed into a config JSON blob following the schema pattern:
+    The request body is validated against the agent v1 JSON schema.
+    The knowledgeBases will be transformed into a config JSON blob following the schema pattern:
     {
       "schema": "agent_config",
       "version": 1,
@@ -66,7 +66,8 @@ async def create_agent(
             )
         
         # Convert Pydantic model to dict for JSON schema validation
-        request_dict = request_body.model_dump(exclude_none=False)
+        # Use by_alias=True to get camelCase field names for schema validation
+        request_dict = request_body.model_dump(by_alias=True, exclude_none=False)
         
         # Validate against JSON schema
         try:
@@ -85,34 +86,32 @@ async def create_agent(
                 detail=f"Schema validation error: {str(e)}"
             )
         
-        # Transform knowledge_bases into config structure
-        config = None
-        if request_body.knowledge_bases:
-            knowledge_bases_data = []
-            for kb in request_body.knowledge_bases:
-                kb_dict = {
-                    "provider": kb.provider,
-                    "index": kb.index,
-                    "namespace": kb.namespace
-                }
-                if kb.description:
-                    kb_dict["description"] = kb.description
-                knowledge_bases_data.append(kb_dict)
-            
-            config = {
-                "schema": "agent_config",
-                "version": 1,
-                "data": {
-                    "knowledgeBases": knowledge_bases_data
-                }
+        # Transform knowledgeBases into config structure
+        knowledge_bases_data = []
+        for kb in request_body.knowledgeBases:
+            kb_dict = {
+                "provider": kb.provider,
+                "index": kb.index,
+                "namespace": kb.namespace
             }
+            if kb.description:
+                kb_dict["description"] = kb.description
+            knowledge_bases_data.append(kb_dict)
+        
+        config = {
+            "schema": "agent_config",
+            "version": 1,
+            "data": {
+                "knowledgeBases": knowledge_bases_data
+            }
+        }
         
         # Create the agent
-        # Map description to system_prompt for database storage
+        # Map systemPrompt to system_prompt for database storage
         agent = Agent(
             account_id=account_id,
             name=agent_name,
-            system_prompt=request_body.description,
+            system_prompt=request_body.systemPrompt,
             config=config
         )
         
