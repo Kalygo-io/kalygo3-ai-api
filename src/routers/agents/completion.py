@@ -150,8 +150,9 @@ async def create_retrieval_tool_for_kb(
         query: str = Field(description="The search query to find relevant documents")
         top_k: int = Field(default=10, description="Number of results to return")
     
-    return StructuredTool.from_function(
+    return StructuredTool(
         func=retrieval_impl,
+        coroutine=retrieval_impl,
         name=f"search_{namespace}",
         description=description,
         args_schema=SearchQuery
@@ -170,7 +171,6 @@ async def generator(
     Dynamically configures agent based on agent config from database.
     """
     try:
-        print(f"[AGENT COMPLETION] Starting completion for agent_id={agent_id}, sessionId={sessionId}")
         account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
         
         # Get agent and verify ownership
@@ -180,7 +180,7 @@ async def generator(
         ).first()
         
         if not agent:
-            print(f"[AGENT COMPLETION] Agent {agent_id} not found for account {account_id}")
+            
             yield json.dumps({
                 "event": "error",
                 "data": {
@@ -486,7 +486,13 @@ async def generator(
                         query = tool_input.get('query', 'Unknown query')
                         
                         # Extract results from tool output
-                        results = tool_output.get('results', [])
+                        # Note: With proper async tool setup (coroutine parameter), LangChain should await the tool
+                        # and provide the result here, not a coroutine
+                        if isinstance(tool_output, dict):
+                            results = tool_output.get('results', [])
+                        else:
+                            print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping retrieval tracking")
+                            results = []
                         
                         # Format results for response
                         formatted_results = []
