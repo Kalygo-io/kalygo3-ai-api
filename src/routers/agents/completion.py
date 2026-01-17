@@ -54,7 +54,8 @@ callbacks = [
 async def create_retrieval_tool_for_kb(
     knowledge_base: Dict[str, Any],
     account_id: int,
-    db
+    db,
+    jwt_token: Optional[str] = None
 ) -> Optional[StructuredTool]:
     """
     Create a retrieval tool for a knowledge base.
@@ -102,12 +103,16 @@ async def create_retrieval_tool_for_kb(
         try:
             # Get embedding for the query
             embedding = {}
+            headers = {}
+            if jwt_token:
+                headers["Authorization"] = f"Bearer {jwt_token}"
+            
             async with aiohttp.ClientSession() as session:
                 url = f"{os.getenv('EMBEDDINGS_API_URL')}/huggingface/embedding"
                 payload = {"input": query}
                 
                 try:
-                    async with session.post(url, json=payload) as response:
+                    async with session.post(url, json=payload, headers=headers) as response:
                         if response.status != 200:
                             raise aiohttp.ClientError(f"Request failed with status code {response.status}: {await response.text()}")
                         result = await response.json()
@@ -164,7 +169,8 @@ async def generator(
     sessionId: str,
     prompt: str,
     db,
-    auth: dict
+    auth: dict,
+    request: Request = None
 ):
     """
     Generator function for streaming agent completion.
@@ -292,8 +298,19 @@ async def generator(
         tools = []
         retrieval_calls = []
         
+        # Extract JWT token from request for passing to embedding API
+        jwt_token = None
+        if request:
+            # Try to get JWT from cookie first (standard flow)
+            jwt_token = request.cookies.get("jwt")
+            # If not in cookie, try Authorization header
+            if not jwt_token:
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    jwt_token = auth_header.replace("Bearer ", "").strip()
+        
         for kb in knowledge_bases:
-            tool = await create_retrieval_tool_for_kb(kb, account_id, db)
+            tool = await create_retrieval_tool_for_kb(kb, account_id, db, jwt_token=jwt_token)
             if tool:
                 tools.append(tool)
                 retrieval_calls.append({
@@ -629,7 +646,8 @@ async def agent_completion(
             sessionId=request_body.sessionId,
             prompt=request_body.prompt,
             db=db,
-            auth=auth
+            auth=auth,
+            request=request
         ),
         media_type='text/event-stream'
     )
