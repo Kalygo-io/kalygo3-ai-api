@@ -19,6 +19,7 @@ class Account(Base):
     usage_credits = relationship('UsageCredits', back_populates='account')
     credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
+    api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -109,6 +110,36 @@ class Credential(Base):
     
     def __repr__(self):
         return f'<Credential {self.service_name} for account {self.account_id}>'
+
+
+class ApiKeyStatus(str, Enum):
+    """Enumeration of API key statuses."""
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
+class ApiKey(Base):
+    __tablename__ = 'api_keys'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    
+    # Key storage: hash the full key, store prefix for display/lookup
+    key_hash = Column(String, nullable=False, unique=True, index=True)
+    key_prefix = Column(String, nullable=False, index=True)  # First 20 chars for display/lookup
+    
+    # Optional metadata
+    name = Column(String, nullable=True)  # User-friendly name (e.g., "Website Chatbot")
+    status = Column(PG_ENUM('active', 'revoked', name='api_key_status_enum', create_type=False), nullable=False, default=ApiKeyStatus.ACTIVE, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    
+    account = relationship('Account', back_populates='api_keys')
+    
+    def __repr__(self):
+        return f'<ApiKey {self.key_prefix}... for account {self.account_id}>'
 
 
 class OperationType(str, Enum):
