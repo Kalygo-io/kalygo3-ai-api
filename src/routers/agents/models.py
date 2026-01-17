@@ -13,6 +13,14 @@ class CreateAgentRequest(BaseModel):
         populate_by_name = True
 
 
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        populate_by_name = True
+
+
 class AgentResponse(BaseModel):
     id: int
     name: str
