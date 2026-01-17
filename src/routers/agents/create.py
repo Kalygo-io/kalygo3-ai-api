@@ -70,7 +70,7 @@ async def create_agent(
         
         # Validate against JSON schema
         try:
-            validate_against_schema(request_dict, "agent_config", 1)
+            validate_against_schema(request_dict, "agent", 1)
         except JsonSchemaValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
