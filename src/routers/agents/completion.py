@@ -363,165 +363,151 @@ async def generator(
             print(f"[AGENT COMPLETION] Streaming events from agent executor")
             print(f"[AGENT COMPLETION] Agent executor type: {type(agent_executor)}")
             print(f"[AGENT COMPLETION] Prompt: {prompt}")
-            try:
-                async for event in agent_executor.astream_events(
-                    {
-                        "input": prompt
-                    },
-                    version="v1",
-                ):
-                    print(f"[AGENT COMPLETION] Got event: {event.get('event', 'unknown')}")
-                    kind = event["event"]
-                    if kind == "on_chain_start":
-                        print(f"[AGENT COMPLETION] on_chain_start")
-                        if (
-                            event["name"] == "Agent"
-                        ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                            print(
-                                f"Starting agent: {event['name']} with input: {event['data'].get('input')}"
-                            )
+            
+            # Direct async for loop - matching kalygoAgent exactly
+            async for event in agent_executor.astream_events(
+                {
+                    "input": prompt
+                },
+                version="v1",
+            ):
+                kind = event["event"]
+                print(f"[AGENT COMPLETION] Event: {kind}", flush=True)
+                if kind == "on_chain_start":
+                    if (
+                        event["name"] == "Agent"
+                    ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                        print(
+                            f"Starting agent: {event['name']} with input: {event['data'].get('input')}"
+                        )
 
-                            yield json.dumps({
-                                "event": "on_chain_start",
-                            }, separators=(',', ':'))
-                    elif kind == "on_chain_end":
-                        print(f"[AGENT COMPLETION] on_chain_end")
-                        if (
-                            event["name"] == "Agent"
-                        ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                            content = event['data'].get('output')['output']
-                            print()
-                            print("--")
-                            print(
-                                f"Done agent: {event['name']}"
-                            )
-                            print(len(retrieval_calls))
-                            
-                            if content:
-                            # Empty content in the context of OpenAI means
-                            # that the model is asking for a tool to be invoked.
-                            # So we only print non-empty content
-                                try: # Store the AI's response into the session message history
-                                    ai_message = ChatAppMessage(
-                                        message={
-                                            "role": "ai",
-                                            "content": content
-                                        },
-                                        chat_app_session_id=session.id
-                                    )
-                                    db.add(ai_message)
-                                    db.commit()
-                                    db.refresh(ai_message)
-                                    print(f"Stored AI response with ID: {ai_message.id}")
-                                except Exception as e:
-                                    print(f"Failed to store AI response: {e}")
-                                    db.rollback()
-
-                                # print(content, end="|")
-
-                                yield json.dumps({
-                                    "event": "on_chain_end",
-                                    "data": content,
-                                    "retrieval_calls": retrieval_calls
-                                }, separators=(',', ':'))
-                    if kind == "on_chat_model_start":
-                        print(f"[AGENT COMPLETION] on_chat_model_start")
-                        # Only store the user message once, even if on_chat_model_start fires multiple times
-                        # (which happens when the agent makes multiple LLM calls for tool usage)
-                        if not user_message_stored:
-                            try: # Store the latest prompt into the session message history
-                                user_message = ChatAppMessage(
+                        yield json.dumps({
+                            "event": "on_chain_start",
+                        }, separators=(',', ':'))
+                elif kind == "on_chain_end":
+                    if (
+                        event["name"] == "Agent"
+                    ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
+                        content = event['data'].get('output')['output']
+                        print()
+                        print("--")
+                        print(
+                            f"Done agent: {event['name']}"
+                        )
+                        print(len(retrieval_calls))
+                        
+                        if content:
+                        # Empty content in the context of OpenAI means
+                        # that the model is asking for a tool to be invoked.
+                        # So we only print non-empty content
+                            try: # Store the AI's response into the session message history
+                                ai_message = ChatAppMessage(
                                     message={
-                                        "role": "human",
-                                        "content": prompt
+                                        "role": "ai",
+                                        "content": content
                                     },
                                     chat_app_session_id=session.id
                                 )
-                                db.add(user_message)
+                                db.add(ai_message)
                                 db.commit()
-                                db.refresh(user_message)
-                                user_message_id = user_message.id
-                                print(f"Stored user message with ID: {user_message_id}")
-                                user_message_stored = True
+                                db.refresh(ai_message)
+                                print(f"Stored AI response with ID: {ai_message.id}")
                             except Exception as e:
-                                print(f"Failed to store user message: {e}")
+                                print(f"Failed to store AI response: {e}")
                                 db.rollback()
-                        
-                        yield json.dumps({
-                            "event": "on_chat_model_start",
-                            "retrieval_calls": retrieval_calls
-                        }, separators=(',', ':'))
-                    elif kind == "on_chat_model_stream":
-                        print(f"[AGENT COMPLETION] on_chat_model_stream")
-                        content = event["data"]["chunk"].content
-                        if content:
-                            # Empty content in the context of OpenAI means
-                            # that the model is asking for a tool to be invoked.
-                            # So we only print non-empty content
-                            print(content, end="|")
+
+                            # print(content, end="|")
+
                             yield json.dumps({
-                                "event": "on_chat_model_stream",
-                                "data": content
+                                "event": "on_chain_end",
+                                "data": content,
+                                "retrieval_calls": retrieval_calls
                             }, separators=(',', ':'))
-                    elif kind == "on_chat_model_end":
-                        print("!!! on_chat_model_end !!!") # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
-                    elif kind == "on_tool_start":
-                        print(f"[AGENT COMPLETION] on_tool_start")
-                        print(
-                            f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
-                        )
+                if kind == "on_chat_model_start":
+                    # Only store the user message once, even if on_chat_model_start fires multiple times
+                    # (which happens when the agent makes multiple LLM calls for tool usage)
+                    if not user_message_stored:
+                        try: # Store the latest prompt into the session message history
+                            user_message = ChatAppMessage(
+                                message={
+                                    "role": "human",
+                                    "content": prompt
+                                },
+                                chat_app_session_id=session.id
+                            )
+                            db.add(user_message)
+                            db.commit()
+                            db.refresh(user_message)
+                            user_message_id = user_message.id
+                            print(f"Stored user message with ID: {user_message_id}")
+                            user_message_stored = True
+                        except Exception as e:
+                            print(f"Failed to store user message: {e}")
+                            db.rollback()
+                    
+                    yield json.dumps({
+                        "event": "on_chat_model_start",
+                        "retrieval_calls": retrieval_calls
+                    }, separators=(',', ':'))
+                elif kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        # Empty content in the context of OpenAI means
+                        # that the model is asking for a tool to be invoked.
+                        # So we only print non-empty content
+                        print(content, end="|", flush=True)
                         yield json.dumps({
-                            "event": "on_tool_start",
-                            "data": f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
+                            "event": "on_chat_model_stream",
+                            "data": content
                         }, separators=(',', ':'))
-                    elif kind == "on_tool_end":
-                        print(f"Done tool: {event['name']}")
-                        # print(f"Tool output was: {event['data'].get('output')}")
-                        print("--")
+                elif kind == "on_chat_model_end":
+                    print("!!! on_chat_model_end !!!") # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
+                elif kind == "on_tool_start":
+                    print("--")
+                    print(
+                        f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
+                    )
+                    yield json.dumps({
+                        "event": "on_tool_start",
+                        "data": f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
+                    }, separators=(',', ':'))
+                elif kind == "on_tool_end":
+                    print(f"Done tool: {event['name']}")
+                    # print(f"Tool output was: {event['data'].get('output')}")
+                    print("--")
+                    
+                    # Track retrieval calls if it's a retrieval tool
+                    tool_name = event['name']
+                    if any(tool_name.startswith(f"search_{kb.get('namespace', '')}") for kb in knowledge_bases):
+                        tool_input = event['data'].get('input', {})
+                        tool_output = event['data'].get('output', {})
                         
-                        # Track retrieval calls if it's a retrieval tool
-                        tool_name = event['name']
-                        if any(tool_name.startswith(f"search_{kb.get('namespace', '')}") for kb in knowledge_bases):
-                            tool_input = event['data'].get('input', {})
-                            tool_output = event['data'].get('output', {})
-                            
-                            # Extract query from tool input
-                            query = tool_input.get('query', 'Unknown query')
-                            
-                            # Extract results from tool output
-                            results = tool_output.get('results', [])
-                            
-                            # Format results for response
-                            formatted_results = []
-                            for result in results:
-                                formatted_results.append({
-                                    "chunk_id": result.get("id", "N/A"),
-                                    "score": result.get("score", 0.0),
-                                    "content": result.get("metadata", {}).get("content", ""),
-                                    "metadata": result.get("metadata", {})
-                                })
-                            
-                            retrieval_calls.append({
-                                "query": query,
-                                "results": formatted_results,
-                                "namespace": tool_output.get('namespace', ''),
-                                "index": tool_output.get('index', '')
+                        # Extract query from tool input
+                        query = tool_input.get('query', 'Unknown query')
+                        
+                        # Extract results from tool output
+                        results = tool_output.get('results', [])
+                        
+                        # Format results for response
+                        formatted_results = []
+                        for result in results:
+                            formatted_results.append({
+                                "chunk_id": result.get("id", "N/A"),
+                                "score": result.get("score", 0.0),
+                                "content": result.get("metadata", {}).get("content", ""),
+                                "metadata": result.get("metadata", {})
                             })
                         
-                        yield json.dumps({
-                            "event": "on_tool_end",
-                        }, separators=(',', ':'))
-            except Exception as e:
-                print(f"[AGENT COMPLETION] Exception in event loop: {e}")
-                import traceback
-                traceback.print_exc()
-                yield json.dumps({
-                    "event": "error",
-                    "data": {
-                        "error": "Streaming error",
-                        "message": str(e)
-                    }
-                }, separators=(',', ':'))
+                        retrieval_calls.append({
+                            "query": query,
+                            "results": formatted_results,
+                            "namespace": tool_output.get('namespace', ''),
+                            "index": tool_output.get('index', '')
+                        })
+                    
+                    yield json.dumps({
+                        "event": "on_tool_end",
+                    }, separators=(',', ':'))
         else:
             # Simple chat without tools - use prompt template with streaming
             print(f"[AGENT COMPLETION] Using simple chat mode (no tools)")
@@ -561,6 +547,7 @@ async def generator(
                     kind = event["event"]
                     
                     if kind == "on_chat_model_stream":
+                        print(f"[AGENT COMPLETION] on_chat_model_stream")
                         content = event["data"]["chunk"].content
                         if content:
                             chunk_count += 1
