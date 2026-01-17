@@ -16,7 +16,8 @@ from .routers import (
   payments,
   kalygoAgent,
   credentials,
-  vectorStores
+  vectorStores,
+  agents
 )
 
 from src.db.database import Base, engine
@@ -168,4 +169,10 @@ app.include_router(
     vectorStores.router,
     prefix="/api/vector-stores",
     tags=['Vector Stores'],
+)
+
+app.include_router(
+    agents.router,
+    prefix="/api/agents",
+    tags=['Agents'],
 )
