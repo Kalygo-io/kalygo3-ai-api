@@ -6,8 +6,7 @@
   "additionalProperties": false,
   "required": [
     "name",
-    "systemPrompt",
-    "knowledgeBases"
+    "config"
   ],
   "properties": {
     "name": {
@@ -15,70 +14,29 @@
       "minLength": 1,
       "description": "Human-readable agent name."
     },
-    "systemPrompt": {
-      "type": "string",
-      "minLength": 1,
-      "description": "What the agent is for."
-    },
-    "knowledgeBases": {
-      "type": "array",
-      "minItems": 1,
-      "description": "One or more knowledge base bindings used by the agent.",
-      "items": {
-        "$ref": "#/$defs/knowledgeBase"
-      }
-    },
     "config": {
       "$ref": "https://kalygo.example/schemas/agent-config.schema.json",
-      "description": "Agent configuration (optional, can be derived from knowledge_bases)."
-    }
-  },
-  "$defs": {
-    "knowledgeBase": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "provider",
-        "index",
-        "namespace",
-        "description"
-      ],
-      "properties": {
-        "provider": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Knowledge base provider identifier (e.g., 'pinecone')."
-        },
-        "index": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Provider index / collection name."
-        },
-        "namespace": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Provider namespace / partition key."
-        },
-        "description": {
-          "type": "string",
-          "minLength": 1,
-          "description": "What this knowledge base contains."
-        }
-      }
+      "description": "Agent configuration containing schema, version, and data (systemPrompt, knowledgeBases, etc.)."
     }
   },
   "examples": [
     {
       "name": "AI school agent",
-      "systemPrompt": "Is it useful for finding out information about AI school",
-      "knowledgeBases": [
-        {
-          "provider": "pinecone",
-          "index": "all-minilm-l6-v2-384-dims",
-          "namespace": "aisalon_miami",
-          "description": "Information about AI school."
+      "config": {
+        "schema": "agent_config",
+        "version": 1,
+        "data": {
+          "systemPrompt": "It is useful for finding out information about AI school",
+          "knowledgeBases": [
+            {
+              "provider": "pinecone",
+              "index": "all-minilm-l6-v2-384-dims",
+              "namespace": "aisalon_miami",
+              "description": "Information about AI school."
+            }
+          ]
         }
-      ]
+      }
     }
   ]
 }

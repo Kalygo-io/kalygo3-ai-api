@@ -1,31 +1,32 @@
 """
 Shared Pydantic models for the agents router.
 """
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-
-
-class KnowledgeBase(BaseModel):
-    provider: str
-    index: str
-    namespace: str
-    description: Optional[str] = None
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 
 
 class CreateAgentRequest(BaseModel):
     name: str
-    systemPrompt: str = Field(..., alias="systemPrompt", description="The system prompt for the agent")
-    knowledgeBases: List[KnowledgeBase] = Field(..., alias="knowledgeBases", description="List of knowledge bases")
+    config: Dict[str, Any]
     
     class Config:
-        populate_by_name = True  # Allow both camelCase and snake_case
+        populate_by_name = True
 
 
 class AgentResponse(BaseModel):
     id: int
     name: str
-    system_prompt: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
+    
+    # Extract systemPrompt from config for convenience
+    @property
+    def systemPrompt(self) -> Optional[str]:
+        """Extract systemPrompt from config if available."""
+        if self.config and isinstance(self.config, dict):
+            data = self.config.get("data", {})
+            if isinstance(data, dict):
+                return data.get("systemPrompt")
+        return None
 
     class Config:
         from_attributes = True

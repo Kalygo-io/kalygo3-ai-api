@@ -45,7 +45,6 @@ async def list_agents(
             AgentResponse(
                 id=agent.id,
                 name=agent.name,
-                system_prompt=agent.system_prompt,
                 config=agent.config
             )
             for agent in agents

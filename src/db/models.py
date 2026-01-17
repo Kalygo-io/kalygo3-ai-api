@@ -185,7 +185,6 @@ class Agent(Base):
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
-    system_prompt = Column(Text, nullable=True)
     config = Column(JSON, nullable=True)  # JSONB in PostgreSQL, JSON in SQLAlchemy
     
     def __repr__(self):

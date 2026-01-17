@@ -28,24 +28,27 @@ async def create_agent(
     
     The agent will have:
     - name: The name of the agent (required)
-    - systemPrompt: The system prompt for the agent (required, maps to system_prompt in DB)
-    - knowledgeBases: List of knowledge bases to associate with the agent (required)
+    - config: Agent configuration object (required)
     
-    The request body is validated against the agent v1 JSON schema.
-    The knowledgeBases will be transformed into a config JSON blob following the schema pattern:
+    The config must include schema, version, and data:
     {
       "schema": "agent_config",
       "version": 1,
       "data": {
+        "systemPrompt": "The system prompt for the agent",
         "knowledgeBases": [
           {
             "provider": "pinecone",
             "index": "all-MiniLM-L6-v2",
-            "namespace": "ai_school_kb"
+            "namespace": "ai_school_kb",
+            "description": "Optional description"
           }
         ]
       }
     }
+    
+    The request body is validated against the agent v1 JSON schema, which validates
+    the config field against the agent_config schema (including schema, version, and data).
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
@@ -66,10 +69,9 @@ async def create_agent(
             )
         
         # Convert Pydantic model to dict for JSON schema validation
-        # Use by_alias=True to get camelCase field names for schema validation
-        request_dict = request_body.model_dump(by_alias=True, exclude_none=False)
+        request_dict = request_body.model_dump(exclude_none=False)
         
-        # Validate against JSON schema
+        # Validate against JSON schema (validates name and full config structure including schema/version/data)
         try:
             validate_against_schema(request_dict, "agent", 1)
         except JsonSchemaValidationError as e:
@@ -86,33 +88,22 @@ async def create_agent(
                 detail=f"Schema validation error: {str(e)}"
             )
         
-        # Transform knowledgeBases into config structure
-        knowledge_bases_data = []
-        for kb in request_body.knowledgeBases:
-            kb_dict = {
-                "provider": kb.provider,
-                "index": kb.index,
-                "namespace": kb.namespace
-            }
-            if kb.description:
-                kb_dict["description"] = kb.description
-            knowledge_bases_data.append(kb_dict)
+        # Validate config structure separately against agent_config schema (validates schema, version, and data)
+        try:
+            validate_against_schema(request_body.config, "agent_config", 1)
+        except JsonSchemaValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Config validation failed: {str(e)}"
+            )
+        except FileNotFoundError as e:
+            print(f"Warning: Config schema validation skipped - {str(e)}")
         
-        config = {
-            "schema": "agent_config",
-            "version": 1,
-            "data": {
-                "knowledgeBases": knowledge_bases_data
-            }
-        }
-        
-        # Create the agent
-        # Map systemPrompt to system_prompt for database storage
+        # Create the agent with the provided config (already includes schema, version, and data)
         agent = Agent(
             account_id=account_id,
             name=agent_name,
-            system_prompt=request_body.systemPrompt,
-            config=config
+            config=request_body.config
         )
         
         db.add(agent)
@@ -122,7 +113,6 @@ async def create_agent(
         return AgentResponse(
             id=agent.id,
             name=agent.name,
-            system_prompt=agent.system_prompt,
             config=agent.config
         )
         
