@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/chat-message.schema.json",
+  "title": "Chat Message v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "role",
+    "content"
+  ],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": ["human", "ai"],
+      "description": "The role of the message sender (human or AI)."
+    },
+    "content": {
+      "type": "string",
+      "description": "The text content of the message."
+    },
+    "toolCalls": {
+      "type": "array",
+      "description": "Array of tool calls made during the generation of this message. Only present for AI messages. Each tool call can have a different schema depending on the tool type.",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/retrievalToolCall"
+          }
+        ],
+        "description": "A tool call. The schema varies by tool type."
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "retrievalToolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "query",
+        "namespace",
+        "index",
+        "results"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "retrieval with re-ranking",
+          "description": "The name of the retrieval tool."
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The query used for retrieval."
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The namespace used for retrieval."
+        },
+        "index": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The index used for retrieval."
+        },
+        "results": {
+          "type": "array",
+          "description": "The results returned by the retrieval tool.",
+          "items": {
+            "$ref": "#/$defs/retrievalResult"
+          }
+        }
+      }
+    },
+    "retrievalResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chunk_id",
+        "score",
+        "content"
+      ],
+      "properties": {
+        "chunk_id": {
+          "type": "string",
+          "description": "The ID of the retrieved chunk."
+        },
+        "score": {
+          "type": "number",
+          "description": "The relevance score of the result."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content of the retrieved chunk."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Additional metadata associated with the result."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "role": "human",
+      "content": "Tell me about Tad"
+    },
+    {
+      "role": "ai",
+      "content": "Here are some details about Tad...",
+      "toolCalls": [
+        {
+          "name": "retrieval with re-ranking",
+          "query": "Tad",
+          "namespace": "tad",
+          "index": "all-minilm-l6-v2-384-dims",
+          "results": [
+            {
+              "chunk_id": "chunk-123",
+              "score": 0.95,
+              "content": "Tad Duval is the founder of...",
+              "metadata": {
+                "source": "document1",
+                "page": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import ChatAppSession, ChatMessage, ChatAppMessage, Account
+from src.db.models import ChatAppSession, ChatAppMessage, Account
 import uuid
 from datetime import datetime
 
@@ -172,12 +172,18 @@ async def get_session(
             
             print('convert_shape_of_message', msg)
 
-            return {
+            message_data = {
                 "id": msg.id,
                 "role": msg.message['role'],
                 "content": msg.message['content'],
                 "createdAt": msg.created_at
             }
+            
+            # Include toolCalls if present in the message
+            if 'toolCalls' in msg.message and msg.message['toolCalls']:
+                message_data["toolCalls"] = msg.message['toolCalls']
+            
+            return message_data
 
         messages = [convert_shape_of_message(m) for m in messages]
         

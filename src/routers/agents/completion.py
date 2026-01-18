@@ -15,6 +15,7 @@ from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import decrypt_api_key
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 from src.core.clients import pc
+from src.schemas import validate_against_schema
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
@@ -296,7 +297,7 @@ async def generator(
         
         # Create retrieval tools from knowledge bases
         tools = []
-        retrieval_calls = []
+        retrieval_calls = []  # Will be populated only when tools are actually executed
         
         # Extract JWT token from request for passing to embedding API
         jwt_token = None
@@ -313,10 +314,8 @@ async def generator(
             tool = await create_retrieval_tool_for_kb(kb, account_id, db, jwt_token=jwt_token)
             if tool:
                 tools.append(tool)
-                retrieval_calls.append({
-                    "namespace": kb.get('namespace'),
-                    "index": kb.get('index')
-                })
+                # Note: retrieval_calls will be populated in on_tool_end event handler
+                # when tools are actually executed, not here during tool creation
         
         print(f"[AGENT COMPLETION] Created {len(tools)} tools, using {'agent executor' if tools else 'simple chat'} mode")
         
@@ -418,11 +417,25 @@ async def generator(
                         # that the model is asking for a tool to be invoked.
                         # So we only print non-empty content
                             try: # Store the AI's response into the session message history
+                                # Build message object according to schema
+                                message_obj = {
+                                    "role": "ai",
+                                    "content": content
+                                }
+                                
+                                # Add toolCalls if any retrieval calls were made
+                                if retrieval_calls:
+                                    message_obj["toolCalls"] = retrieval_calls
+                                
+                                # Validate message against schema
+                                try:
+                                    validate_against_schema(message_obj, "chat_message", 1)
+                                except Exception as validation_error:
+                                    print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
+                                    # Continue anyway - don't fail the request, but log the error
+                                
                                 ai_message = ChatAppMessage(
-                                    message={
-                                        "role": "ai",
-                                        "content": content
-                                    },
+                                    message=message_obj,
                                     chat_app_session_id=session.id
                                 )
                                 db.add(ai_message)
@@ -445,11 +458,20 @@ async def generator(
                     # (which happens when the agent makes multiple LLM calls for tool usage)
                     if not user_message_stored:
                         try: # Store the latest prompt into the session message history
+                            message_obj = {
+                                "role": "human",
+                                "content": prompt
+                            }
+                            
+                            # Validate message against schema
+                            try:
+                                validate_against_schema(message_obj, "message", 1)
+                            except Exception as validation_error:
+                                print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
+                                # Continue anyway - don't fail the request, but log the error
+                            
                             user_message = ChatAppMessage(
-                                message={
-                                    "role": "human",
-                                    "content": prompt
-                                },
+                                message=message_obj,
                                 chat_app_session_id=session.id
                             )
                             db.add(user_message)
@@ -514,14 +536,34 @@ async def generator(
                         # Format results for response
                         formatted_results = []
                         for result in results:
+                            metadata = result.get("metadata", {})
+                            
+                            # Extract content from metadata - handle different metadata formats
+                            # Standard format: metadata["content"]
+                            # Q&A format: metadata["a"] (answer) or metadata["q"] (question)
+                            content = metadata.get("content", "")
+                            
+                            # If no content field, try to construct from Q&A format
+                            if not content:
+                                answer = metadata.get("a", "")
+                                question = metadata.get("q", "")
+                                if answer and question:
+                                    content = f"Q: {question}\nA: {answer}"
+                                elif answer:
+                                    content = answer
+                                elif question:
+                                    content = question
+                            
                             formatted_results.append({
                                 "chunk_id": result.get("id", "N/A"),
                                 "score": result.get("score", 0.0),
-                                "content": result.get("metadata", {}).get("content", ""),
-                                "metadata": result.get("metadata", {})
+                                "content": content,
+                                "metadata": metadata
                             })
                         
+                        # Structure tool call according to message schema
                         retrieval_calls.append({
+                            "name": "retrieval with re-ranking",
                             "query": query,
                             "results": formatted_results,
                             "namespace": tool_output.get('namespace', ''),
@@ -536,8 +578,20 @@ async def generator(
             print(f"[AGENT COMPLETION] Using simple chat mode (no tools)")
             if not user_message_stored:
                 try:
+                    message_obj = {
+                        "role": "human",
+                        "content": prompt
+                    }
+                    
+                    # Validate message against schema
+                    try:
+                        validate_against_schema(message_obj, "message", 1)
+                    except Exception as validation_error:
+                        print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
+                        # Continue anyway - don't fail the request, but log the error
+                    
                     user_message = ChatAppMessage(
-                        message={"role": "human", "content": prompt},
+                        message=message_obj,
                         chat_app_session_id=session.id
                     )
                     db.add(user_message)
@@ -598,8 +652,20 @@ async def generator(
             # Store AI response
             if full_response:
                 try:
+                    message_obj = {
+                        "role": "ai",
+                        "content": full_response
+                    }
+                    
+                    # Validate message against schema
+                    try:
+                        validate_against_schema(message_obj, "chat_message", 1)
+                    except Exception as validation_error:
+                        print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
+                        # Continue anyway - don't fail the request, but log the error
+                    
                     ai_message = ChatAppMessage(
-                        message={"role": "ai", "content": full_response},
+                        message=message_obj,
                         chat_app_session_id=session.id
                     )
                     db.add(ai_message)

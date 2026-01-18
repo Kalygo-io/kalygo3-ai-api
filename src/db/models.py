@@ -54,23 +54,10 @@ class ChatAppSession(Base):
     title = Column(String)
     
     account = relationship('Account', back_populates='chat_app_sessions')
-    messages = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
     app_messages = relationship('ChatAppMessage', back_populates='session', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<ChatAppSession {self.session_id}>'
-
-class ChatMessage(Base):
-    __tablename__ = 'chat_messages'
-    id = Column(Integer, primary_key=True, index=True)
-    message = Column(JSON)
-    session_id = Column(Integer, ForeignKey('chat_app_sessions.id'), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    
-    session = relationship('ChatAppSession', back_populates='messages')
-    
-    def __repr__(self):
-        return f'<ChatMessage {self.id}>'
 
 class ChatAppMessage(Base):
     __tablename__ = 'chat_app_messages'
