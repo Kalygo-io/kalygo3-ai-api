@@ -30,12 +30,12 @@ load_dotenv()
 debugpy.listen(("0.0.0.0", 5678))
 # debugpy.wait_for_client()
 
-# Disable automatic trailing slash redirects to prevent HTTP redirects
-# Routes should be registered consistently (with or without trailing slash)
+# Keep redirect_slashes enabled for proper route matching
+# We'll fix redirect URLs to use HTTPS in the CORS middleware
 app = FastAPI(
     docs_url=None, 
     redoc_url=None,
-    redirect_slashes=False  # Disable automatic redirects to prevent HTTP->HTTPS issues
+    redirect_slashes=True  # Enable redirects, but we'll fix HTTP->HTTPS in middleware
 )
 
 # Configure FastAPI to trust proxy headers (for HTTPS detection behind proxies)
