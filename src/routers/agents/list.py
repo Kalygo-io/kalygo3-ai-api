@@ -14,6 +14,7 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
+@router.get("", response_model=List[AgentResponse])
 @router.get("/", response_model=List[AgentResponse])
 @limiter.limit("30/minute")
 async def list_agents(
