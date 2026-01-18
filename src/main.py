@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from src.middleware.dynamic_cors import DynamicCORSMiddleware
 
 from .routers import (
   healthcheck,
@@ -35,7 +35,8 @@ app = FastAPI(docs_url=None, redoc_url=None)
 # Let Alembic handle all database schema changes
 # Base.metadata.create_all(bind=engine)
 
-origins = [
+# Allowed origins for JWT/cookie authentication (internal UI)
+jwt_allowed_origins = [
     "https://kalygo.io",
     "http://127.0.0.1:3000",
     "http://localhost:3000",
@@ -44,21 +45,22 @@ origins = [
     "http://localhost:5000",  # Second FastAPI
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Create a Limiter instance
 limiter = Limiter(key_func=get_remote_address)
 
-# Add SlowAPI middleware to FastAPI app
+# Add SlowAPI middleware to FastAPI app (runs first)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Dynamic CORS middleware (added last, so runs first to handle OPTIONS preflight)
+# - API key requests: Allow all origins (for third-party integrations)
+# - JWT/cookie requests: Restrict to jwt_allowed_origins (for internal UI)
+app.add_middleware(
+    DynamicCORSMiddleware,
+    allowed_origins=jwt_allowed_origins,
+    allow_credentials=True
+)
 
 app.include_router(healthcheck.router, prefix="")
 
