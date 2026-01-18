@@ -30,7 +30,13 @@ load_dotenv()
 debugpy.listen(("0.0.0.0", 5678))
 # debugpy.wait_for_client()
 
-app = FastAPI(docs_url=None, redoc_url=None)
+# Disable automatic trailing slash redirects to prevent HTTP redirects
+# Routes should be registered consistently (with or without trailing slash)
+app = FastAPI(
+    docs_url=None, 
+    redoc_url=None,
+    redirect_slashes=False  # Disable automatic redirects to prevent HTTP->HTTPS issues
+)
 
 # Configure FastAPI to trust proxy headers (for HTTPS detection behind proxies)
 # This ensures request.url.scheme is correctly set to 'https' when behind a proxy

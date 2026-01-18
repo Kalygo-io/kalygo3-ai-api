@@ -122,7 +122,19 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         # Handle actual requests
         response = await call_next(request)
         
-        # Add CORS headers to response
+        # Fix redirect URLs to use HTTPS if X-Forwarded-Proto indicates HTTPS
+        # This prevents mixed content errors when FastAPI redirects
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("Location", "")
+            if location and forwarded_proto == "https":
+                # If we have an HTTP redirect but the request came via HTTPS, fix it
+                if location.startswith("http://"):
+                    # Replace http:// with https:// in redirect location
+                    fixed_location = location.replace("http://", "https://", 1)
+                    response.headers["Location"] = fixed_location
+                    print(f"[CORS] Fixed redirect URL: {location} -> {fixed_location}")
+        
+        # Add CORS headers to response (including redirect responses)
         if has_api_key:
             # API key requests: allow all origins
             if origin:
