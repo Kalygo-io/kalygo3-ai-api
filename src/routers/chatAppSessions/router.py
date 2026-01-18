@@ -31,6 +31,7 @@ class ChatAppMessageResponse(BaseModel):
     role: str
     content: str
     createdAt: datetime
+    toolCalls: Optional[List[dict]] = None
 
 class ChatAppSessionResponse(BaseModel):
     id: int
