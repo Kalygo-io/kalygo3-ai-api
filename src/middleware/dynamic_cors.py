@@ -59,10 +59,15 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         has_api_key = self._has_api_key(request)
         
-        # Debug logging
+        # Debug logging - also log the request URL to detect HTTPS->HTTP issues
+        request_url = str(request.url) if hasattr(request, 'url') else 'unknown'
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "not-set")
+        forwarded_host = request.headers.get("X-Forwarded-Host", "not-set")
+        
         if origin:
             is_allowed = self._is_allowed_origin(origin)
             print(f"[CORS] {request.method} from origin: {origin}, has_api_key: {has_api_key}, is_allowed: {is_allowed}")
+            print(f"[CORS] Request URL: {request_url}, X-Forwarded-Proto: {forwarded_proto}, X-Forwarded-Host: {forwarded_host}")
             if not is_allowed and not has_api_key:
                 print(f"[CORS] Allowed origins: {self.allowed_origins}")
         

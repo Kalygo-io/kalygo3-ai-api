@@ -32,6 +32,10 @@ debugpy.listen(("0.0.0.0", 5678))
 
 app = FastAPI(docs_url=None, redoc_url=None)
 
+# Configure FastAPI to trust proxy headers (for HTTPS detection behind proxies)
+# This ensures request.url.scheme is correctly set to 'https' when behind a proxy
+app.root_path = ""
+
 # Let Alembic handle all database schema changes
 # Base.metadata.create_all(bind=engine)
 
