@@ -64,6 +64,7 @@ async def create_retrieval_tool_for_kb(
         knowledge_base: Dict with 'provider', 'index', 'namespace', optionally 'description'
         account_id: Account ID for fetching credentials
         db: Database session
+        jwt_token: Authentication token to pass to embedding API (JWT token or Kalygo API key)
     
     Returns:
         StructuredTool for retrieval, or None if provider not supported
@@ -104,6 +105,7 @@ async def create_retrieval_tool_for_kb(
             # Get embedding for the query
             embedding = {}
             headers = {}
+            # Pass authentication token (JWT or Kalygo API key) to Embeddings API
             if jwt_token:
                 headers["Authorization"] = f"Bearer {jwt_token}"
             
@@ -314,19 +316,40 @@ async def generator(
         tools = []
         retrieval_calls = []  # Will be populated only when tools are actually executed
         
-        # Extract JWT token from request for passing to embedding API
-        jwt_token = None
+        # Extract authentication token for passing to embedding API
+        # This handles both JWT and API key authentication
+        auth_token = None
         if request:
-            # Try to get JWT from cookie first (standard flow)
-            jwt_token = request.cookies.get("jwt")
-            # If not in cookie, try Authorization header
-            if not jwt_token:
+            auth_type = auth.get('auth_type', 'jwt')
+            
+            if auth_type == 'jwt':
+                # JWT authentication - extract JWT token
+                jwt_token = request.cookies.get("jwt")
+                # If not in cookie, try Authorization header
+                if not jwt_token:
+                    auth_header = request.headers.get("Authorization", "")
+                    if auth_header.startswith("Bearer "):
+                        jwt_token = auth_header.replace("Bearer ", "").strip()
+                auth_token = jwt_token
+            
+            elif auth_type == 'api_key':
+                # API key authentication - extract the Kalygo API key
+                api_key = None
+                
+                # Check Authorization header: "Bearer kalygo_live_..."
                 auth_header = request.headers.get("Authorization", "")
                 if auth_header.startswith("Bearer "):
-                    jwt_token = auth_header.replace("Bearer ", "").strip()
+                    api_key = auth_header.replace("Bearer ", "").strip()
+                
+                # Also check X-API-Key header
+                if not api_key:
+                    api_key = request.headers.get("X-API-Key", "").strip()
+                
+                auth_token = api_key
+                print(f"[AGENT COMPLETION] Using API key authentication for embedding API")
         
         for kb in knowledge_bases:
-            tool = await create_retrieval_tool_for_kb(kb, account_id, db, jwt_token=jwt_token)
+            tool = await create_retrieval_tool_for_kb(kb, account_id, db, jwt_token=auth_token)
             if tool:
                 tools.append(tool)
                 # Note: retrieval_calls will be populated in on_tool_end event handler
