@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -40,6 +42,45 @@ app = FastAPI(
 # Configure FastAPI to trust proxy headers (for HTTPS detection behind proxies)
 # This ensures request.url.scheme is correctly set to 'https' when behind a proxy
 app.root_path = ""
+
+# Add custom exception handler for validation errors (422)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Custom handler for 422 validation errors to provide detailed error messages.
+    This helps with debugging API calls from the frontend.
+    """
+    errors = exc.errors()
+    print(f"[VALIDATION ERROR] Path: {request.url.path}")
+    print(f"[VALIDATION ERROR] Method: {request.method}")
+    print(f"[VALIDATION ERROR] Errors: {errors}")
+    
+    # Try to log the request body for debugging
+    try:
+        body = await request.body()
+        print(f"[VALIDATION ERROR] Request body: {body.decode('utf-8')[:500]}")
+    except:
+        pass
+    
+    # Format error message for frontend
+    error_details = []
+    for error in errors:
+        location = " -> ".join(str(loc) for loc in error["loc"])
+        error_details.append({
+            "location": location,
+            "message": error["msg"],
+            "type": error["type"]
+        })
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "Validation Error",
+            "message": "The request could not be processed due to validation errors.",
+            "details": error_details,
+            "path": str(request.url.path)
+        }
+    )
 
 # Let Alembic handle all database schema changes
 # Base.metadata.create_all(bind=engine)

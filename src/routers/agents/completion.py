@@ -259,15 +259,31 @@ async def generator(
                 ChatAppSession.account_id == account_id
             ).first()
             
+            # Auto-create session if it doesn't exist
             if not session:
-                yield json.dumps({
-                    "event": "error",
-                    "data": {
-                        "error": "Session not found",
-                        "message": "The specified session was not found or does not belong to you."
-                    }
-                }, separators=(',', ':'))
-                return
+                print(f"[AGENT COMPLETION] Session {sessionId} not found, creating automatically...")
+                try:
+                    session = ChatAppSession(
+                        session_id=session_uuid,
+                        chat_app_id=f"agent-{agent_id}",  # Associate with this agent
+                        account_id=account_id,
+                        title=f"Chat with Agent {agent_id}"
+                    )
+                    db.add(session)
+                    db.commit()
+                    db.refresh(session)
+                    print(f"[AGENT COMPLETION] Created new session with ID: {session.id}")
+                except Exception as e:
+                    db.rollback()
+                    print(f"[AGENT COMPLETION] Failed to create session: {e}")
+                    yield json.dumps({
+                        "event": "error",
+                        "data": {
+                            "error": "Failed to create session",
+                            "message": f"Could not create chat session: {str(e)}"
+                        }
+                    }, separators=(',', ':'))
+                    return
             
             db_messages = db.query(ChatAppMessage).filter(
                 ChatAppMessage.chat_app_session_id == session.id
@@ -342,7 +358,7 @@ async def generator(
         
         # Create memory
         memory = ConversationBufferMemory(
-            memory_key="chat_history" if tools else None,
+            memory_key="chat_history",  # Always use "chat_history" as the memory key
             chat_memory=message_history,
             return_messages=True,
             output_key="output" if tools else None
@@ -706,6 +722,11 @@ async def agent_completion(
     Stream completion from a dynamically configured agent.
     The agent is configured based on its config stored in the database.
     """
+    # Debug logging
+    print(f"[AGENT COMPLETION] Received request for agent_id: {agent_id}")
+    print(f"[AGENT COMPLETION] Request body: sessionId={request_body.sessionId}, prompt={request_body.prompt[:50]}...")
+    print(f"[AGENT COMPLETION] Auth: {auth}")
+    
     return StreamingResponse(
         generator(
             agent_id=agent_id,
