@@ -51,7 +51,6 @@ callbacks = [
     )
 ] if os.getenv("LANGSMITH_API_KEY") else []
 
-
 async def create_retrieval_tool_for_kb(
     knowledge_base: Dict[str, Any],
     account_id: int,
@@ -630,12 +629,15 @@ async def generator(
             chunk_count = 0
             try:
                 # Use astream_events for consistent event handling
+                # Pass callbacks as a config parameter
+                config = {"callbacks": callbacks} if callbacks else {}
                 async for event in llm.astream_events(
                     prompt_template.format_messages(
                         chat_history=message_history.messages,
                         input=prompt
                     ),
-                    version="v1"
+                    version="v1",
+                    config=config  # Add callbacks here
                 ):
                     kind = event["event"]
                     
