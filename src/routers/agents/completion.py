@@ -570,7 +570,7 @@ async def generator(
                     kind = event["event"]
                     
                     if kind == "on_chat_model_stream":
-                        print(f"[AGENT COMPLETION] on_chat_model_stream")
+                        # print(f"[AGENT COMPLETION] on_chat_model_stream")
                         content = event["data"]["chunk"].content
                         if content:
                             chunk_count += 1
