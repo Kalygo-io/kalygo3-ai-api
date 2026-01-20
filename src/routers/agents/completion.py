@@ -19,7 +19,6 @@ from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
-from langchain_classic import hub
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -257,7 +256,14 @@ async def generator(
         # Create agent with system prompt
         if tools:
             # Agent with tools (RAG agent)
-            prompt_template = hub.pull("hwchase17/openai-tools-agent")
+            # Use local prompt template instead of pulling from LangChain Hub
+            # This avoids dependency on external LangSmith API
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}"),
+                MessagesPlaceholder(variable_name="agent_scratchpad")
+            ])
             # Bind tools to LLM (required for tool calling)
             llm_with_tools = llm.bind_tools(tools)
             agent_langchain = create_openai_tools_agent(
