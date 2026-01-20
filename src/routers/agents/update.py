@@ -31,13 +31,35 @@ async def update_agent(
     - name: The name of the agent (optional)
     - config: Agent configuration object (optional)
     
-    The config must follow the agent_config schema structure if provided:
+    The config must follow the agent_config schema structure if provided.
+    
+    Supported versions:
+    
+    Version 1 (Knowledge Base-centric):
     {
       "schema": "agent_config",
       "version": 1,
       "data": {
         "systemPrompt": "The system prompt for the agent",
         "knowledgeBases": [...]
+      }
+    }
+    
+    Version 2 (Tool-centric, recommended):
+    {
+      "schema": "agent_config",
+      "version": 2,
+      "data": {
+        "systemPrompt": "The system prompt for the agent",
+        "tools": [
+          {
+            "type": "vectorSearch",
+            "provider": "pinecone",
+            "index": "index-name",
+            "namespace": "namespace",
+            "topK": 10
+          }
+        ]
       }
     }
     
@@ -85,13 +107,25 @@ async def update_agent(
         
         # Update config if provided
         if request_body.config is not None:
+            # Extract version from config to validate against the correct schema
+            config_version = request_body.config.get("version", 1)
+            
+            # Validate version is supported
+            if config_version not in [1, 2]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2"
+                )
+            
+            print(f"[UPDATE AGENT] Validating against agent_config v{config_version}")
+            
             # Validate config structure against agent_config schema
             try:
-                validate_against_schema(request_body.config, "agent_config", 1)
+                validate_against_schema(request_body.config, "agent_config", config_version)
             except JsonSchemaValidationError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Config validation failed: {str(e)}"
+                    detail=f"Config validation failed for schema 'agent_config' v{config_version}: {str(e)}"
                 )
             except FileNotFoundError as e:
                 print(f"Warning: Config schema validation skipped - {str(e)}")
@@ -100,17 +134,20 @@ async def update_agent(
         
         # Validate the updated agent structure if both fields are present
         if request_body.name is not None and request_body.config is not None:
+            # Use the version from the updated config
+            config_version = agent.config.get("version", 1)
+            
             # Create a full agent structure for validation
             agent_dict = {
                 "name": agent.name,
                 "config": agent.config
             }
             try:
-                validate_against_schema(agent_dict, "agent", 1)
+                validate_against_schema(agent_dict, "agent", config_version)
             except JsonSchemaValidationError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Request validation failed: {str(e)}"
+                    detail=f"Validation failed for schema 'agent' v{config_version}: {str(e)}"
                 )
             except FileNotFoundError as e:
                 print(f"Warning: Agent schema validation skipped - {str(e)}")

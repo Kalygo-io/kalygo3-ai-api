@@ -30,7 +30,11 @@ async def create_agent(
     - name: The name of the agent (required)
     - config: Agent configuration object (required)
     
-    The config must include schema, version, and data:
+    The config must include schema, version, and data.
+    
+    Supported versions:
+    
+    Version 1 (Knowledge Base-centric):
     {
       "schema": "agent_config",
       "version": 1,
@@ -47,8 +51,27 @@ async def create_agent(
       }
     }
     
-    The request body is validated against the agent v1 JSON schema, which validates
-    the config field against the agent_config schema (including schema, version, and data).
+    Version 2 (Tool-centric, recommended):
+    {
+      "schema": "agent_config",
+      "version": 2,
+      "data": {
+        "systemPrompt": "The system prompt for the agent",
+        "tools": [
+          {
+            "type": "vectorSearch",
+            "provider": "pinecone",
+            "index": "all-MiniLM-L6-v2",
+            "namespace": "ai_school_kb",
+            "description": "Optional description",
+            "topK": 10
+          }
+        ]
+      }
+    }
+    
+    The request body is validated against the agent JSON schema matching the version
+    specified in the config (v1 or v2).
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
@@ -68,16 +91,28 @@ async def create_agent(
                 detail="Agent name cannot be empty"
             )
         
+        # Extract version from config to validate against the correct schema
+        config_version = request_body.config.get("version", 1)
+        
+        # Validate version is supported
+        if config_version not in [1, 2]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2"
+            )
+        
+        print(f"[CREATE AGENT] Validating against agent_config v{config_version}")
+        
         # Convert Pydantic model to dict for JSON schema validation
         request_dict = request_body.model_dump(exclude_none=False)
         
         # Validate against JSON schema (validates name and full config structure including schema/version/data)
         try:
-            validate_against_schema(request_dict, "agent", 1)
+            validate_against_schema(request_dict, "agent", config_version)
         except JsonSchemaValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Request validation failed: {str(e)}"
+                detail=f"Validation failed for schema 'agent' v{config_version}: {str(e)}"
             )
         except FileNotFoundError as e:
             # Schema file not found - log error but don't fail the request
@@ -90,11 +125,11 @@ async def create_agent(
         
         # Validate config structure separately against agent_config schema (validates schema, version, and data)
         try:
-            validate_against_schema(request_body.config, "agent_config", 1)
+            validate_against_schema(request_body.config, "agent_config", config_version)
         except JsonSchemaValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Config validation failed: {str(e)}"
+                detail=f"Config validation failed for schema 'agent_config' v{config_version}: {str(e)}"
             )
         except FileNotFoundError as e:
             print(f"Warning: Config schema validation skipped - {str(e)}")

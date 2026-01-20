@@ -7,6 +7,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 from typing import List
 
+# Debug flag - set to False to disable CORS debug logging
+debug = False
+
 
 class DynamicCORSMiddleware(BaseHTTPMiddleware):
     """
@@ -66,10 +69,12 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         
         if origin:
             is_allowed = self._is_allowed_origin(origin)
-            print(f"[CORS] {request.method} from origin: {origin}, has_api_key: {has_api_key}, is_allowed: {is_allowed}")
-            print(f"[CORS] Request URL: {request_url}, X-Forwarded-Proto: {forwarded_proto}, X-Forwarded-Host: {forwarded_host}")
+            if debug:
+                print(f"[CORS] {request.method} from origin: {origin}, has_api_key: {has_api_key}, is_allowed: {is_allowed}")
+                print(f"[CORS] Request URL: {request_url}, X-Forwarded-Proto: {forwarded_proto}, X-Forwarded-Host: {forwarded_host}")
             if not is_allowed and not has_api_key:
-                print(f"[CORS] Allowed origins: {self.allowed_origins}")
+                if debug:
+                    print(f"[CORS] Allowed origins: {self.allowed_origins}")
         
         # Handle preflight OPTIONS requests
         if request.method == "OPTIONS":
@@ -94,7 +99,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                     response.headers["Access-Control-Allow-Credentials"] = "true" if self.allow_credentials else "false"
                 else:
                     # Origin not allowed and no API key - reject
-                    print(f"[CORS] Rejecting OPTIONS request from origin: {origin} (not in allowed list)")
+                    if debug:
+                        print(f"[CORS] Rejecting OPTIONS request from origin: {origin} (not in allowed list)")
                     response.status_code = 403
                     return response
             else:
@@ -132,7 +138,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                     # Replace http:// with https:// in redirect location
                     fixed_location = location.replace("http://", "https://", 1)
                     response.headers["Location"] = fixed_location
-                    print(f"[CORS] Fixed redirect URL: {location} -> {fixed_location}")
+                    if debug:
+                        print(f"[CORS] Fixed redirect URL: {location} -> {fixed_location}")
         
         # Add CORS headers to response (including redirect responses)
         if has_api_key:
@@ -149,7 +156,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                 response.headers["Access-Control-Allow-Credentials"] = "true" if self.allow_credentials else "false"
             else:
                 # Origin not in allowed list - log for debugging
-                print(f"[CORS] Not adding CORS headers for origin: {origin} (not in allowed list)")
+                if debug:
+                    print(f"[CORS] Not adding CORS headers for origin: {origin} (not in allowed list)")
             # If origin not in allowed list, don't add CORS headers (browser will block)
         # If no origin header, it's a same-origin request - no CORS headers needed
         

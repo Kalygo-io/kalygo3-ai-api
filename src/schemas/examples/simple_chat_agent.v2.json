@@ -1,0 +1,7 @@
+{
+  "schema": "agent_config",
+  "version": 2,
+  "data": {
+    "systemPrompt": "You are a friendly and helpful AI assistant. Be concise, accurate, and conversational in your responses."
+  }
+}

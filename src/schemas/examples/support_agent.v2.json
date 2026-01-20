@@ -1,0 +1,25 @@
+{
+  "schema": "agent_config",
+  "version": 2,
+  "data": {
+    "systemPrompt": "You are a customer support agent for TechCorp. Your job is to help users solve problems quickly and professionally.\n\nGuidelines:\n1. Search the knowledge base when users ask technical questions\n2. Be empathetic and patient\n3. If you can't find an answer, escalate to a human agent\n4. Always cite which knowledge base section you used\n5. Provide step-by-step instructions when applicable",
+    "tools": [
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "techcorp-support",
+        "namespace": "faq",
+        "description": "Frequently asked questions covering account management, billing, and common technical issues",
+        "topK": 5
+      },
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "techcorp-support",
+        "namespace": "troubleshooting",
+        "description": "Detailed troubleshooting guides for error messages, connectivity issues, and performance problems",
+        "topK": 8
+      }
+    ]
+  }
+}

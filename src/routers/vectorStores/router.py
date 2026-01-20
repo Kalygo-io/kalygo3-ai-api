@@ -242,6 +242,7 @@ async def list_namespaces(
         
         namespace_responses = []
         for namespace_name, namespace_info in namespaces_data.items():
+            print(f"[LIST NAMESPACES] Namespace '{namespace_name}' has {namespace_info.get('vector_count', 0)} vectors")
             namespace_responses.append(NamespaceResponse(
                 namespace=namespace_name,
                 vector_count=namespace_info.get("vector_count", 0)
@@ -272,10 +273,13 @@ async def create_namespace(
     """
     Create a new namespace within a specific Pinecone index.
     
-    Note: Namespaces in Pinecone are created automatically when you first upsert data to them.
-    This endpoint validates that the namespace can be used and verifies the index exists.
+    This endpoint creates the namespace by upserting a temporary dummy vector
+    (which is immediately deleted) to force Pinecone to initialize the namespace.
+    If the namespace already exists, it returns the existing namespace info.
     """
     try:
+        print(f"*** Creating namespace ***: {request_body.namespace} for index: {index_name}")
+
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
         
@@ -316,17 +320,56 @@ async def create_namespace(
         
         if namespace_name in existing_namespaces:
             # Namespace already exists, return it
+            print(f"[CREATE NAMESPACE] Namespace '{namespace_name}' already exists with {existing_namespaces[namespace_name].get('vector_count', 0)} vectors")
             return NamespaceResponse(
                 namespace=namespace_name,
                 vector_count=existing_namespaces[namespace_name].get("vector_count", 0)
             )
         
-        # Namespace will be created automatically on first upsert
-        # Return success response indicating namespace is ready to use
-        return NamespaceResponse(
-            namespace=namespace_name,
-            vector_count=0
-        )
+        # Create the namespace by upserting a dummy vector
+        # Pinecone namespaces are created automatically on first upsert
+        try:
+            # Get index dimension from stats
+            dimension = index_stats.get("dimension")
+            if not dimension:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Could not determine index dimension"
+                )
+            
+            print(f"[CREATE NAMESPACE] Creating namespace '{namespace_name}' in index '{index_name}' (dimension: {dimension})")
+            
+            # Create a dummy vector to initialize the namespace
+            # Note: Pinecone requires at least one non-zero value in dense vectors
+            dummy_id = f"__init_{namespace_name}__"
+            dummy_vector = [1.0] + [0.0] * (dimension - 1)  # First element is 1.0, rest are 0.0
+            
+            # Upsert the dummy vector to create the namespace
+            print(f"[CREATE NAMESPACE] Upserting dummy vector to initialize namespace")
+            index.upsert(
+                vectors=[(dummy_id, dummy_vector)],
+                namespace=namespace_name
+            )
+            
+            # Delete the dummy vector immediately
+            # print(f"[CREATE NAMESPACE] Deleting dummy vector")
+            # index.delete(ids=[dummy_id], namespace=namespace_name)
+            
+            print(f"[CREATE NAMESPACE] Successfully created namespace '{namespace_name}'")
+            
+            # Return success response
+            return NamespaceResponse(
+                namespace=namespace_name,
+                vector_count=0
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[CREATE NAMESPACE] Error during namespace creation: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create namespace: {str(e)}"
+            )
         
     except HTTPException:
         raise

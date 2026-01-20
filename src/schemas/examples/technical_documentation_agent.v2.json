@@ -1,0 +1,41 @@
+{
+  "schema": "agent_config",
+  "version": 2,
+  "data": {
+    "systemPrompt": "You are a technical documentation assistant for developers. Your role is to help developers find information in our API documentation and guides.\n\nBehavior:\n- Search the most relevant knowledge base based on the question\n- Provide code examples when available\n- Cite specific sections and page numbers when possible\n- If information is outdated (check the version/date in metadata), mention it\n- Link to the full documentation when helpful\n- Be precise and technical - developers prefer accuracy over simplicity",
+    "tools": [
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "developer-docs",
+        "namespace": "api-v3-reference",
+        "description": "REST API v3 documentation including endpoints, authentication, request/response formats, rate limits, and error codes. Includes Python, JavaScript, and cURL examples.",
+        "topK": 10
+      },
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "developer-docs",
+        "namespace": "sdk-guides",
+        "description": "SDK integration guides for Python, JavaScript, Ruby, and Go. Covers installation, configuration, common patterns, and best practices.",
+        "topK": 8
+      },
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "developer-docs",
+        "namespace": "tutorials",
+        "description": "Step-by-step tutorials for common use cases like authentication flows, webhooks, data synchronization, and advanced features.",
+        "topK": 5
+      },
+      {
+        "type": "vectorSearch",
+        "provider": "pinecone",
+        "index": "developer-docs",
+        "namespace": "migration-guides",
+        "description": "Migration guides for upgrading between API versions, including breaking changes, deprecation notices, and code migration examples.",
+        "topK": 6
+      }
+    ]
+  }
+}

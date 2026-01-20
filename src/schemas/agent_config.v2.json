@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/agent-config-v2.schema.json",
+  "title": "Agent Config v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "agent_config"
+    },
+    "version": {
+      "type": "integer",
+      "const": 2
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "systemPrompt"
+      ],
+      "properties": {
+        "systemPrompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The system prompt that defines the agent's behavior and personality."
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 0,
+          "description": "Array of tools available to the agent. Can be empty for simple chat agents. Each tool extends the agent's capabilities.",
+          "items": {
+            "$ref": "#/$defs/tool"
+          },
+          "default": []
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "description": "A tool that the agent can use. Tool type determines available properties.",
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "$ref": "#/$defs/vectorSearchTool"
+        },
+        {
+          "$ref": "#/$defs/vectorSearchWithRerankingTool"
+        }
+      ]
+    },
+    "vectorSearchTool": {
+      "type": "object",
+      "description": "Vector database search tool for semantic retrieval from knowledge bases.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "provider",
+        "index",
+        "namespace"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "vectorSearch",
+          "description": "Tool type identifier."
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "pinecone"
+          ],
+          "description": "Vector database provider (currently supports: pinecone)."
+        },
+        "index": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The name of the vector database index/collection to query."
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The namespace/partition within the index to search."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this knowledge base contains. Helps the LLM decide when to use this tool."
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "Number of top results to return from vector search."
+        }
+      }
+    },
+    "vectorSearchWithRerankingTool": {
+      "type": "object",
+      "description": "Vector database search with re-ranking for improved relevance. Retrieves more candidates (topK) and re-ranks them to return the most relevant subset (topN).",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "provider",
+        "index",
+        "namespace"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "vectorSearchWithReranking",
+          "description": "Tool type identifier."
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "pinecone"
+          ],
+          "description": "Vector database provider (currently supports: pinecone)."
+        },
+        "index": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The name of the vector database index/collection to query."
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The namespace/partition within the index to search."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this knowledge base contains. Helps the LLM decide when to use this tool."
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20,
+          "description": "Number of initial candidates to retrieve from vector search before re-ranking."
+        },
+        "topN": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 5,
+          "description": "Number of final results to return after re-ranking."
+        }
+      }
+    }
+  }
+}

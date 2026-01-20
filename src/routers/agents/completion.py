@@ -6,7 +6,6 @@ from typing import List, Dict, Any, Optional
 import uuid
 import json
 import os
-import aiohttp
 from fastapi import APIRouter, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from src.deps import db_dependency, auth_dependency
@@ -14,7 +13,6 @@ from src.db.models import Agent, Account, ChatAppSession, ChatAppMessage, Creden
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import decrypt_api_key
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
-from src.core.clients import pc
 from src.schemas import validate_against_schema
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -31,6 +29,9 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 from pydantic import BaseModel, Field
+
+# Import tool factory
+from src.tools import create_tools_from_agent_config
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -50,120 +51,6 @@ callbacks = [
         )
     )
 ] if os.getenv("LANGSMITH_API_KEY") else []
-
-async def create_retrieval_tool_for_kb(
-    knowledge_base: Dict[str, Any],
-    account_id: int,
-    db,
-    jwt_token: Optional[str] = None
-) -> Optional[StructuredTool]:
-    """
-    Create a retrieval tool for a knowledge base.
-    
-    Args:
-        knowledge_base: Dict with 'provider', 'index', 'namespace', optionally 'description'
-        account_id: Account ID for fetching credentials
-        db: Database session
-        jwt_token: Authentication token to pass to embedding API (JWT token or Kalygo API key)
-    
-    Returns:
-        StructuredTool for retrieval, or None if provider not supported
-    """
-    provider = knowledge_base.get('provider', '').lower()
-    index_name = knowledge_base.get('index')
-    namespace = knowledge_base.get('namespace')
-    description = knowledge_base.get('description', f"Search the {namespace} knowledge base")
-    
-    if provider != 'pinecone':
-        print(f"Unsupported provider: {provider}")
-        return None
-    
-    # Get Pinecone API key from credentials
-    credential = db.query(Credential).filter(
-        Credential.account_id == account_id,
-        Credential.service_name == ServiceName.PINECONE_API_KEY
-    ).first()
-    
-    if not credential:
-        print(f"No Pinecone API key found for account {account_id}")
-        return None
-    
-    try:
-        pinecone_api_key = decrypt_api_key(credential.encrypted_api_key)
-    except Exception as e:
-        print(f"Failed to decrypt Pinecone API key: {e}")
-        return None
-    
-    # Create Pinecone client for this specific index
-    from pinecone import Pinecone
-    pc_client = Pinecone(api_key=pinecone_api_key)
-    index = pc_client.Index(index_name)
-    
-    async def retrieval_impl(query: str, top_k: int = 10) -> Dict:
-        """Retrieve relevant documents from the knowledge base."""
-        try:
-            # Get embedding for the query
-            embedding = {}
-            headers = {}
-            # Pass authentication token (JWT or Kalygo API key) to Embeddings API
-            if jwt_token:
-                headers["Authorization"] = f"Bearer {jwt_token}"
-            
-            async with aiohttp.ClientSession() as session:
-                url = f"{os.getenv('EMBEDDINGS_API_URL')}/huggingface/embedding"
-                payload = {"input": query}
-                
-                try:
-                    async with session.post(url, json=payload, headers=headers) as response:
-                        if response.status != 200:
-                            raise aiohttp.ClientError(f"Request failed with status code {response.status}: {await response.text()}")
-                        result = await response.json()
-                        embedding = result['embedding']
-                except aiohttp.ClientError as e:
-                    print(f"Error occurred during API request: {e}")
-                    return {"error": f"Failed to generate embedding: {str(e)}"}
-            
-            # Query Pinecone
-            results = index.query(
-                vector=embedding,
-                top_k=top_k,
-                include_values=False,
-                include_metadata=True,
-                namespace=namespace
-            )
-            
-            if not results['matches']:
-                return {"results": [], "message": "No relevant documents found"}
-            
-            # Format results
-            formatted_results = []
-            for match in results['matches']:
-                formatted_results.append({
-                    'metadata': match.get('metadata', {}),
-                    'score': match.get('score', 0.0),
-                    'id': match.get('id')
-                })
-            
-            return {
-                "results": formatted_results,
-                "namespace": namespace,
-                "index": index_name
-            }
-        except Exception as e:
-            print(f"Error in retrieval: {e}")
-            return {"error": str(e)}
-    
-    class SearchQuery(BaseModel):
-        query: str = Field(description="The search query to find relevant documents")
-        top_k: int = Field(default=10, description="Number of results to return")
-    
-    return StructuredTool(
-        func=retrieval_impl,
-        coroutine=retrieval_impl,
-        name=f"search_{namespace}",
-        description=description,
-        args_schema=SearchQuery
-    )
 
 
 async def generator(
@@ -211,9 +98,16 @@ async def generator(
             return
         
         config_data = agent.config.get('data', {})
+        config_version = agent.config.get('version', 1)
         system_prompt = config_data.get('systemPrompt', 'You are a helpful assistant.')
-        knowledge_bases = config_data.get('knowledgeBases', [])
-        print(f"[AGENT COMPLETION] Config extracted - system_prompt length: {len(system_prompt)}, knowledge_bases: {len(knowledge_bases)}")
+        
+        # Count tools/knowledge bases for logging
+        if config_version == 1:
+            tool_count = len(config_data.get('knowledgeBases', []))
+        else:
+            tool_count = len(config_data.get('tools', []))
+        
+        print(f"[AGENT COMPLETION] Config v{config_version} - system_prompt length: {len(system_prompt)}, tools: {tool_count}")
         
         # Get OpenAI API key
         credential = db.query(Credential).filter(
@@ -312,8 +206,8 @@ async def generator(
                 elif role == 'ai':
                     message_history.add_ai_message(content)
         
-        # Create retrieval tools from knowledge bases
-        tools = []
+        # Create tools using the tool factory
+        # This supports both v1 (knowledgeBases) and v2 (tools) configs
         retrieval_calls = []  # Will be populated only when tools are actually executed
         
         # Extract authentication token for passing to embedding API
@@ -348,12 +242,15 @@ async def generator(
                 auth_token = api_key
                 print(f"[AGENT COMPLETION] Using API key authentication for embedding API")
         
-        for kb in knowledge_bases:
-            tool = await create_retrieval_tool_for_kb(kb, account_id, db, jwt_token=auth_token)
-            if tool:
-                tools.append(tool)
-                # Note: retrieval_calls will be populated in on_tool_end event handler
-                # when tools are actually executed, not here during tool creation
+        # Create tools from agent config using factory
+        # Automatically handles v1 (knowledgeBases) and v2 (tools) formats
+        tools = await create_tools_from_agent_config(
+            agent_config=agent.config,
+            account_id=account_id,
+            db=db,
+            auth_token=auth_token,
+            request=request
+        )
         
         print(f"[AGENT COMPLETION] Created {len(tools)} tools, using {'agent executor' if tools else 'simple chat'} mode")
         
@@ -541,21 +438,23 @@ async def generator(
                     print("!!! on_chat_model_end !!!") # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
                 elif kind == "on_tool_start":
                     print("--")
-                    print(
-                        f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
-                    )
+                    print(f"⚡⚡⚡ Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
+                    print(f"⚡⚡⚡ Tool execution logs should appear below...")
+                    print("--")
                     yield json.dumps({
                         "event": "on_tool_start",
-                        "data": f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
+                        "data": f"!!!Starting tool!!!: {event['name']} with inputs: {event['data'].get('input')}"
                     }, separators=(',', ':'))
                 elif kind == "on_tool_end":
-                    print(f"Done tool: {event['name']}")
+                    print("--")
+                    print(f"✅✅✅ Tool finished: {event['name']}")
                     # print(f"Tool output was: {event['data'].get('output')}")
                     print("--")
                     
-                    # Track retrieval calls if it's a retrieval tool
+                    # Track retrieval calls if it's a retrieval tool (vector search or vector search with reranking)
+                    # Vector search tools are named "search_{namespace}" or "search_rerank_{namespace}"
                     tool_name = event['name']
-                    if any(tool_name.startswith(f"search_{kb.get('namespace', '')}") for kb in knowledge_bases):
+                    if tool_name.startswith("search_") or tool_name.startswith("search_rerank_"):
                         tool_input = event['data'].get('input', {})
                         tool_output = event['data'].get('output', {})
                         
@@ -670,7 +569,7 @@ async def generator(
                         if content:
                             chunk_count += 1
                             full_response += content
-                            print(f"[AGENT COMPLETION] Chunk {chunk_count}: {content[:50]}...")
+                            # print(f"[AGENT COMPLETION] Chunk {chunk_count}: {content[:50]}...")
                             yield json.dumps({
                                 "event": "on_chat_model_stream",
                                 "data": content
