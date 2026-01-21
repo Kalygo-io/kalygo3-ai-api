@@ -16,7 +16,6 @@ from .routers import (
   waitlist,
   chatAppSessions,
   payments,
-  kalygoAgent,
   credentials,
   vectorStores,
   agents,
