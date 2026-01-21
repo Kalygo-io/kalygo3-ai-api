@@ -148,11 +148,6 @@ app.include_router(healthcheck.router, prefix="")
 #     prefix="/api/ai-school-agent",
 # )
 
-app.include_router(
-    kalygoAgent.router,
-    prefix="/api/kalygo-agent",
-)
-
 # app.include_router(
 #     localAgent.router,
 #     prefix="/api/local-agent",
