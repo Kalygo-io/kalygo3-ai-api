@@ -29,6 +29,9 @@
           },
           {
             "$ref": "#/$defs/vectorSearchWithRerankingToolCall"
+          },
+          {
+            "$ref": "#/$defs/dbReadToolCall"
           }
         ],
         "description": "A tool call. The schema varies by tool type."
@@ -292,6 +295,75 @@
         }
       },
       "additionalProperties": false
+    },
+    "dbReadToolCall": {
+      "type": "object",
+      "description": "Tool call for database read (structured data query)",
+      "additionalProperties": false,
+      "required": [
+        "toolType",
+        "toolName",
+        "input",
+        "output"
+      ],
+      "properties": {
+        "toolType": {
+          "type": "string",
+          "const": "dbRead",
+          "description": "The type of tool (dbRead)"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "The specific tool instance name (e.g., 'query_chat_app_sessions')"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "filters": {
+              "type": "object",
+              "description": "Filters applied to the query",
+              "additionalProperties": true
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Maximum number of results"
+            },
+            "offset": {
+              "type": "integer",
+              "description": "Number of results to skip"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": ["results", "table", "count"],
+          "properties": {
+            "results": {
+              "type": "array",
+              "description": "Query results from database",
+              "items": {
+                "type": "object",
+                "required": ["data"],
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "description": "Row data as key-value pairs",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            },
+            "table": {
+              "type": "string",
+              "description": "The table that was queried"
+            },
+            "count": {
+              "type": "integer",
+              "description": "Number of results returned"
+            }
+          }
+        }
+      }
     }
   },
   "examples": [
@@ -364,6 +436,37 @@
             ],
             "namespace": "qa",
             "index": "knowledge-base"
+          }
+        }
+      ]
+    },
+    {
+      "role": "ai",
+      "content": "Here are your recent chat sessions...",
+      "toolCalls": [
+        {
+          "toolType": "dbRead",
+          "toolName": "query_chat_app_sessions",
+          "input": {
+            "filters": null,
+            "limit": 10,
+            "offset": 0
+          },
+          "output": {
+            "results": [
+              {
+                "data": {
+                  "id": 1,
+                  "session_id": "f7e18bb1-fb1b-4739-8022-f6a21b83de23",
+                  "chat_app_id": "ai_school",
+                  "account_id": 123,
+                  "created_at": "2026-01-26T20:00:00Z",
+                  "title": "AI School Chat"
+                }
+              }
+            ],
+            "table": "chat_app_sessions",
+            "count": 1
           }
         }
       ]

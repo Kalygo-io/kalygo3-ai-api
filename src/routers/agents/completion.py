@@ -456,18 +456,18 @@ async def generator(
                     # print(f"Tool output was: {event['data'].get('output')}")
                     print("--")
                     
-                    # Track tool calls if it's a retrieval tool (vector search or vector search with reranking)
-                    # Vector search tools are named "search_{namespace}" or "search_rerank_{namespace}"
+                    # Track tool calls for all supported tool types
                     tool_name = event['name']
+                    tool_input = event['data'].get('input', {})
+                    tool_output = event['data'].get('output', {})
+                    
+                    # Validate tool_output
+                    if not isinstance(tool_output, dict):
+                        print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping tool call tracking")
+                        continue
+                    
+                    # Handle vector search tools
                     if tool_name.startswith("search_") or tool_name.startswith("search_rerank_"):
-                        tool_input = event['data'].get('input', {})
-                        tool_output = event['data'].get('output', {})
-                        
-                        # Validate tool_output
-                        if not isinstance(tool_output, dict):
-                            print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping tool call tracking")
-                            continue
-                        
                         # Determine tool type based on tool name
                         if tool_name.startswith("search_rerank_"):
                             tool_type = "vectorSearchWithReranking"
@@ -498,6 +498,26 @@ async def generator(
                                 "results": formatted_results,
                                 "namespace": tool_output.get('namespace', ''),
                                 "index": tool_output.get('index', '')
+                            }
+                        })
+                    
+                    # Handle database read tools
+                    elif tool_name.startswith("query_"):
+                        tool_type = "dbRead"
+                        
+                        # Structure tool call according to chat_message.v2.json schema
+                        tool_calls.append({
+                            "toolType": tool_type,
+                            "toolName": tool_name,
+                            "input": {
+                                "filters": tool_input.get('filters'),
+                                "limit": tool_input.get('limit'),
+                                "offset": tool_input.get('offset')
+                            },
+                            "output": {
+                                "results": tool_output.get('results', []),
+                                "table": tool_output.get('table', ''),
+                                "count": tool_output.get('count', 0)
                             }
                         })
                     

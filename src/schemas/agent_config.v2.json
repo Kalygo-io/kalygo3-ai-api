@@ -55,6 +55,9 @@
         },
         {
           "$ref": "#/$defs/vectorSearchWithRerankingTool"
+        },
+        {
+          "$ref": "#/$defs/dbReadTool"
         }
       ]
     },
@@ -156,6 +159,52 @@
           "maximum": 50,
           "default": 5,
           "description": "Number of final results to return after re-ranking."
+        }
+      }
+    },
+    "dbReadTool": {
+      "type": "object",
+      "description": "Database read tool for querying structured data from Kalygo database tables.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "table"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "dbRead",
+          "description": "Tool type identifier."
+        },
+        "table": {
+          "type": "string",
+          "enum": [
+            "chat_app_sessions",
+            "chat_app_messages",
+            "usage_credits",
+            "vector_db_ingestion_log",
+            "api_keys"
+          ],
+          "description": "The database table to query. Only whitelisted tables are allowed."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this table contains. Helps the LLM decide when to use this tool."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of columns to return. If not specified, all non-sensitive columns are returned."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50,
+          "description": "Maximum number of rows to return."
         }
       }
     }
