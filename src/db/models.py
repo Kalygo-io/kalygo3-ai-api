@@ -84,19 +84,55 @@ class UsageCredits(Base):
     def __repr__(self):
         return f'<UsageCredits {self.account_id}: ${self.amount}>'
 
+class CredentialType(str, Enum):
+    """
+    Types of credentials that can be stored.
+    This determines the expected structure of encrypted_data.
+    """
+    API_KEY = "api_key"
+    DB_CONNECTION = "db_connection"
+    OAUTH = "oauth"
+    SSH_KEY = "ssh_key"
+    CERTIFICATE = "certificate"
+
+
 class Credential(Base):
+    """
+    Stores encrypted credentials for third-party services.
+    
+    The table supports multiple credential types:
+    - API keys: Simple key-value (e.g., OpenAI API key)
+    - Database connections: Host, port, username, password, database name
+    - OAuth: Client ID, client secret, tokens
+    - SSH keys: Private keys with optional passphrases
+    - Certificates: Certificate data with optional private keys
+    
+    For backward compatibility, encrypted_api_key is kept but deprecated.
+    New code should use encrypted_data which stores JSON-encrypted structures.
+    """
     __tablename__ = 'credentials'
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
     service_name = Column(Enum(ServiceName, name='service_name_enum'), nullable=False, index=True)
-    encrypted_api_key = Column(String, nullable=False)  # Encrypted API key
+    credential_type = Column(String(50), nullable=False, index=True, default='api_key')
+    
+    # New flexible encrypted storage (JSON structure, encrypted)
+    encrypted_data = Column(Text, nullable=True)
+    
+    # DEPRECATED: Kept for backward compatibility during migration period
+    # Will be removed in a future migration after all data is migrated
+    encrypted_api_key = Column(String, nullable=True)
+    
+    # Non-sensitive metadata (e.g., display name, description, last_validated)
+    credential_metadata = Column(JSON, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     account = relationship('Account', back_populates='credentials')
     
     def __repr__(self):
-        return f'<Credential {self.service_name} for account {self.account_id}>'
+        return f'<Credential {self.service_name} ({self.credential_type}) for account {self.account_id}>'
 
 
 class ApiKeyStatus(str, Enum):

@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Agent, Account, ChatAppSession, ChatAppMessage, Credential
 from src.db.service_name import ServiceName
-from src.routers.credentials.encryption import decrypt_api_key
+from src.routers.credentials.encryption import get_credential_value
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
 from src.schemas import validate_against_schema
 from slowapi import Limiter
@@ -125,7 +125,7 @@ async def generator(
             return
         
         try:
-            openai_api_key = decrypt_api_key(credential.encrypted_api_key)
+            openai_api_key = get_credential_value(credential, "api_key")
         except Exception as e:
             yield json.dumps({
                 "event": "error",

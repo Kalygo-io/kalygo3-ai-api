@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from src.db.models import Credential
 from src.db.service_name import ServiceName
-from src.routers.credentials.encryption import decrypt_api_key
+from src.routers.credentials.encryption import get_credential_value
 
 
 # Type definitions for vector search results
@@ -97,7 +97,7 @@ async def create_vector_search_tool(
         return None
     
     try:
-        pinecone_api_key = decrypt_api_key(credential.encrypted_api_key)
+        pinecone_api_key = get_credential_value(credential, "api_key")
     except Exception as e:
         print(f"[VECTOR SEARCH TOOL] Failed to decrypt Pinecone API key: {e}")
         return None
