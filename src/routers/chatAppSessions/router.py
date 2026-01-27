@@ -267,6 +267,62 @@ async def delete_session(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.delete("/sessions/{session_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def clear_session_messages(
+    session_id: str, 
+    db: db_dependency, 
+    jwt: jwt_dependency, 
+    request: Request
+):
+    """Clear all messages from a session without deleting the session itself"""
+    try:
+        print(f"[CLEAR MESSAGES] Attempting to clear messages for session: {session_id}")
+        
+        # Convert string to UUID for database query
+        try:
+            session_uuid = uuid.UUID(session_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Invalid session ID format"
+            )
+        
+        # Verify the session exists and belongs to the user
+        session = db.query(ChatAppSession).filter(
+            ChatAppSession.session_id == session_uuid,
+            ChatAppSession.account_id == jwt['id']
+        ).first()
+        
+        if not session:
+            print(f"[CLEAR MESSAGES] Session not found: {session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Session not found"
+            )
+        
+        print(f"[CLEAR MESSAGES] Found session with ID: {session.id}, deleting messages...")
+        
+        # Delete all messages for this session
+        deleted_count = db.query(ChatAppMessage).filter(
+            ChatAppMessage.chat_app_session_id == session.id
+        ).delete()
+        
+        db.commit()
+        
+        print(f"[CLEAR MESSAGES] Successfully deleted {deleted_count} messages from session {session_id}")
+        
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CLEAR MESSAGES] Error: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Failed to clear session messages: {str(e)}"
+        )
+
 # CRUD Operations for ChatMessage
 
 # @router.post("/sessions/{session_id}/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
