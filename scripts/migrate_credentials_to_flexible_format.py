@@ -1,34 +1,18 @@
 """
-Script to migrate existing credentials to the new flexible format.
+DEPRECATED: This script is no longer needed.
 
-This script converts credentials from the legacy format (encrypted_api_key only)
-to the new flexible format (encrypted_data with JSON structure).
+The encrypted_api_key column has been removed from the credentials table.
+All credentials now use the encrypted_data column with JSON structure.
 
-The script:
-1. Reads existing credentials with encrypted_api_key
-2. Decrypts the API key
-3. Re-encrypts as JSON: {"api_key": "..."}
-4. Stores in encrypted_data column
-5. Sets credential_type to "api_key"
-6. Preserves encrypted_api_key for backward compatibility
+This script was used to migrate credentials from the legacy format 
+(encrypted_api_key only) to the new flexible format (encrypted_data with JSON).
 
-Prerequisites:
-- The Alembic migration f8a3b2c1d456 must have been run first
-  (this adds the credential_type, encrypted_data, and metadata columns)
+If you need to run this migration (for an older database), ensure you:
+1. Have the encrypted_api_key column still in your database
+2. Run this script BEFORE running the b2c3d4e5f6a7 migration
+   (which removes the encrypted_api_key column)
 
-Usage:
-    # Dry run first to see what will be migrated
-    python scripts/migrate_credentials_to_flexible_format.py --dry-run
-    
-    # Run the actual migration
-    python scripts/migrate_credentials_to_flexible_format.py
-    
-    # Force migration even if encrypted_data already exists
-    python scripts/migrate_credentials_to_flexible_format.py --force
-
-Example:
-    export CREDENTIALS_ENCRYPTION_KEY="your_key_here"
-    python scripts/migrate_credentials_to_flexible_format.py
+For new installations, this script is not needed.
 """
 import os
 import sys

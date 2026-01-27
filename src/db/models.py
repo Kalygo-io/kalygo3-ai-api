@@ -107,8 +107,7 @@ class Credential(Base):
     - SSH keys: Private keys with optional passphrases
     - Certificates: Certificate data with optional private keys
     
-    For backward compatibility, encrypted_api_key is kept but deprecated.
-    New code should use encrypted_data which stores JSON-encrypted structures.
+    All credentials are stored in encrypted_data as encrypted JSON structures.
     """
     __tablename__ = 'credentials'
     id = Column(Integer, primary_key=True, index=True)
@@ -116,12 +115,8 @@ class Credential(Base):
     service_name = Column(Enum(ServiceName, name='service_name_enum'), nullable=False, index=True)
     credential_type = Column(String(50), nullable=False, index=True, default='api_key')
     
-    # New flexible encrypted storage (JSON structure, encrypted)
-    encrypted_data = Column(Text, nullable=True)
-    
-    # DEPRECATED: Kept for backward compatibility during migration period
-    # Will be removed in a future migration after all data is migrated
-    encrypted_api_key = Column(String, nullable=True)
+    # Encrypted storage (JSON structure, encrypted with Fernet)
+    encrypted_data = Column(Text, nullable=False)
     
     # Non-sensitive metadata (e.g., display name, description, last_validated)
     credential_metadata = Column(JSON, nullable=True)

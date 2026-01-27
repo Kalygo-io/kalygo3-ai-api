@@ -6,8 +6,6 @@ from src.deps import db_dependency, jwt_dependency
 from src.db.models import Credential, Account, CredentialType
 from src.db.service_name import ServiceName
 from .encryption import (
-    encrypt_api_key, 
-    decrypt_api_key,
     encrypt_credential_data,
     decrypt_credential_data,
     get_credential_value
@@ -139,19 +137,15 @@ async def create_credential(
                 detail=f"Credential for service '{request_body.service_name.value}' already exists. Use PUT to update it."
             )
         
-        # Encrypt the API key using the new format (for forward compatibility)
+        # Encrypt the API key
         encrypted_data = encrypt_credential_data({"api_key": request_body.api_key})
         
-        # Also store in legacy column for backward compatibility
-        encrypted_key = encrypt_api_key(request_body.api_key)
-        
-        # Create the credential with both new and legacy fields
+        # Create the credential
         credential = Credential(
             account_id=account_id,
             service_name=request_body.service_name,
             credential_type="api_key",
-            encrypted_data=encrypted_data,
-            encrypted_api_key=encrypted_key  # Legacy, for backward compatibility
+            encrypted_data=encrypted_data
         )
         
         db.add(credential)
@@ -267,7 +261,7 @@ async def get_credential(
                 detail="Credential not found"
             )
         
-        # Use backward-compatible decryption (prefers encrypted_data, falls back to encrypted_api_key)
+        # Decrypt the API key
         decrypted_key = get_credential_value(credential, "api_key")
         
         return CredentialDetailResponse(
@@ -335,12 +329,8 @@ async def update_credential(
         # Encrypt using new format
         encrypted_data = encrypt_credential_data({"api_key": request_body.api_key})
         
-        # Also update legacy column for backward compatibility
-        encrypted_key = encrypt_api_key(request_body.api_key)
-        
-        # Update the credential with both formats
+        # Update the credential
         credential.encrypted_data = encrypted_data
-        credential.encrypted_api_key = encrypted_key  # Legacy, for backward compatibility
         credential.credential_type = "api_key"
         db.commit()
         db.refresh(credential)
@@ -539,18 +529,12 @@ async def create_flexible_credential(
         # Encrypt the credential data
         encrypted_data = encrypt_credential_data(request_body.credential_data)
         
-        # For API keys, also populate legacy column for backward compatibility
-        encrypted_api_key = None
-        if request_body.credential_type == "api_key" and "api_key" in request_body.credential_data:
-            encrypted_api_key = encrypt_api_key(request_body.credential_data["api_key"])
-        
         # Create the credential
         credential = Credential(
             account_id=account_id,
             service_name=request_body.service_name,
             credential_type=request_body.credential_type,
             encrypted_data=encrypted_data,
-            encrypted_api_key=encrypted_api_key,
             credential_metadata=request_body.metadata
         )
         
@@ -564,7 +548,7 @@ async def create_flexible_credential(
             credential_type=credential.credential_type,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
-            credential_credential_metadata=credential.credential_metadata
+            credential_metadata=credential.credential_metadata
         )
         
     except HTTPException:
@@ -618,21 +602,12 @@ async def get_credential_full(
             )
         
         # Decrypt the full credential data
-        if credential.encrypted_data:
-            credential_data = decrypt_credential_data(credential.encrypted_data)
-        elif credential.encrypted_api_key:
-            # Backward compatibility: wrap legacy API key
-            credential_data = {"api_key": decrypt_api_key(credential.encrypted_api_key)}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No encrypted credential data found"
-            )
+        credential_data = decrypt_credential_data(credential.encrypted_data)
         
         return FlexibleCredentialDetailResponse(
             id=credential.id,
             service_name=credential.service_name,
-            credential_type=credential.credential_type or "api_key",
+            credential_type=credential.credential_type,
             credential_data=credential_data,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
@@ -690,10 +665,6 @@ async def update_credential_full(
         
         # Encrypt the new credential data
         encrypted_data = encrypt_credential_data(request_body.credential_data)
-        
-        # For API keys, also update legacy column for backward compatibility
-        if "api_key" in request_body.credential_data:
-            credential.encrypted_api_key = encrypt_api_key(request_body.credential_data["api_key"])
         
         # Update the credential
         credential.encrypted_data = encrypted_data
@@ -763,21 +734,12 @@ async def get_credential_by_service_full(
             )
         
         # Decrypt the full credential data
-        if credential.encrypted_data:
-            credential_data = decrypt_credential_data(credential.encrypted_data)
-        elif credential.encrypted_api_key:
-            # Backward compatibility: wrap legacy API key
-            credential_data = {"api_key": decrypt_api_key(credential.encrypted_api_key)}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No encrypted credential data found"
-            )
+        credential_data = decrypt_credential_data(credential.encrypted_data)
         
         return FlexibleCredentialDetailResponse(
             id=credential.id,
             service_name=credential.service_name,
-            credential_type=credential.credential_type or "api_key",
+            credential_type=credential.credential_type,
             credential_data=credential_data,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),

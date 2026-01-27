@@ -60,7 +60,7 @@ ACCOUNT_SCOPED_TABLES = {
 SENSITIVE_COLUMNS = {
     "hashed_password",
     "reset_token",
-    "encrypted_api_key",
+    "encrypted_data",  # Encrypted credential data
     "key_hash",
 }
 

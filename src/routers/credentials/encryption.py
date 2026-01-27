@@ -218,10 +218,7 @@ def decrypt_credential_data(encrypted_data: str) -> Dict[str, Any]:
 
 def get_credential_value(credential, key: str = "api_key") -> str:
     """
-    Get a specific value from a credential, with backward compatibility.
-    
-    This function handles both old-style credentials (encrypted_api_key only)
-    and new-style credentials (encrypted_data with JSON structure).
+    Get a specific value from a credential.
     
     Args:
         credential: Credential model instance
@@ -233,25 +230,13 @@ def get_credential_value(credential, key: str = "api_key") -> str:
     Raises:
         ValueError: If the credential cannot be decrypted or key not found
     """
-    # Prefer new encrypted_data if available
-    if credential.encrypted_data:
-        try:
-            data = decrypt_credential_data(credential.encrypted_data)
-            if key in data:
-                return data[key]
-            # If key not found but we have a simple string (legacy format), return it
-            if isinstance(data, str):
-                return data
-            raise ValueError(f"Key '{key}' not found in credential data")
-        except Exception as e:
-            # Fall back to encrypted_api_key if encrypted_data fails
-            if credential.encrypted_api_key:
-                return decrypt_api_key(credential.encrypted_api_key)
-            raise
+    if not credential.encrypted_data:
+        raise ValueError("No encrypted credential data found")
     
-    # Fall back to old encrypted_api_key for backward compatibility
-    if credential.encrypted_api_key:
-        return decrypt_api_key(credential.encrypted_api_key)
+    data = decrypt_credential_data(credential.encrypted_data)
     
-    raise ValueError("No encrypted credential data found")
+    if key in data:
+        return data[key]
+    
+    raise ValueError(f"Key '{key}' not found in credential data. Available keys: {list(data.keys())}")
 
