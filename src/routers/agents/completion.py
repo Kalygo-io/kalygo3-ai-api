@@ -542,6 +542,27 @@ async def generator(
                             }
                         })
                     
+                    # Handle database write tools
+                    elif tool_name.startswith("insert_") or tool_name.startswith("create_"):
+                        tool_type = "dbWrite"
+                        
+                        # Structure tool call according to chat_message.v2.json schema
+                        # Note: input is now flat (column fields directly) instead of nested under "data"
+                        tool_calls.append({
+                            "toolType": tool_type,
+                            "toolName": tool_name,
+                            "input": {
+                                "data": tool_input  # The flat input IS the data
+                            },
+                            "output": {
+                                "success": tool_output.get('success', False),
+                                "table": tool_output.get('table', ''),
+                                "inserted": tool_output.get('inserted', {}),
+                                "message": tool_output.get('message', ''),
+                                "error": tool_output.get('error')
+                            }
+                        })
+                    
                     yield json.dumps({
                         "event": "on_tool_end",
                     }, separators=(',', ':'))

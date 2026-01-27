@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 from src.db.models import Credential
 from src.routers.credentials.encryption import decrypt_credential_data
 
@@ -158,8 +159,14 @@ async def create_db_read_tool(
     connection_string = get_connection_string(credential_id, account_id, db)
     
     # Create the database engine for the external database
+    # Use NullPool to avoid creating persistent connection pools for each tool
+    # Connections are created/closed on each query - better for tools that run infrequently
     try:
-        external_engine = create_engine(connection_string, pool_pre_ping=True)
+        external_engine = create_engine(
+            connection_string, 
+            poolclass=NullPool,  # No persistent pool - connections close after each use
+            pool_pre_ping=True
+        )
         print(f"[DB READ TOOL] Created connection to external database for table: {table_name}")
     except Exception as e:
         raise CredentialError(

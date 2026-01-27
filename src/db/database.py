@@ -9,13 +9,14 @@ load_dotenv()
 SQL_ALCHEMY_DATABASE_URL = os.getenv("POSTGRES_URL")
 
 # Configure connection pool for Supabase
-# Use conservative settings to avoid "Max client connections reached" error
+# Increased pool size to handle concurrent streaming requests
+# Each streaming request may hold a connection for the duration of the response
 engine = create_engine(
     SQL_ALCHEMY_DATABASE_URL,
-    pool_size=3,              # Reduce from default 5 to 3 connections in the pool
-    max_overflow=2,           # Allow max 2 additional connections when pool is exhausted
+    pool_size=10,             # Increased from 3 to handle concurrent requests
+    max_overflow=10,          # Allow up to 10 additional connections when pool is exhausted
     pool_pre_ping=True,       # Verify connections before using them (handles stale connections)
-    pool_recycle=3600,        # Recycle connections after 1 hour
+    pool_recycle=1800,        # Recycle connections after 30 minutes (reduced from 1 hour)
     pool_timeout=30,          # Wait max 30 seconds for a connection from the pool
     echo_pool=False,          # Set to True for debugging connection pool issues
 )

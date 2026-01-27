@@ -58,6 +58,9 @@
         },
         {
           "$ref": "#/$defs/dbReadTool"
+        },
+        {
+          "$ref": "#/$defs/dbWriteTool"
         }
       ]
     },
@@ -214,6 +217,69 @@
           "maximum": 1000,
           "default": 100,
           "description": "Maximum number of rows the agent can request in a single query."
+        }
+      }
+    },
+    "dbWriteTool": {
+      "type": "object",
+      "description": "Database write tool for inserting records into an external database table. Requires a stored credential with the database connection string.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId",
+        "table",
+        "columns"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "dbWrite",
+          "description": "Tool type identifier."
+        },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the stored credential containing the database connection string. The credential must have credential_type='db_connection' and contain a 'connection_string' key."
+        },
+        "table": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The database table to insert records into."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Optional custom name for the tool (e.g., 'create_lead', 'add_order'). If not provided, defaults to 'insert_{table}'. Must be lowercase with underscores only."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what records this tool creates. Helps the LLM decide when and how to use this tool."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "List of columns that can be written. Only these columns can be set when inserting. Required for security."
+        },
+        "requiredColumns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [],
+          "description": "List of columns that must be provided when inserting. Must be a subset of 'columns'."
+        },
+        "injectAccountId": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, automatically inject the authenticated user's account_id into the record. Use this when the target table has an account_id column that should be set to the current user's account."
         }
       }
     }

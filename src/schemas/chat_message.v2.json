@@ -32,6 +32,9 @@
           },
           {
             "$ref": "#/$defs/dbReadToolCall"
+          },
+          {
+            "$ref": "#/$defs/dbWriteToolCall"
           }
         ],
         "description": "A tool call. The schema varies by tool type."
@@ -360,6 +363,65 @@
             "count": {
               "type": "integer",
               "description": "Number of results returned"
+            }
+          }
+        }
+      }
+    },
+    "dbWriteToolCall": {
+      "type": "object",
+      "description": "Tool call for database write (insert record)",
+      "additionalProperties": false,
+      "required": [
+        "toolType",
+        "toolName",
+        "input",
+        "output"
+      ],
+      "properties": {
+        "toolType": {
+          "type": "string",
+          "const": "dbWrite",
+          "description": "The type of tool (dbWrite)"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "The specific tool instance name (e.g., 'create_lead', 'insert_orders')"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "description": "Data to insert as key-value pairs",
+              "additionalProperties": true
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": ["success", "table"],
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "description": "Whether the insert was successful"
+            },
+            "table": {
+              "type": "string",
+              "description": "The table that was written to"
+            },
+            "inserted": {
+              "type": "object",
+              "description": "The inserted record data",
+              "additionalProperties": true
+            },
+            "message": {
+              "type": "string",
+              "description": "Success or error message"
+            },
+            "error": {
+              "type": "string",
+              "description": "Error message if insert failed"
             }
           }
         }
