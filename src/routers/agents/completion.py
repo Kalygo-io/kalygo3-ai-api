@@ -30,7 +30,7 @@ from langsmith import Client
 from pydantic import BaseModel, Field
 
 # Import tool factory
-from src.tools import create_tools_from_agent_config
+from src.tools import create_tools_from_agent_config, CredentialError
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -243,13 +243,34 @@ async def generator(
         
         # Create tools from agent config using factory
         # Automatically handles v1 (knowledgeBases) and v2 (tools) formats
-        tools = await create_tools_from_agent_config(
-            agent_config=agent.config,
-            account_id=account_id,
-            db=db,
-            auth_token=auth_token,
-            request=request
-        )
+        try:
+            tools = await create_tools_from_agent_config(
+                agent_config=agent.config,
+                account_id=account_id,
+                db=db,
+                auth_token=auth_token,
+                request=request
+            )
+        except CredentialError as e:
+            print(f"[AGENT COMPLETION] Tool configuration error: {e}")
+            yield json.dumps({
+                "event": "error",
+                "data": {
+                    "error": "Tool configuration error",
+                    "message": str(e)
+                }
+            }, separators=(',', ':'))
+            return
+        except ValueError as e:
+            print(f"[AGENT COMPLETION] Tool configuration error: {e}")
+            yield json.dumps({
+                "event": "error",
+                "data": {
+                    "error": "Invalid tool configuration",
+                    "message": str(e)
+                }
+            }, separators=(',', ':'))
+            return
         
         print(f"[AGENT COMPLETION] Created {len(tools)} tools, using {'agent executor' if tools else 'simple chat'} mode")
         
