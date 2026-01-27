@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/agent-streaming-events-v1.schema.json",
+  "title": "Agent Streaming Events v1",
+  "description": "Schema for Server-Sent Events (SSE) emitted by the agent completion endpoint during streaming",
+  "oneOf": [
+    { "$ref": "#/$defs/errorEvent" },
+    { "$ref": "#/$defs/chainStartEvent" },
+    { "$ref": "#/$defs/chainEndEvent" },
+    { "$ref": "#/$defs/chatModelStartEvent" },
+    { "$ref": "#/$defs/chatModelStreamEvent" },
+    { "$ref": "#/$defs/toolStartEvent" },
+    { "$ref": "#/$defs/toolEndEvent" }
+  ],
+  "$defs": {
+    "errorEvent": {
+      "type": "object",
+      "description": "Error event emitted when something goes wrong",
+      "required": ["event", "data"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "error"
+        },
+        "data": {
+          "type": "object",
+          "required": ["error"],
+          "properties": {
+            "error": {
+              "type": "string",
+              "description": "Error type/category"
+            },
+            "message": {
+              "type": "string",
+              "description": "Detailed error message"
+            }
+          }
+        }
+      }
+    },
+    "chainStartEvent": {
+      "type": "object",
+      "description": "Event emitted when agent execution begins",
+      "required": ["event"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_chain_start"
+        }
+      }
+    },
+    "chainEndEvent": {
+      "type": "object",
+      "description": "Event emitted when agent execution completes successfully",
+      "required": ["event", "data"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_chain_end"
+        },
+        "data": {
+          "type": "string",
+          "description": "The complete AI response text"
+        },
+        "toolCalls": {
+          "type": "array",
+          "description": "All tool calls made during this agent execution. See chat_message.v2.json for schema.",
+          "items": {
+            "type": "object",
+            "description": "Tool call - see chat_message.v2.json#/$defs/vectorSearchToolCall or vectorSearchWithRerankingToolCall"
+          }
+        }
+      }
+    },
+    "chatModelStartEvent": {
+      "type": "object",
+      "description": "Event emitted when the LLM starts processing",
+      "required": ["event"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_chat_model_start"
+        },
+        "toolCalls": {
+          "type": "array",
+          "description": "Tool calls accumulated so far",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "chatModelStreamEvent": {
+      "type": "object",
+      "description": "Event emitted for each token streamed from the LLM",
+      "required": ["event", "data"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_chat_model_stream"
+        },
+        "data": {
+          "type": "string",
+          "description": "Streaming token/chunk from the LLM"
+        }
+      }
+    },
+    "toolStartEvent": {
+      "type": "object",
+      "description": "Event emitted when a tool execution begins",
+      "required": ["event", "data"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_tool_start"
+        },
+        "data": {
+          "type": "string",
+          "description": "Human-readable description of tool execution starting (e.g., 'Starting tool: search_docs with inputs: ...')"
+        }
+      }
+    },
+    "toolEndEvent": {
+      "type": "object",
+      "description": "Event emitted when a tool execution completes",
+      "required": ["event"],
+      "properties": {
+        "event": {
+          "type": "string",
+          "const": "on_tool_end"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "event": "on_chain_start"
+    },
+    {
+      "event": "on_chat_model_start",
+      "toolCalls": []
+    },
+    {
+      "event": "on_chat_model_stream",
+      "data": "Let "
+    },
+    {
+      "event": "on_chat_model_stream",
+      "data": "me "
+    },
+    {
+      "event": "on_tool_start",
+      "data": "Starting tool: search_docs with inputs: {'query': 'ollama', 'topK': 5}"
+    },
+    {
+      "event": "on_tool_end"
+    },
+    {
+      "event": "on_chain_end",
+      "data": "Ollama is an open-source tool that allows you to run large language models locally...",
+      "toolCalls": [
+        {
+          "toolType": "vectorSearch",
+          "toolName": "search_docs",
+          "input": {
+            "query": "ollama",
+            "topK": 5
+          },
+          "output": {
+            "results": [
+              {
+                "id": "abc123",
+                "score": 0.92,
+                "metadata": {
+                  "filename": "ollama_guide.md",
+                  "chunkId": 1,
+                  "content": "Ollama is...",
+                  "chunkSizeTokens": 150,
+                  "uploadTimestamp": "1706234567890",
+                  "chunkNumber": 1,
+                  "totalChunks": 5
+                }
+              }
+            ],
+            "namespace": "docs",
+            "index": "knowledge-base"
+          }
+        }
+      ]
+    },
+    {
+      "event": "error",
+      "data": {
+        "error": "Internal server error",
+        "message": "Failed to connect to LLM"
+      }
+    }
+  ]
+}

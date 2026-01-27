@@ -207,7 +207,7 @@ async def generator(
         
         # Create tools using the tool factory
         # This supports both v1 (knowledgeBases) and v2 (tools) configs
-        retrieval_calls = []  # Will be populated only when tools are actually executed
+        tool_calls = []  # Will be populated when tools are executed during agent run
         
         # Extract authentication token for passing to embedding API
         # This handles both JWT and API key authentication
@@ -351,7 +351,7 @@ async def generator(
                         print(
                             f"Done agent: {event['name']}"
                         )
-                        print(len(retrieval_calls))
+                        print(f"[AGENT COMPLETION] Tool calls made: {len(tool_calls)}")
                         
                         if content:
                         # Empty content in the context of OpenAI means
@@ -364,13 +364,13 @@ async def generator(
                                     "content": content
                                 }
                                 
-                                # Add toolCalls if any retrieval calls were made
-                                if retrieval_calls:
-                                    message_obj["toolCalls"] = retrieval_calls
+                                # Add toolCalls if any tools were executed
+                                if tool_calls:
+                                    message_obj["toolCalls"] = tool_calls
                                 
-                                # Validate message against schema
+                                # Validate message against schema v2
                                 try:
-                                    validate_against_schema(message_obj, "chat_message", 1)
+                                    validate_against_schema(message_obj, "chat_message", 2)
                                 except Exception as validation_error:
                                     print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                                     # Continue anyway - don't fail the request, but log the error
@@ -392,7 +392,7 @@ async def generator(
                             yield json.dumps({
                                 "event": "on_chain_end",
                                 "data": content,
-                                "retrieval_calls": retrieval_calls
+                                "toolCalls": tool_calls
                             }, separators=(',', ':'))
                 if kind == "on_chat_model_start":
                     # Only store the user message once, even if on_chat_model_start fires multiple times
@@ -427,7 +427,7 @@ async def generator(
                     
                     yield json.dumps({
                         "event": "on_chat_model_start",
-                        "retrieval_calls": retrieval_calls
+                        "toolCalls": tool_calls
                     }, separators=(',', ':'))
                 elif kind == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
@@ -445,11 +445,10 @@ async def generator(
                 elif kind == "on_tool_start":
                     print("--")
                     print(f"⚡⚡⚡ Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
-                    print(f"⚡⚡⚡ Tool execution logs should appear below...")
                     print("--")
                     yield json.dumps({
                         "event": "on_tool_start",
-                        "data": f"!!!Starting tool!!!: {event['name']} with inputs: {event['data'].get('input')}"
+                        "data": f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
                     }, separators=(',', ':'))
                 elif kind == "on_tool_end":
                     print("--")
@@ -457,60 +456,49 @@ async def generator(
                     # print(f"Tool output was: {event['data'].get('output')}")
                     print("--")
                     
-                    # Track retrieval calls if it's a retrieval tool (vector search or vector search with reranking)
+                    # Track tool calls if it's a retrieval tool (vector search or vector search with reranking)
                     # Vector search tools are named "search_{namespace}" or "search_rerank_{namespace}"
                     tool_name = event['name']
                     if tool_name.startswith("search_") or tool_name.startswith("search_rerank_"):
                         tool_input = event['data'].get('input', {})
                         tool_output = event['data'].get('output', {})
                         
-                        # Extract query from tool input
-                        query = tool_input.get('query', 'Unknown query')
+                        # Validate tool_output
+                        if not isinstance(tool_output, dict):
+                            print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping tool call tracking")
+                            continue
                         
-                        # Extract results from tool output
-                        # Note: With proper async tool setup (coroutine parameter), LangChain should await the tool
-                        # and provide the result here, not a coroutine
-                        if isinstance(tool_output, dict):
-                            results = tool_output.get('results', [])
+                        # Determine tool type based on tool name
+                        if tool_name.startswith("search_rerank_"):
+                            tool_type = "vectorSearchWithReranking"
                         else:
-                            print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping retrieval tracking")
-                            results = []
+                            tool_type = "vectorSearch"
                         
-                        # Format results for response
+                        # Get results from tool output
+                        results = tool_output.get('results', [])
+                        
+                        # Format results according to v2 schema (keep metadata as-is)
                         formatted_results = []
                         for result in results:
-                            metadata = result.get("metadata", {})
-                            
-                            # Extract content from metadata - handle different metadata formats
-                            # Standard format: metadata["content"]
-                            # Q&A format: metadata["a"] (answer) or metadata["q"] (question)
-                            content = metadata.get("content", "")
-                            
-                            # If no content field, try to construct from Q&A format
-                            if not content:
-                                answer = metadata.get("a", "")
-                                question = metadata.get("q", "")
-                                if answer and question:
-                                    content = f"Q: {question}\nA: {answer}"
-                                elif answer:
-                                    content = answer
-                                elif question:
-                                    content = question
-                            
                             formatted_results.append({
-                                "chunk_id": result.get("id", "N/A"),
+                                "id": result.get("id", ""),
                                 "score": result.get("score", 0.0),
-                                "content": content,
-                                "metadata": metadata
+                                "metadata": result.get("metadata", {})
                             })
                         
-                        # Structure tool call according to message schema
-                        retrieval_calls.append({
-                            "name": "retrieval with re-ranking",
-                            "query": query,
-                            "results": formatted_results,
-                            "namespace": tool_output.get('namespace', ''),
-                            "index": tool_output.get('index', '')
+                        # Structure tool call according to chat_message.v2.json schema
+                        tool_calls.append({
+                            "toolType": tool_type,
+                            "toolName": tool_name,
+                            "input": {
+                                "query": tool_input.get('query', ''),
+                                "topK": tool_input.get('top_k', tool_input.get('topK'))
+                            },
+                            "output": {
+                                "results": formatted_results,
+                                "namespace": tool_output.get('namespace', ''),
+                                "index": tool_output.get('index', '')
+                            }
                         })
                     
                     yield json.dumps({
@@ -603,9 +591,9 @@ async def generator(
                         "content": full_response
                     }
                     
-                    # Validate message against schema
+                    # Validate message against schema v2
                     try:
-                        validate_against_schema(message_obj, "chat_message", 1)
+                        validate_against_schema(message_obj, "chat_message", 2)
                     except Exception as validation_error:
                         print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                         # Continue anyway - don't fail the request, but log the error

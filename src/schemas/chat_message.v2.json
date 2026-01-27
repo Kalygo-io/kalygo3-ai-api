@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/chat-message-v2.schema.json",
+  "title": "Chat Message v2",
+  "description": "Schema for chat messages with structured tool call outputs",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "role",
+    "content"
+  ],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": ["human", "ai"],
+      "description": "The role of the message sender (human or AI)."
+    },
+    "content": {
+      "type": "string",
+      "description": "The text content of the message."
+    },
+    "toolCalls": {
+      "type": "array",
+      "description": "Array of tool calls made during the generation of this message. Only present for AI messages. Each tool call has a different schema depending on the tool type.",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/vectorSearchToolCall"
+          },
+          {
+            "$ref": "#/$defs/vectorSearchWithRerankingToolCall"
+          }
+        ],
+        "description": "A tool call. The schema varies by tool type."
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "vectorSearchToolCall": {
+      "type": "object",
+      "description": "Tool call for vector search (semantic retrieval)",
+      "additionalProperties": false,
+      "required": [
+        "toolType",
+        "toolName",
+        "input",
+        "output"
+      ],
+      "properties": {
+        "toolType": {
+          "type": "string",
+          "const": "vectorSearch",
+          "description": "The type of tool (vectorSearch)"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "The specific tool instance name (e.g., 'search_docs')"
+        },
+        "input": {
+          "type": "object",
+          "required": ["query"],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query"
+            },
+            "topK": {
+              "type": "integer",
+              "description": "Number of results requested"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": ["results", "namespace", "index"],
+          "properties": {
+            "results": {
+              "type": "array",
+              "description": "Search results from vector database",
+              "items": {
+                "$ref": "#/$defs/vectorSearchResult"
+              }
+            },
+            "namespace": {
+              "type": "string",
+              "description": "The Pinecone namespace searched"
+            },
+            "index": {
+              "type": "string",
+              "description": "The Pinecone index name"
+            }
+          }
+        }
+      }
+    },
+    "vectorSearchWithRerankingToolCall": {
+      "type": "object",
+      "description": "Tool call for vector search with re-ranking",
+      "additionalProperties": false,
+      "required": [
+        "toolType",
+        "toolName",
+        "input",
+        "output"
+      ],
+      "properties": {
+        "toolType": {
+          "type": "string",
+          "const": "vectorSearchWithReranking",
+          "description": "The type of tool (vectorSearchWithReranking)"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "The specific tool instance name (e.g., 'search_rerank_kb')"
+        },
+        "input": {
+          "type": "object",
+          "required": ["query"],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query"
+            },
+            "topK": {
+              "type": "integer",
+              "description": "Number of candidates retrieved before reranking"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": ["results", "namespace", "index"],
+          "properties": {
+            "results": {
+              "type": "array",
+              "description": "Re-ranked search results",
+              "items": {
+                "$ref": "#/$defs/vectorSearchResult"
+              }
+            },
+            "namespace": {
+              "type": "string",
+              "description": "The Pinecone namespace searched"
+            },
+            "index": {
+              "type": "string",
+              "description": "The Pinecone index name"
+            }
+          }
+        }
+      }
+    },
+    "vectorSearchResult": {
+      "type": "object",
+      "description": "A single result from vector search",
+      "required": ["id", "score", "metadata"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique vector identifier (SHA256 hash)"
+        },
+        "score": {
+          "type": "number",
+          "description": "Similarity score (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "metadata": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/textDocumentMetadata"
+            },
+            {
+              "$ref": "#/$defs/qaMetadata"
+            }
+          ],
+          "description": "Metadata structure varies by ingestion type (text/markdown vs CSV Q&A)"
+        }
+      }
+    },
+    "textDocumentMetadata": {
+      "type": "object",
+      "description": "Metadata for text/markdown document chunks ingested via text_processor.py",
+      "required": [
+        "filename",
+        "chunkId",
+        "content",
+        "chunkSizeTokens",
+        "uploadTimestamp",
+        "chunkNumber",
+        "totalChunks"
+      ],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Original filename (.txt or .md)"
+        },
+        "chunkId": {
+          "type": "integer",
+          "description": "Chunk identifier (1-based)",
+          "minimum": 1
+        },
+        "content": {
+          "type": "string",
+          "description": "The actual text content of this chunk"
+        },
+        "chunkSizeTokens": {
+          "type": "integer",
+          "description": "Approximate token count (word-based)",
+          "minimum": 0
+        },
+        "uploadTimestamp": {
+          "type": "string",
+          "description": "Upload timestamp in milliseconds (unix epoch)",
+          "pattern": "^[0-9]+$"
+        },
+        "chunkNumber": {
+          "type": "integer",
+          "description": "Chunk number for display (1-based)",
+          "minimum": 1
+        },
+        "totalChunks": {
+          "type": "integer",
+          "description": "Total number of chunks in the document",
+          "minimum": 1
+        }
+      },
+      "patternProperties": {
+        "^file_": {
+          "type": "string",
+          "description": "Custom YAML front matter fields from the source file (e.g., file_video_title, file_video_url)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "qaMetadata": {
+      "type": "object",
+      "description": "Metadata for Q&A pairs from CSV ingestion via csv_processor.py",
+      "required": [
+        "row_number",
+        "q",
+        "a",
+        "content",
+        "filename",
+        "user_id",
+        "user_email",
+        "upload_timestamp"
+      ],
+      "properties": {
+        "row_number": {
+          "type": "integer",
+          "description": "Row number in the CSV file (1-based)",
+          "minimum": 1
+        },
+        "q": {
+          "type": "string",
+          "description": "The question text"
+        },
+        "a": {
+          "type": "string",
+          "description": "The answer text"
+        },
+        "content": {
+          "type": "string",
+          "description": "Formatted content: 'Q: {question}\\nA: {answer}'"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Original CSV filename"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "ID of the user who uploaded the file"
+        },
+        "user_email": {
+          "type": "string",
+          "description": "Email of the user who uploaded the file"
+        },
+        "upload_timestamp": {
+          "type": "string",
+          "description": "Upload timestamp in milliseconds (unix epoch)",
+          "pattern": "^[0-9]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Creation timestamp from CSV (optional)"
+        },
+        "last_edited_at": {
+          "type": "string",
+          "description": "Last edit timestamp from CSV (optional)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "role": "human",
+      "content": "What is Ollama?"
+    },
+    {
+      "role": "ai",
+      "content": "Ollama is a tool that allows you to run large language models locally...",
+      "toolCalls": [
+        {
+          "toolType": "vectorSearch",
+          "toolName": "search_docs",
+          "input": {
+            "query": "Ollama",
+            "topK": 5
+          },
+          "output": {
+            "results": [
+              {
+                "id": "abc123...",
+                "score": 0.92,
+                "metadata": {
+                  "filename": "ollama_guide.md",
+                  "chunkId": 1,
+                  "content": "Ollama is an open-source tool...",
+                  "chunkSizeTokens": 150,
+                  "uploadTimestamp": "1706234567890",
+                  "chunkNumber": 1,
+                  "totalChunks": 5,
+                  "file_video_title": "What is Ollama?",
+                  "file_video_url": "https://youtube.com/watch?v=..."
+                }
+              }
+            ],
+            "namespace": "docs",
+            "index": "knowledge-base"
+          }
+        }
+      ]
+    },
+    {
+      "role": "ai",
+      "content": "Here's what I found about pricing...",
+      "toolCalls": [
+        {
+          "toolType": "vectorSearchWithReranking",
+          "toolName": "search_rerank_qa",
+          "input": {
+            "query": "pricing",
+            "topK": 10
+          },
+          "output": {
+            "results": [
+              {
+                "id": "def456...",
+                "score": 0.95,
+                "metadata": {
+                  "row_number": 15,
+                  "q": "What is the pricing for the Pro plan?",
+                  "a": "The Pro plan costs $29/month...",
+                  "content": "Q: What is the pricing for the Pro plan?\nA: The Pro plan costs $29/month...",
+                  "filename": "faq.csv",
+                  "user_id": "123",
+                  "user_email": "admin@kalygo.io",
+                  "upload_timestamp": "1706234567890"
+                }
+              }
+            ],
+            "namespace": "qa",
+            "index": "knowledge-base"
+          }
+        }
+      ]
+    }
+  ]
+}

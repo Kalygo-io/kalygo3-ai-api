@@ -3,20 +3,47 @@ Vector Search Tool
 
 Provides semantic search over vector databases (Pinecone).
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TypedDict, List
 import os
 import aiohttp
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from src.db.models import Credential
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import decrypt_api_key
 
 
+# Type definitions for vector search results
+class VectorSearchMatch(TypedDict):
+    """A single match from vector search."""
+    metadata: Dict[str, Any]
+    score: float
+    id: str
+
+
+class VectorSearchSuccess(TypedDict):
+    """Successful vector search result."""
+    results: List[VectorSearchMatch]
+    namespace: str
+    index: str
+
+
+class VectorSearchEmpty(TypedDict):
+    """Empty vector search result."""
+    results: List[VectorSearchMatch]
+    message: str
+
+
+class VectorSearchError(TypedDict):
+    """Error result from vector search."""
+    error: str
+
+
 async def create_vector_search_tool(
     tool_config: Dict[str, Any],
     account_id: int,
-    db: Any,
+    db: Session,
     auth_token: Optional[str] = None,
     **kwargs
 ) -> Optional[StructuredTool]:
@@ -83,7 +110,10 @@ async def create_vector_search_tool(
     print(f"[VECTOR SEARCH TOOL] Created tool for {provider}/{index_name}/{namespace}")
     
     # Define the retrieval implementation
-    async def retrieval_impl(query: str, top_k: int = top_k_default) -> Dict:
+    async def retrieval_impl(
+        query: str, 
+        top_k: int = top_k_default
+    ) -> VectorSearchSuccess | VectorSearchEmpty | VectorSearchError:
         """Retrieve relevant documents from the knowledge base."""
         # DEBUG: Tool invocation
         import sys
