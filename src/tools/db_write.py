@@ -64,7 +64,7 @@ async def create_db_write_tool(
         
     Example tool_config:
         {
-            "type": "dbWrite",
+            "type": "dbTableWrite",
             "credentialId": 6,
             "table": "leads",
             "name": "create_lead",
@@ -84,13 +84,13 @@ async def create_db_write_tool(
     
     # Validate required fields
     if not credential_id:
-        raise CredentialError("Missing required field 'credentialId' in dbWrite tool configuration")
+        raise CredentialError("Missing required field 'credentialId' in dbTableWrite tool configuration")
     
     if not table_name:
-        raise ValueError("Missing required field 'table' in dbWrite tool configuration")
+        raise ValueError("Missing required field 'table' in dbTableWrite tool configuration")
     
     if not allowed_columns:
-        raise ValueError("Missing required field 'columns' in dbWrite tool configuration. "
+        raise ValueError("Missing required field 'columns' in dbTableWrite tool configuration. "
                         "You must specify which columns can be written for security.")
     
     # Validate requiredColumns are in allowed_columns

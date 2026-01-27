@@ -524,7 +524,7 @@ async def generator(
                     
                     # Handle database read tools
                     elif tool_name.startswith("query_"):
-                        tool_type = "dbRead"
+                        tool_type = "dbTableRead"
                         
                         # Structure tool call according to chat_message.v2.json schema
                         tool_calls.append({
@@ -544,7 +544,7 @@ async def generator(
                     
                     # Handle database write tools
                     elif tool_name.startswith("insert_") or tool_name.startswith("create_"):
-                        tool_type = "dbWrite"
+                        tool_type = "dbTableWrite"
                         
                         # Structure tool call according to chat_message.v2.json schema
                         # Note: input is now flat (column fields directly) instead of nested under "data"

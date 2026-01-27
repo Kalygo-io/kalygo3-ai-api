@@ -132,7 +132,7 @@ async def create_db_read_tool(
         
     Example tool_config:
         {
-            "type": "dbRead",
+            "type": "dbTableRead",
             "credentialId": 6,
             "table": "users",
             "name": "query_users",
@@ -150,10 +150,10 @@ async def create_db_read_tool(
     
     # Validate required fields
     if not credential_id:
-        raise CredentialError("Missing required field 'credentialId' in dbRead tool configuration")
+        raise CredentialError("Missing required field 'credentialId' in dbTableRead tool configuration")
     
     if not table_name:
-        raise ValueError("Missing required field 'table' in dbRead tool configuration")
+        raise ValueError("Missing required field 'table' in dbTableRead tool configuration")
     
     # Get the connection string from the credential (raises CredentialError if fails)
     connection_string = get_connection_string(credential_id, account_id, db)

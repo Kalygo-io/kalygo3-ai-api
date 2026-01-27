@@ -31,10 +31,10 @@
             "$ref": "#/$defs/vectorSearchWithRerankingToolCall"
           },
           {
-            "$ref": "#/$defs/dbReadToolCall"
+            "$ref": "#/$defs/dbTableReadToolCall"
           },
           {
-            "$ref": "#/$defs/dbWriteToolCall"
+            "$ref": "#/$defs/dbTableWriteToolCall"
           }
         ],
         "description": "A tool call. The schema varies by tool type."
@@ -299,7 +299,7 @@
       },
       "additionalProperties": false
     },
-    "dbReadToolCall": {
+    "dbTableReadToolCall": {
       "type": "object",
       "description": "Tool call for database read (structured data query)",
       "additionalProperties": false,
@@ -312,8 +312,8 @@
       "properties": {
         "toolType": {
           "type": "string",
-          "const": "dbRead",
-          "description": "The type of tool (dbRead)"
+          "const": "dbTableRead",
+          "description": "The type of tool (dbTableRead)"
         },
         "toolName": {
           "type": "string",
@@ -368,7 +368,7 @@
         }
       }
     },
-    "dbWriteToolCall": {
+    "dbTableWriteToolCall": {
       "type": "object",
       "description": "Tool call for database write (insert record)",
       "additionalProperties": false,
@@ -381,8 +381,8 @@
       "properties": {
         "toolType": {
           "type": "string",
-          "const": "dbWrite",
-          "description": "The type of tool (dbWrite)"
+          "const": "dbTableWrite",
+          "description": "The type of tool (dbTableWrite)"
         },
         "toolName": {
           "type": "string",
@@ -507,7 +507,7 @@
       "content": "Here are your recent chat sessions...",
       "toolCalls": [
         {
-          "toolType": "dbRead",
+          "toolType": "dbTableRead",
           "toolName": "query_chat_app_sessions",
           "input": {
             "filters": null,

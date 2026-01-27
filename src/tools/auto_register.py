@@ -18,8 +18,8 @@ def register_all_tools():
     register_tool_type("vectorSearchWithReranking", create_vector_search_with_reranking_tool)
     
     # Register database tools
-    register_tool_type("dbRead", create_db_read_tool)
-    register_tool_type("dbWrite", create_db_write_tool)
+    register_tool_type("dbTableRead", create_db_read_tool)
+    register_tool_type("dbTableWrite", create_db_write_tool)
     
     # Future tool types will be registered here:
     # register_tool_type("webSearch", create_web_search_tool)

@@ -57,10 +57,10 @@
           "$ref": "#/$defs/vectorSearchWithRerankingTool"
         },
         {
-          "$ref": "#/$defs/dbReadTool"
+          "$ref": "#/$defs/dbTableReadTool"
         },
         {
-          "$ref": "#/$defs/dbWriteTool"
+          "$ref": "#/$defs/dbTableWriteTool"
         }
       ]
     },
@@ -165,7 +165,7 @@
         }
       }
     },
-    "dbReadTool": {
+    "dbTableReadTool": {
       "type": "object",
       "description": "Database read tool for querying structured data from an external database. Requires a stored credential with the database connection string.",
       "additionalProperties": false,
@@ -177,7 +177,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "dbRead",
+          "const": "dbTableRead",
           "description": "Tool type identifier."
         },
         "credentialId": {
@@ -220,7 +220,7 @@
         }
       }
     },
-    "dbWriteTool": {
+    "dbTableWriteTool": {
       "type": "object",
       "description": "Database write tool for inserting records into an external database table. Requires a stored credential with the database connection string.",
       "additionalProperties": false,
@@ -233,7 +233,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "dbWrite",
+          "const": "dbTableWrite",
           "description": "Tool type identifier."
         },
         "credentialId": {

@@ -4,14 +4,14 @@ The Database Read Tool allows agents to query structured data from Kalygo databa
 
 ## Overview
 
-- **Tool Type:** `dbRead`
+- **Tool Type:** `dbTableRead`
 - **Tool Name Pattern:** `query_{table_name}`
 - **Security:** Account-scoped (agents can only access their own data)
 - **Registration:** Automatically registered in the tool registry
 
 ## Configuration
 
-Add the `dbRead` tool to your agent configuration:
+Add the `dbTableRead` tool to your agent configuration:
 
 ```json
 {
@@ -21,14 +21,14 @@ Add the `dbRead` tool to your agent configuration:
     "systemPrompt": "You are a helpful assistant...",
     "tools": [
       {
-        "type": "dbRead",
+        "type": "dbTableRead",
         "table": "chat_app_sessions",
         "description": "Query user's chat sessions to provide history and context",
         "columns": ["id", "session_id", "title", "created_at"],
         "limit": 20
       },
       {
-        "type": "dbRead",
+        "type": "dbTableRead",
         "table": "usage_credits",
         "description": "Check user's remaining usage credits",
         "limit": 1
@@ -42,7 +42,7 @@ Add the `dbRead` tool to your agent configuration:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | ✅ | Must be `"dbRead"` |
+| `type` | string | ✅ | Must be `"dbTableRead"` |
 | `table` | string | ✅ | Table name (see allowed tables below) |
 | `description` | string | ❌ | Helps the LLM decide when to use this tool |
 | `columns` | array | ❌ | Specific columns to return (defaults to all non-sensitive) |
@@ -212,7 +212,7 @@ Here's what a complete tool call looks like in the chat message:
   "content": "Here are your recent chat sessions...",
   "toolCalls": [
     {
-      "toolType": "dbRead",
+      "toolType": "dbTableRead",
       "toolName": "query_chat_app_sessions",
       "input": {
         "filters": null,
@@ -251,13 +251,13 @@ Here's what a complete tool call looks like in the chat message:
     "systemPrompt": "You are a support assistant that helps users with their chat history and usage.",
     "tools": [
       {
-        "type": "dbRead",
+        "type": "dbTableRead",
         "table": "chat_app_sessions",
         "description": "Access user's chat sessions to provide context and history",
         "limit": 50
       },
       {
-        "type": "dbRead",
+        "type": "dbTableRead",
         "table": "usage_credits",
         "description": "Check user's remaining credits to answer billing questions"
       }
@@ -276,7 +276,7 @@ Here's what a complete tool call looks like in the chat message:
     "systemPrompt": "You help users manage their uploaded documents and data.",
     "tools": [
       {
-        "type": "dbRead",
+        "type": "dbTableRead",
         "table": "vector_db_ingestion_log",
         "description": "Query user's document upload history and status",
         "columns": ["id", "filenames", "status", "created_at", "namespace"],
@@ -301,12 +301,12 @@ Here's what a complete tool call looks like in the chat message:
 ```
 /code/src/tools/
   ├── db_read.py              # Tool implementation
-  ├── auto_register.py        # Registers dbRead tool
+  ├── auto_register.py        # Registers dbTableRead tool
   └── registry.py             # Tool registry
 
 /code/src/schemas/
-  ├── agent_config.v2.json    # Includes dbReadTool definition
-  └── chat_message.v2.json    # Includes dbReadToolCall definition
+  ├── agent_config.v2.json    # Includes dbTableReadTool definition
+  └── chat_message.v2.json    # Includes dbTableReadToolCall definition
 ```
 
 ### Adding New Tables
@@ -344,7 +344,7 @@ To whitelist a new table for agent access:
 
 ## Testing
 
-### 1. Create an agent with dbRead tool:
+### 1. Create an agent with dbTableRead tool:
 
 ```bash
 curl -X POST https://api.kalygo.io/api/agents \
@@ -358,7 +358,7 @@ curl -X POST https://api.kalygo.io/api/agents \
       "data": {
         "systemPrompt": "You help manage chat sessions.",
         "tools": [{
-          "type": "dbRead",
+          "type": "dbTableRead",
           "table": "chat_app_sessions",
           "description": "Query chat sessions",
           "limit": 10
@@ -381,7 +381,7 @@ curl -X POST https://api.kalygo.io/api/agents/{agent_id}/completion \
 
 ### 3. Verify the output contains:
 
-- `toolCalls` array with `toolType: "dbRead"`
+- `toolCalls` array with `toolType: "dbTableRead"`
 - Results from the `chat_app_sessions` table
 - Only the user's own sessions (account-scoped)
 
@@ -392,7 +392,7 @@ Help the LLM understand when to use the tool:
 
 ```json
 {
-  "type": "dbRead",
+  "type": "dbTableRead",
   "table": "usage_credits",
   "description": "Check user's remaining credit balance for billing questions"
 }
@@ -403,7 +403,7 @@ Only request needed columns for better performance:
 
 ```json
 {
-  "type": "dbRead",
+  "type": "dbTableRead",
   "table": "vector_db_ingestion_log",
   "columns": ["filenames", "status", "created_at"]
 }
@@ -414,7 +414,7 @@ Balance between completeness and performance:
 
 ```json
 {
-  "type": "dbRead",
+  "type": "dbTableRead",
   "table": "chat_app_sessions",
   "limit": 20  // Reasonable default
 }
@@ -427,12 +427,12 @@ Give agents access to multiple tables:
 {
   "tools": [
     {
-      "type": "dbRead",
+      "type": "dbTableRead",
       "table": "chat_app_sessions",
       "description": "User's chat history"
     },
     {
-      "type": "dbRead",
+      "type": "dbTableRead",
       "table": "usage_credits",
       "description": "User's billing information"
     }
@@ -444,7 +444,7 @@ Give agents access to multiple tables:
 
 ### Tool not found
 
-**Error:** "Unknown tool type 'dbRead'"
+**Error:** "Unknown tool type 'dbTableRead'"
 
 **Solution:** Tool registration happens on import. Restart the FastAPI server.
 
