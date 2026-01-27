@@ -20,6 +20,7 @@ class Account(Base):
     credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
+    leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -84,19 +85,50 @@ class UsageCredits(Base):
     def __repr__(self):
         return f'<UsageCredits {self.account_id}: ${self.amount}>'
 
+class CredentialType(str, Enum):
+    """
+    Types of credentials that can be stored.
+    This determines the expected structure of encrypted_data.
+    """
+    API_KEY = "api_key"
+    DB_CONNECTION = "db_connection"
+    OAUTH = "oauth"
+    SSH_KEY = "ssh_key"
+    CERTIFICATE = "certificate"
+
+
 class Credential(Base):
+    """
+    Stores encrypted credentials for third-party services.
+    
+    The table supports multiple credential types:
+    - API keys: Simple key-value (e.g., OpenAI API key)
+    - Database connections: Host, port, username, password, database name
+    - OAuth: Client ID, client secret, tokens
+    - SSH keys: Private keys with optional passphrases
+    - Certificates: Certificate data with optional private keys
+    
+    All credentials are stored in encrypted_data as encrypted JSON structures.
+    """
     __tablename__ = 'credentials'
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
     service_name = Column(Enum(ServiceName, name='service_name_enum'), nullable=False, index=True)
-    encrypted_api_key = Column(String, nullable=False)  # Encrypted API key
+    credential_type = Column(String(50), nullable=False, index=True, default='api_key')
+    
+    # Encrypted storage (JSON structure, encrypted with Fernet)
+    encrypted_data = Column(Text, nullable=False)
+    
+    # Non-sensitive metadata (e.g., display name, description, last_validated)
+    credential_metadata = Column(JSON, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     account = relationship('Account', back_populates='credentials')
     
     def __repr__(self):
-        return f'<Credential {self.service_name} for account {self.account_id}>'
+        return f'<Credential {self.service_name} ({self.credential_type}) for account {self.account_id}>'
 
 
 class ApiKeyStatus(str, Enum):
@@ -242,3 +274,27 @@ class JsonSchema(Base):
     
     def __repr__(self):
         return f'<JsonSchema {self.schema_name} v{self.version}>'
+
+
+class Lead(Base):
+    """
+    Stores lead/inquiry information.
+    
+    Leads are potential customers or inquiries captured through
+    various channels (website forms, chat, etc.).
+    """
+    __tablename__ = 'leads'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True, index=True)
+    phone = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    account = relationship('Account', back_populates='leads')
+    
+    def __repr__(self):
+        return f'<Lead {self.id}: {self.name}>'

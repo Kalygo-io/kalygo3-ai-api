@@ -1,13 +1,20 @@
 """
-Encryption utility for securely storing and retrieving API keys.
+Encryption utility for securely storing and retrieving credentials.
 Uses Fernet symmetric encryption from the cryptography library.
 Supports key rotation by maintaining multiple encryption keys.
+
+Supports multiple credential types:
+- API keys (string)
+- Database connections (host, port, username, password, etc.)
+- OAuth credentials (client_id, client_secret, tokens)
+- SSH keys (private key, passphrase)
+- Certificates (cert data, private key)
 """
 from cryptography.fernet import Fernet, MultiFernet
 from dotenv import load_dotenv
 import os
-import base64
-from typing import List, Optional
+import json
+from typing import List, Optional, Dict, Any
 
 load_dotenv()
 
@@ -119,6 +126,9 @@ def decrypt_api_key(encrypted_api_key: str) -> str:
     Decrypt an API key using Fernet symmetric encryption.
     Tries multiple keys to support key rotation.
     
+    DEPRECATED: Use decrypt_credential_data() for new code.
+    Kept for backward compatibility during migration period.
+    
     Args:
         encrypted_api_key: The encrypted API key as a base64-encoded string
         
@@ -135,4 +145,98 @@ def decrypt_api_key(encrypted_api_key: str) -> str:
         return decrypted_bytes.decode()
     except Exception as e:
         raise ValueError(f"Failed to decrypt API key: {str(e)}")
+
+
+# =============================================================================
+# NEW FLEXIBLE CREDENTIAL ENCRYPTION FUNCTIONS
+# =============================================================================
+
+def encrypt_credential_data(data: Dict[str, Any]) -> str:
+    """
+    Encrypt credential data (any structure) using Fernet symmetric encryption.
+    
+    The data is serialized to JSON before encryption, allowing storage of
+    complex credential structures like database connections, OAuth tokens, etc.
+    
+    Args:
+        data: Dictionary containing credential information.
+              For API keys: {"api_key": "sk-..."}
+              For DB connections: {"host": "...", "port": 5432, "username": "...", "password": "...", "database": "..."}
+              For OAuth: {"client_id": "...", "client_secret": "...", "access_token": "...", "refresh_token": "..."}
+              
+    Returns:
+        The encrypted credential data as a base64-encoded string
+        
+    Raises:
+        ValueError: If data is empty or cannot be serialized
+    """
+    if not data:
+        raise ValueError("Credential data cannot be empty")
+    
+    _ensure_ciphers_initialized()
+    
+    try:
+        # Serialize to JSON
+        json_str = json.dumps(data, default=str)
+        
+        # Encrypt
+        encrypted_bytes = _fernet.encrypt(json_str.encode())
+        return encrypted_bytes.decode()
+    except (TypeError, json.JSONDecodeError) as e:
+        raise ValueError(f"Failed to serialize credential data: {str(e)}")
+
+
+def decrypt_credential_data(encrypted_data: str) -> Dict[str, Any]:
+    """
+    Decrypt credential data and return as dictionary.
+    Tries multiple keys to support key rotation.
+    
+    Args:
+        encrypted_data: The encrypted credential data as a base64-encoded string
+        
+    Returns:
+        Dictionary containing decrypted credential information
+        
+    Raises:
+        ValueError: If decryption fails or data is malformed
+    """
+    if not encrypted_data:
+        raise ValueError("Encrypted data cannot be empty")
+    
+    _ensure_ciphers_initialized()
+    
+    try:
+        # MultiFernet tries all keys in order until one succeeds
+        decrypted_bytes = _multi_fernet.decrypt(encrypted_data.encode())
+        json_str = decrypted_bytes.decode()
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Failed to parse decrypted credential data as JSON: {str(e)}")
+    except Exception as e:
+        raise ValueError(f"Failed to decrypt credential data: {str(e)}")
+
+
+def get_credential_value(credential, key: str = "api_key") -> str:
+    """
+    Get a specific value from a credential.
+    
+    Args:
+        credential: Credential model instance
+        key: The key to extract from the credential data (default: "api_key")
+        
+    Returns:
+        The requested credential value
+        
+    Raises:
+        ValueError: If the credential cannot be decrypted or key not found
+    """
+    if not credential.encrypted_data:
+        raise ValueError("No encrypted credential data found")
+    
+    data = decrypt_credential_data(credential.encrypted_data)
+    
+    if key in data:
+        return data[key]
+    
+    raise ValueError(f"Key '{key}' not found in credential data. Available keys: {list(data.keys())}")
 

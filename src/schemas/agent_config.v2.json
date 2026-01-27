@@ -55,6 +55,9 @@
         },
         {
           "$ref": "#/$defs/vectorSearchWithRerankingTool"
+        },
+        {
+          "$ref": "#/$defs/dbReadTool"
         }
       ]
     },
@@ -156,6 +159,61 @@
           "maximum": 50,
           "default": 5,
           "description": "Number of final results to return after re-ranking."
+        }
+      }
+    },
+    "dbReadTool": {
+      "type": "object",
+      "description": "Database read tool for querying structured data from an external database. Requires a stored credential with the database connection string.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId",
+        "table"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "dbRead",
+          "description": "Tool type identifier."
+        },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the stored credential containing the database connection string. The credential must have credential_type='db_connection' and contain a 'connection_string' key."
+        },
+        "table": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The database table to query."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Optional custom name for the tool (e.g., 'query_users', 'query_orders'). If not provided, defaults to 'query_{table}'. Must be lowercase with underscores only."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this table contains and what queries are useful. Helps the LLM decide when and how to use this tool."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "List of columns to expose to the agent. Only these columns can be queried and returned. Required for security - prevents exposing sensitive columns."
+        },
+        "maxLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 100,
+          "description": "Maximum number of rows the agent can request in a single query."
         }
       }
     }

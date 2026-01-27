@@ -10,6 +10,7 @@ Tool types are automatically registered when this package is imported.
 
 from .factory import create_tool_from_config, create_tools_from_agent_config
 from .registry import ToolRegistry, register_tool_type, get_tool_builder
+from .db_read import CredentialError
 
 # Import auto_register to register all available tools
 from . import auto_register  # noqa: F401
@@ -20,4 +21,5 @@ __all__ = [
     'ToolRegistry',
     'register_tool_type',
     'get_tool_builder',
+    'CredentialError',
 ]

@@ -9,7 +9,7 @@ from datetime import datetime
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Credential, Account
 from src.db.service_name import ServiceName
-from src.routers.credentials.encryption import decrypt_api_key
+from src.routers.credentials.encryption import get_credential_value
 from pinecone import Pinecone
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -82,7 +82,7 @@ def get_pinecone_api_key(db, account_id: int) -> str:
         )
     
     try:
-        api_key = decrypt_api_key(credential.encrypted_api_key)
+        api_key = get_credential_value(credential, "api_key")
         return api_key
     except Exception as e:
         raise HTTPException(

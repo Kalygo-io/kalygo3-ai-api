@@ -1,8 +1,15 @@
-# Credentials Encryption Key Rotation
+# Credentials Management Scripts
 
-This document explains how to rotate the encryption key used for storing API keys.
+This document explains the scripts available for managing credentials encryption.
 
-## Current Limitation
+## Available Scripts
+
+1. **rotate_credentials_encryption_key.py** - Rotate encryption keys
+2. **migrate_credentials_to_flexible_format.py** - Migrate to new flexible JSON format
+
+---
+
+# Script 1: Encryption Key Rotation
 
 If you change `CREDENTIALS_ENCRYPTION_KEY` without proper rotation, all existing encrypted API keys will become unreadable. The system now supports key rotation to avoid this issue.
 
@@ -106,4 +113,110 @@ For production deployments (e.g., Google Cloud Run):
 - Check that you have write permissions
 - Verify environment variables are set correctly
 - Review the error output for specific issues
+
+---
+
+# Script 2: Migrate to Flexible Format
+
+The credentials table now supports flexible credential types (API keys, database connections, OAuth, etc.). This script migrates existing credentials from the legacy format to the new JSON format.
+
+## Background
+
+**Legacy format**: `encrypted_api_key` column stores encrypted string
+**New format**: `encrypted_data` column stores encrypted JSON: `{"api_key": "..."}`
+
+The new format supports any credential structure:
+- API keys: `{"api_key": "sk-..."}`
+- Database connections: `{"host": "...", "port": 5432, "username": "...", "password": "..."}`
+- OAuth: `{"client_id": "...", "client_secret": "...", "access_token": "..."}`
+
+## Prerequisites
+
+1. Run the Alembic migration first:
+   ```bash
+   alembic upgrade head
+   ```
+   This adds the `credential_type`, `encrypted_data`, and `metadata` columns.
+
+2. Ensure `CREDENTIALS_ENCRYPTION_KEY` is set.
+
+## Migration Steps
+
+### 1. Test the Migration (Dry Run)
+
+```bash
+python scripts/migrate_credentials_to_flexible_format.py --dry-run
+```
+
+This shows what would be migrated without making changes.
+
+### 2. Perform the Migration
+
+```bash
+python scripts/migrate_credentials_to_flexible_format.py
+```
+
+This will:
+- Read each credential's `encrypted_api_key`
+- Decrypt it
+- Re-encrypt as JSON `{"api_key": "..."}`
+- Store in `encrypted_data`
+- Set `credential_type` to "api_key"
+- Keep `encrypted_api_key` for backward compatibility
+
+### 3. Verify the Migration
+
+```bash
+python scripts/migrate_credentials_to_flexible_format.py --verify
+```
+
+This confirms all credentials can be decrypted correctly.
+
+### 4. Force Re-Migration (Optional)
+
+If you need to re-migrate credentials that already have `encrypted_data`:
+
+```bash
+python scripts/migrate_credentials_to_flexible_format.py --force
+```
+
+## Backward Compatibility
+
+The migration preserves backward compatibility:
+
+1. **Both columns populated**: After migration, both `encrypted_api_key` and `encrypted_data` contain valid data
+2. **Code uses fallback**: The `get_credential_value()` function tries `encrypted_data` first, falls back to `encrypted_api_key`
+3. **Legacy endpoints work**: Old API endpoints continue to function
+
+## Future: Removing Legacy Column
+
+After verifying all code uses the new format:
+
+1. Update all code to use `encrypted_data` exclusively
+2. Create a migration to drop `encrypted_api_key`:
+   ```python
+   def upgrade():
+       op.drop_column('credentials', 'encrypted_api_key')
+   ```
+3. Remove backward compatibility code from `encryption.py`
+
+## Troubleshooting
+
+### "No credentials found in database"
+
+The database is empty or the query failed. Check database connection.
+
+### "Already migrated" message
+
+Credentials already have `encrypted_data`. Use `--force` to re-migrate.
+
+### Verification shows mismatches
+
+The `encrypted_data` and `encrypted_api_key` contain different values. Re-run migration with `--force`.
+
+### Decryption errors
+
+- Check `CREDENTIALS_ENCRYPTION_KEY` is correct
+- If keys were rotated, ensure `CREDENTIALS_ENCRYPTION_KEY_OLD` is set
+- Run key rotation script first if needed
 
