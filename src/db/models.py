@@ -20,6 +20,7 @@ class Account(Base):
     credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
+    leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -273,3 +274,27 @@ class JsonSchema(Base):
     
     def __repr__(self):
         return f'<JsonSchema {self.schema_name} v{self.version}>'
+
+
+class Lead(Base):
+    """
+    Stores lead/inquiry information.
+    
+    Leads are potential customers or inquiries captured through
+    various channels (website forms, chat, etc.).
+    """
+    __tablename__ = 'leads'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True, index=True)
+    phone = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    account = relationship('Account', back_populates='leads')
+    
+    def __repr__(self):
+        return f'<Lead {self.id}: {self.name}>'
