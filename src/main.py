@@ -33,7 +33,7 @@ debugpy.listen(("0.0.0.0", 5678))
 
 # Enable redirect_slashes - we handle HTTPS redirects in CORS middleware
 app = FastAPI(
-    docs_url=None, 
+    docs_url="/api/docs", 
     redoc_url=None,
     redirect_slashes=True  # Enable redirects - CORS middleware fixes HTTP->HTTPS redirects
 )
