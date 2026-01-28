@@ -28,6 +28,7 @@ ALGORITHM = os.getenv("AUTH_ALGORITHM")
 class AccountCreateRequestBody(BaseModel):
     email: str
     password: str
+    newsletter_subscribed: bool = False
 
 class LoginRequestBody(BaseModel):
     email: str
@@ -99,7 +100,8 @@ async def create_account(db: db_dependency, create_account_request: AccountCreat
         create_account_model = Account(
             email=create_account_request.email,
             hashed_password=hashed_password,
-            stripe_customer_id=stripe_customer_id
+            stripe_customer_id=stripe_customer_id,
+            newsletter_subscribed=create_account_request.newsletter_subscribed
         )
         db.add(create_account_model)
         db.commit()
