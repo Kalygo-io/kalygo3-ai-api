@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from .database import Base
@@ -13,6 +13,7 @@ class Account(Base):
     hashed_password = Column(String)
     reset_token = Column(String)
     stripe_customer_id = Column(String, nullable=True)
+    newsletter_subscribed = Column(Boolean, default=False, nullable=False)
 
     logins = relationship('Logins', back_populates='account')
     chat_sessions = relationship('ChatSession', back_populates='account')
