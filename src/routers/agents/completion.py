@@ -324,7 +324,8 @@ async def generator(
                 "callbacks": callbacks,
                 "metadata": {
                     "user_email": user_email,
-                    "agent_id": agent_id
+                    "agent_id": agent_id,
+                    "session_id": session.id
                 },
                 "tags": [f"user:{user_email}", f"agent:{agent_id}"]
             })
