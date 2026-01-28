@@ -19,7 +19,8 @@ from .routers import (
   credentials,
   vectorStores,
   agents,
-  apiKeys
+  apiKeys,
+  accounts
 )
 
 from src.db.database import Base, engine
@@ -228,4 +229,10 @@ app.include_router(
     apiKeys.router,
     prefix="/api/api-keys",
     tags=['API Keys'],
+)
+
+app.include_router(
+    accounts.router,
+    prefix="/api/accounts",
+    tags=['Accounts'],
 )
