@@ -326,7 +326,7 @@ async def generator(
                 "metadata": {
                     "user_email": user_email,
                     "agent_id": agent_id,
-                    "session_id": session.id
+                    "session_id": str(session_uuid)  # Use UUID for LangSmith tracing
                 },
                 "tags": [f"user:{user_email}", f"agent:{agent_id}"]
             })
