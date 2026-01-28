@@ -249,7 +249,8 @@ async def generator(
                 account_id=account_id,
                 db=db,
                 auth_token=auth_token,
-                request=request
+                request=request,
+                chat_session_id=session_uuid  # Pass session UUID for tools that need it (e.g., dbTableWrite with injectChatSessionId)
             )
         except CredentialError as e:
             print(f"[AGENT COMPLETION] Tool configuration error: {e}")

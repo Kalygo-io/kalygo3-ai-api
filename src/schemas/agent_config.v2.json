@@ -280,6 +280,11 @@
           "type": "boolean",
           "default": false,
           "description": "If true, automatically inject the authenticated user's account_id into the record. Use this when the target table has an account_id column that should be set to the current user's account."
+        },
+        "injectChatSessionId": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, automatically inject the current chat session's UUID into the record. Use this when the target table has a chat_session_id column to track which conversation generated the record."
         }
       }
     }

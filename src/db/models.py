@@ -290,6 +290,7 @@ class Lead(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    chat_session_id = Column(UUID, nullable=True, index=True)  # UUID of the chat session where lead was captured
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True, index=True)
     phone = Column(String(50), nullable=True)

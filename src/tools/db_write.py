@@ -50,10 +50,12 @@ async def create_db_write_tool(
             - columns: List of columns that can be written (required for security)
             - requiredColumns: List of columns that must be provided
             - injectAccountId: If true, automatically inject the account_id column
+            - injectChatSessionId: If true, automatically inject the chat_session_id column
         account_id: Account ID for credential lookup and auto-injection
         db: Database session (for credential lookup)
         auth_token: Authentication token (unused)
-        **kwargs: Additional context (unused)
+        **kwargs: Additional context including:
+            - chat_session_id: UUID of the current chat session (for injectChatSessionId)
         
     Returns:
         StructuredTool for database inserts
@@ -71,7 +73,8 @@ async def create_db_write_tool(
             "description": "Create a new lead record with contact information",
             "columns": ["name", "email", "phone", "description"],
             "requiredColumns": ["name"],
-            "injectAccountId": true
+            "injectAccountId": true,
+            "injectChatSessionId": true
         }
     """
     credential_id = tool_config.get('credentialId')
@@ -81,6 +84,13 @@ async def create_db_write_tool(
     allowed_columns = tool_config.get('columns', [])
     required_columns = tool_config.get('requiredColumns', [])
     inject_account_id = tool_config.get('injectAccountId', False)
+    inject_chat_session_id = tool_config.get('injectChatSessionId', False)
+    
+    # Get chat_session_id from kwargs (passed by completion.py)
+    chat_session_id = kwargs.get('chat_session_id')
+    print(f"[DB WRITE TOOL] 🔍 kwargs received: {list(kwargs.keys())}")
+    print(f"[DB WRITE TOOL] 🔍 chat_session_id from kwargs: {chat_session_id}")
+    print(f"[DB WRITE TOOL] 🔍 injectChatSessionId config: {inject_chat_session_id}")
     
     # Validate required fields
     if not credential_id:
@@ -150,6 +160,7 @@ async def create_db_write_tool(
     print(f"[DB WRITE TOOL] Allowed columns: {allowed_columns}")
     print(f"[DB WRITE TOOL] Required columns: {required_columns}")
     print(f"[DB WRITE TOOL] Inject account_id: {inject_account_id}")
+    print(f"[DB WRITE TOOL] Inject chat_session_id: {inject_chat_session_id}")
     
     # Define the insert implementation that accepts **kwargs for flat schema
     async def insert_impl(**kwargs) -> DbWriteSuccess | DbWriteError:
@@ -178,6 +189,12 @@ async def create_db_write_tool(
             if inject_account_id:
                 filtered_data['account_id'] = account_id
                 print(f"[DB WRITE TOOL] 🔐 Auto-injected account_id: {account_id}")
+            
+            # Auto-inject chat_session_id if configured
+            # This links the record to the chat session where it was created
+            if inject_chat_session_id and chat_session_id:
+                filtered_data['chat_session_id'] = str(chat_session_id)
+                print(f"[DB WRITE TOOL] 🔐 Auto-injected chat_session_id: {chat_session_id}")
             
             if not filtered_data:
                 return {"error": "No valid columns provided. "

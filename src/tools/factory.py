@@ -125,6 +125,7 @@ async def create_tools_from_agent_config(
     tools = []
     
     print(f"[TOOL FACTORY] Creating tools from agent config v{version}")
+    print(f"[TOOL FACTORY] Received kwargs: {list(kwargs.keys())}")
     
     if version == 1:
         # v1: knowledgeBases format
