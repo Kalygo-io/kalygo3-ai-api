@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from src.deps import db_dependency, auth_dependency
-from src.db.models import Agent, Account, ChatAppSession, ChatAppMessage, Credential
+from src.db.models import Agent, Account, ChatSession, ChatMessage, Credential
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import get_credential_value
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
@@ -148,18 +148,18 @@ async def generator(
         # Get session and messages
         try:
             session_uuid = uuid.UUID(sessionId)
-            session = db.query(ChatAppSession).filter(
-                ChatAppSession.session_id == session_uuid,
-                ChatAppSession.account_id == account_id
+            session = db.query(ChatSession).filter(
+                ChatSession.session_id == session_uuid,
+                ChatSession.account_id == account_id
             ).first()
             
             # Auto-create session if it doesn't exist
             if not session:
                 print(f"[AGENT COMPLETION] Session {sessionId} not found, creating automatically...")
                 try:
-                    session = ChatAppSession(
+                    session = ChatSession(
                         session_id=session_uuid,
-                        chat_app_id=f"agent-{agent_id}",  # Associate with this agent
+                        agent_id=agent_id,  # Associate with this agent
                         account_id=account_id,
                         title=f"Chat with Agent {agent_id}"
                     )
@@ -179,9 +179,9 @@ async def generator(
                     }, separators=(',', ':'))
                     return
             
-            db_messages = db.query(ChatAppMessage).filter(
-                ChatAppMessage.chat_app_session_id == session.id
-            ).order_by(ChatAppMessage.created_at.asc()).all()
+            db_messages = db.query(ChatMessage).filter(
+                ChatMessage.chat_session_id == session.id
+            ).order_by(ChatMessage.created_at.asc()).all()
             
         except ValueError:
             yield json.dumps({
@@ -397,9 +397,9 @@ async def generator(
                                     print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                                     # Continue anyway - don't fail the request, but log the error
                                 
-                                ai_message = ChatAppMessage(
+                                ai_message = ChatMessage(
                                     message=message_obj,
-                                    chat_app_session_id=session.id
+                                    chat_session_id=session.id
                                 )
                                 db.add(ai_message)
                                 db.commit()
@@ -433,9 +433,9 @@ async def generator(
                                 print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                                 # Continue anyway - don't fail the request, but log the error
                             
-                            user_message = ChatAppMessage(
+                            user_message = ChatMessage(
                                 message=message_obj,
-                                chat_app_session_id=session.id
+                                chat_session_id=session.id
                             )
                             db.add(user_message)
                             db.commit()
@@ -584,9 +584,9 @@ async def generator(
                         print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                         # Continue anyway - don't fail the request, but log the error
                     
-                    user_message = ChatAppMessage(
+                    user_message = ChatMessage(
                         message=message_obj,
-                        chat_app_session_id=session.id
+                        chat_session_id=session.id
                     )
                     db.add(user_message)
                     db.commit()
@@ -661,9 +661,9 @@ async def generator(
                         print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
                         # Continue anyway - don't fail the request, but log the error
                     
-                    ai_message = ChatAppMessage(
+                    ai_message = ChatMessage(
                         message=message_obj,
-                        chat_app_session_id=session.id
+                        chat_session_id=session.id
                     )
                     db.add(ai_message)
                     db.commit()

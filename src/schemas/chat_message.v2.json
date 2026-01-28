@@ -317,7 +317,7 @@
         },
         "toolName": {
           "type": "string",
-          "description": "The specific tool instance name (e.g., 'query_chat_app_sessions')"
+          "description": "The specific tool instance name (e.g., 'query_chat_sessions')"
         },
         "input": {
           "type": "object",
@@ -508,7 +508,7 @@
       "toolCalls": [
         {
           "toolType": "dbTableRead",
-          "toolName": "query_chat_app_sessions",
+          "toolName": "query_chat_sessions",
           "input": {
             "filters": null,
             "limit": 10,
@@ -520,14 +520,14 @@
                 "data": {
                   "id": 1,
                   "session_id": "f7e18bb1-fb1b-4739-8022-f6a21b83de23",
-                  "chat_app_id": "ai_school",
+                  "agent_id": 1,
                   "account_id": 123,
                   "created_at": "2026-01-26T20:00:00Z",
                   "title": "AI School Chat"
                 }
               }
             ],
-            "table": "chat_app_sessions",
+            "table": "chat_sessions",
             "count": 1
           }
         }

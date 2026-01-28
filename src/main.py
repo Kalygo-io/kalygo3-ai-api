@@ -14,7 +14,7 @@ from .routers import (
   auth,
   logins,
   waitlist,
-  chatAppSessions,
+  chatSessions,
   payments,
   credentials,
   vectorStores,
@@ -195,9 +195,9 @@ app.include_router(
 # )
 
 app.include_router(
-    chatAppSessions.router,
-    prefix="/api/chat-app-sessions",
-    tags=['Chat App Sessions'],
+    chatSessions.router,
+    prefix="/api/chat-sessions",
+    tags=['Chat Sessions'],
 )
 
 app.include_router(
