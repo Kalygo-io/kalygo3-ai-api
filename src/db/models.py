@@ -15,7 +15,7 @@ class Account(Base):
     stripe_customer_id = Column(String, nullable=True)
 
     logins = relationship('Logins', back_populates='account')
-    chat_app_sessions = relationship('ChatAppSession', back_populates='account')
+    chat_sessions = relationship('ChatSession', back_populates='account')
     usage_credits = relationship('UsageCredits', back_populates='account')
     credentials = relationship('Credential', back_populates='account', cascade='all, delete-orphan')
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
@@ -45,32 +45,33 @@ class ChatHistory(Base):
     message = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
 
-class ChatAppSession(Base):
-    __tablename__ = 'chat_app_sessions'
+class ChatSession(Base):
+    __tablename__ = 'chat_sessions'
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(UUID, unique=True, index=True)
-    chat_app_id = Column(String, index=True)
-    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey('agents.id', ondelete='CASCADE'), nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     title = Column(String)
     
-    account = relationship('Account', back_populates='chat_app_sessions')
-    app_messages = relationship('ChatAppMessage', back_populates='session', cascade='all, delete-orphan')
+    account = relationship('Account', back_populates='chat_sessions')
+    agent = relationship('Agent', back_populates='chat_sessions')
+    messages = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
     
     def __repr__(self):
-        return f'<ChatAppSession {self.session_id}>'
+        return f'<ChatSession {self.session_id}>'
 
-class ChatAppMessage(Base):
-    __tablename__ = 'chat_app_messages'
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
     id = Column(Integer, primary_key=True, index=True)
-    chat_app_session_id = Column(Integer, ForeignKey('chat_app_sessions.id'), nullable=False, index=True)
+    chat_session_id = Column(Integer, ForeignKey('chat_sessions.id', ondelete='CASCADE'), nullable=False, index=True)
     message = Column(JSON)
     created_at = Column(DateTime(timezone=True), default=func.now())
     
-    session = relationship('ChatAppSession', back_populates='app_messages')
+    session = relationship('ChatSession', back_populates='messages')
     
     def __repr__(self):
-        return f'<ChatAppMessage {self.id}>'
+        return f'<ChatMessage {self.id}>'
 
 class UsageCredits(Base):
     __tablename__ = 'usage_credits'
@@ -236,6 +237,8 @@ class Agent(Base):
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
     config = Column(JSON, nullable=True)  # JSONB in PostgreSQL, JSON in SQLAlchemy
+    
+    chat_sessions = relationship('ChatSession', back_populates='agent', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Agent {self.id}: {self.name}>'

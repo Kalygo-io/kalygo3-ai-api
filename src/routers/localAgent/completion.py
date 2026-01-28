@@ -3,7 +3,7 @@ from typing import List
 import uuid
 from fastapi import APIRouter, HTTPException, Request, status
 
-from src.db.models import ChatAppMessage, ChatAppSession, Account
+from src.db.models import ChatMessage, ChatSession, Account
 from src.clients.stripe_client import get_payment_methods
 import stripe
 
@@ -229,9 +229,9 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
         session_uuid = uuid.UUID(sessionId)
         
         # Verify the session exists and belongs to the user
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_uuid,
-            ChatAppSession.account_id == jwt['id']
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
@@ -245,9 +245,9 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
             )
         
         # Get all messages for this session from chat_app_messages table
-        db_messages = db.query(ChatAppMessage).filter(
-            ChatAppMessage.chat_app_session_id == session.id
-        ).order_by(ChatAppMessage.created_at.asc()).all()
+        db_messages = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
+        ).order_by(ChatMessage.created_at.asc()).all()
         
         print(f"Found {len(db_messages)} existing messages for session {sessionId}")
         
@@ -404,12 +404,12 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
                 # that the model is asking for a tool to be invoked.
                 # So we only print non-empty content
                     try: # Store the AI's response into the session message history
-                        ai_message = ChatAppMessage(
+                        ai_message = ChatMessage(
                             message={
                                 "role": "ai",
                                 "content": content
                             },
-                            chat_app_session_id=session.id
+                            chat_session_id=session.id
                         )
                         db.add(ai_message)
                         db.commit()
@@ -431,12 +431,12 @@ async def generator(sessionId: str, prompt: str, db, jwt, request: Request = Non
             # (which happens when the agent makes multiple LLM calls for tool usage)
             if not user_message_stored:
                 try: # Store the latest prompt into the session message history
-                    user_message = ChatAppMessage(
+                    user_message = ChatMessage(
                         message={
                             "role": "human",
                             "content": prompt
                         },
-                        chat_app_session_id=session.id
+                        chat_session_id=session.id
                     )
                     db.add(user_message)
                     db.commit()

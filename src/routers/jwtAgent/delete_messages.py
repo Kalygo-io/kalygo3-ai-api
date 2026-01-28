@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, status
 import uuid
 
-from src.db.models import ChatAppMessage, ChatAppSession
+from src.db.models import ChatMessage, ChatSession
 from src.deps import db_dependency, jwt_dependency
 
 from slowapi import Limiter
@@ -33,9 +33,9 @@ async def delete_session_messages(
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         
         # Verify the session exists and belongs to the user
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_uuid,
-            ChatAppSession.account_id == account_id
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == account_id
         ).first()
         
         if not session:
@@ -50,8 +50,8 @@ async def delete_session_messages(
             )
         
         # Get all messages for this session
-        messages = db.query(ChatAppMessage).filter(
-            ChatAppMessage.chat_app_session_id == session.id
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
         ).all()
         
         print(f"Found {len(messages)} messages to delete for session {session_uuid}")

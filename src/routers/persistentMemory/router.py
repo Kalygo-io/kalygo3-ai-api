@@ -21,7 +21,7 @@ from langchain_core.tracers import LangChainTracer
 from langsmith import Client
 import psycopg
 from src.deps import jwt_dependency, db_dependency
-from src.db.models import ChatAppSession, ChatAppMessage
+from src.db.models import ChatSession, ChatMessage
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -53,9 +53,9 @@ async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
         session_uuid = uuid.UUID(chatSessionPrompt.sessionId)
         
         # Verify the session exists and belongs to the user
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_uuid,
-            ChatAppSession.account_id == jwt['id']
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
@@ -69,9 +69,9 @@ async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
             )
         
         # Get all messages for this session from chat_app_messages table
-        db_messages = db.query(ChatAppMessage).filter(
-            ChatAppMessage.chat_app_session_id == session.id
-        ).order_by(ChatAppMessage.created_at.asc()).all()
+        db_messages = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
+        ).order_by(ChatMessage.created_at.asc()).all()
         
         print(f"Found {len(db_messages)} existing messages for session {chatSessionPrompt.sessionId}")
         
@@ -116,12 +116,12 @@ async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
     async for evt in llm.astream_events(all_messages, version="v1", config={"callbacks": callbacks}, model=model):
         if evt["event"] == "on_chat_model_start":
             try: # Store the latest prompt into the session message history
-                user_message = ChatAppMessage(
+                user_message = ChatMessage(
                     message={
                         "role": "human",
                         "content": chatSessionPrompt.prompt
                     },
-                    chat_app_session_id=session.id
+                    chat_session_id=session.id
                 )
                 db.add(user_message)
                 db.commit()
@@ -147,12 +147,12 @@ async def generator(chatSessionPrompt: ChatSessionPrompt, db, jwt):
 
         elif evt["event"] == "on_chat_model_end":
             try: # Store the AI's response into the session message history
-                ai_message = ChatAppMessage(
+                ai_message = ChatMessage(
                     message={
                         "role": "ai",
                         "content": ai_response_content
                     },
-                    chat_app_session_id=session.id
+                    chat_session_id=session.id
                 )
                 db.add(ai_message)
                 db.commit()
@@ -194,9 +194,9 @@ async def prompt(chatSessionPrompt: ChatSessionPrompt, jwt: jwt_dependency, db: 
     session_uuid = uuid.UUID(chatSessionPrompt.sessionId)
     
     # Verify the session exists and belongs to the user
-    session = db.query(ChatAppSession).filter(
-        ChatAppSession.session_id == session_uuid,
-        ChatAppSession.account_id == jwt['id']
+    session = db.query(ChatSession).filter(
+        ChatSession.session_id == session_uuid,
+        ChatSession.account_id == jwt['id']
     ).first()
     
     if not session:

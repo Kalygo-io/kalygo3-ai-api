@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import ChatAppSession, ChatAppMessage, Account
+from src.db.models import ChatSession, ChatMessage, Account
 import uuid
 from datetime import datetime
 
@@ -15,49 +15,49 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 # Pydantic models for request/response
-class ChatAppSessionCreate(BaseModel):
-    chatAppId: str
+class ChatSessionCreate(BaseModel):
+    agentId: int
     title: Optional[str] = None
 
-class ChatAppSessionUpdate(BaseModel):
+class ChatSessionUpdate(BaseModel):
     title: Optional[str] = None
 
 def to_camel(s: str) -> str:
     parts = s.split('_')
     return parts[0] + ''.join(p.title() for p in parts[1:])
 
-class ChatAppMessageResponse(BaseModel):
+class ChatMessageResponse(BaseModel):
     id: int
     role: str
     content: str
     createdAt: datetime
     toolCalls: Optional[List[dict]] = None
 
-class ChatAppSessionResponse(BaseModel):
+class ChatSessionResponse(BaseModel):
     id: int
     sessionId: uuid.UUID
-    chatAppId: str
+    agentId: Optional[int] = None
     accountId: int
     createdAt: datetime
     title: Optional[str] = None
 
-class ChatAppSessionWithMessagesResponse(BaseModel):
+class ChatSessionWithMessagesResponse(BaseModel):
     id: int
     sessionId: uuid.UUID
-    chatAppId: str
+    agentId: Optional[int] = None
     accountId: int
     createdAt: datetime
     title: Optional[str] = None
-    messages: List[ChatAppMessageResponse] = []
+    messages: List[ChatMessageResponse] = []
 
     class Config:
         from_attributes = True
         alias_generator = to_camel
 
-class ChatMessageCreate(BaseModel):
+class ChatMessageCreateRequest(BaseModel):
     message: dict
 
-class ChatMessageResponse(BaseModel):
+class ChatMessageDetailResponse(BaseModel):
     id: int
     message: dict
     session_id: int
@@ -66,27 +66,27 @@ class ChatMessageResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# CRUD Operations for ChatAppSession
+# CRUD Operations for ChatSession
 
-@router.post("/sessions", response_model=ChatAppSessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def create_session(
-    sessionData: ChatAppSessionCreate, 
+    sessionData: ChatSessionCreate, 
     db: db_dependency, 
     jwt: jwt_dependency, 
     request: Request
 ):
-    """Create a new chat app session"""
+    """Create a new chat session"""
     try:
-        print('Create a new chat app session')
+        print('Create a new chat session')
 
         # Generate a new UUID for the session
         session_uuid = str(uuid.uuid4())
         
         # Create the session
-        new_session = ChatAppSession(
+        new_session = ChatSession(
             session_id=session_uuid,
-            chat_app_id=sessionData.chatAppId,
+            agent_id=sessionData.agentId,
             account_id=jwt['id'],
             title=sessionData.title
         )
@@ -98,7 +98,7 @@ async def create_session(
         return {
             "id": new_session.id,
             "sessionId": new_session.session_id,
-            "chatAppId": new_session.chat_app_id,
+            "agentId": new_session.agent_id,
             "accountId": new_session.account_id,
             "createdAt": new_session.created_at,
             "title": new_session.title
@@ -107,25 +107,30 @@ async def create_session(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@router.get("/sessions", response_model=List[ChatAppSessionResponse])
+@router.get("/sessions", response_model=List[ChatSessionResponse])
 @limiter.limit("30/minute")
 async def get_sessions(
     db: db_dependency,
     jwt: jwt_dependency,
     request: Request,
+    agent_id: Optional[int] = None,
     limit: int = 50,
     offset: int = 0
 ):
-    """Get all sessions for the authenticated user, optionally filtered by chat_app_id"""
+    """Get all sessions for the authenticated user, optionally filtered by agent_id"""
     try:
-        query = db.query(ChatAppSession).filter(ChatAppSession.account_id == jwt['id'])
+        query = db.query(ChatSession).filter(ChatSession.account_id == jwt['id'])
         
-        sessions = query.order_by(ChatAppSession.created_at.desc()).offset(offset).limit(limit).all()
+        # Optionally filter by agent_id
+        if agent_id is not None:
+            query = query.filter(ChatSession.agent_id == agent_id)
+        
+        sessions = query.order_by(ChatSession.created_at.desc()).offset(offset).limit(limit).all()
 
         sessions = [{
             "id": s.id,
             "sessionId": s.session_id,
-            "chatAppId": s.chat_app_id,
+            "agentId": s.agent_id,
             "accountId": s.account_id,
             "createdAt": s.created_at,
             "title": s.title
@@ -135,7 +140,7 @@ async def get_sessions(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@router.get("/sessions/{session_id}", response_model=ChatAppSessionWithMessagesResponse)
+@router.get("/sessions/{session_id}", response_model=ChatSessionWithMessagesResponse)
 @limiter.limit("30/minute")
 async def get_session(
     session_id: str,
@@ -151,18 +156,18 @@ async def get_session(
         # Convert string to UUID for database query
         session_uuid = uuid.UUID(session_id)
         
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_uuid,
-            ChatAppSession.account_id == jwt['id']
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
         
         # Get all messages for this session
-        messages = db.query(ChatAppMessage).filter(
-            ChatAppMessage.chat_app_session_id == session.id
-        ).order_by(ChatAppMessage.created_at.asc()).all()
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
+        ).order_by(ChatMessage.created_at.asc()).all()
 
         # Convert message fields to camelCase for each message
         def to_camel(s: str) -> str:
@@ -192,7 +197,7 @@ async def get_session(
         response_data = {
             "id": session.id,
             "sessionId": session.session_id,
-            "chatAppId": session.chat_app_id,
+            "agentId": session.agent_id,
             "accountId": session.account_id,
             "createdAt": session.created_at,
             "title": session.title,
@@ -249,9 +254,12 @@ async def delete_session(
 ):
     """Delete a session and all its messages"""
     try:
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_id,
-            ChatAppSession.account_id == jwt['id']
+        # Convert string to UUID for database query
+        session_uuid = uuid.UUID(session_id)
+        
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
@@ -261,6 +269,8 @@ async def delete_session(
         db.commit()
         
         return None
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid session ID format")
     except HTTPException:
         raise
     except Exception as e:
@@ -289,9 +299,9 @@ async def clear_session_messages(
             )
         
         # Verify the session exists and belongs to the user
-        session = db.query(ChatAppSession).filter(
-            ChatAppSession.session_id == session_uuid,
-            ChatAppSession.account_id == jwt['id']
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
@@ -304,8 +314,8 @@ async def clear_session_messages(
         print(f"[CLEAR MESSAGES] Found session with ID: {session.id}, deleting messages...")
         
         # Delete all messages for this session
-        deleted_count = db.query(ChatAppMessage).filter(
-            ChatAppMessage.chat_app_session_id == session.id
+        deleted_count = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
         ).delete()
         
         db.commit()

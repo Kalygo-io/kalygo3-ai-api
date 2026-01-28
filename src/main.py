@@ -14,7 +14,7 @@ from .routers import (
   auth,
   logins,
   waitlist,
-  chatAppSessions,
+  chatSessions,
   payments,
   credentials,
   vectorStores,
@@ -33,7 +33,7 @@ debugpy.listen(("0.0.0.0", 5678))
 
 # Enable redirect_slashes - we handle HTTPS redirects in CORS middleware
 app = FastAPI(
-    docs_url=None, 
+    docs_url="/api/docs", 
     redoc_url=None,
     redirect_slashes=True  # Enable redirects - CORS middleware fixes HTTP->HTTPS redirects
 )
@@ -195,9 +195,9 @@ app.include_router(
 # )
 
 app.include_router(
-    chatAppSessions.router,
-    prefix="/api/chat-app-sessions",
-    tags=['Chat App Sessions'],
+    chatSessions.router,
+    prefix="/api/chat-sessions",
+    tags=['Chat Sessions'],
 )
 
 app.include_router(
