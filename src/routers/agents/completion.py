@@ -340,6 +340,7 @@ async def generator(
         
         # Stream events - matching kalygoAgent structure exactly
         if agent_executor:
+            print("POSTGRES_URL", os.getenv("POSTGRES_URL"))
             print(f"[AGENT COMPLETION] Streaming events from agent executor")
             print(f"[AGENT COMPLETION] Agent executor type: {type(agent_executor)}")
             print(f"[AGENT COMPLETION] Prompt: {prompt}")
