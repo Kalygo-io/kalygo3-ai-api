@@ -1,19 +1,22 @@
 """
 Agent completion endpoint - dynamically configures agents based on agent config.
+
+Supports:
+- Streaming responses via Server-Sent Events (SSE)
+- Tool-using agents (RAG, database tools, etc.)
+- Simple chat agents (no tools)
+- PDF document attachments (vision or text extraction mode)
 """
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Optional
 import uuid
-import json
 import os
-from fastapi import APIRouter, HTTPException, status, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from src.deps import db_dependency, auth_dependency
-from src.db.models import Agent, Account, ChatSession, ChatMessage, Credential
+from src.db.models import Agent, ChatSession, ChatMessage, Credential
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import get_credential_value
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
-from src.schemas import validate_against_schema
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
@@ -21,16 +24,26 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_classic.memory import ConversationBufferMemory
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.tools import StructuredTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.tracers import LangChainTracer
 from langsmith import Client
-from pydantic import BaseModel, Field
 
 # Import tool factory
 from src.tools import create_tools_from_agent_config, CredentialError
+
+# Import PDF processing support
+from src.utils.pdf_to_images import build_pdf_message
+
+# Import helpers
+from src.routers.agents.helpers import (
+    build_message_history,
+    store_user_message,
+    store_ai_message,
+    extract_auth_token,
+    format_tool_call,
+    sse_event,
+    sse_error,
+)
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -41,6 +54,7 @@ load_dotenv()
 if not os.getenv("LANGCHAIN_API_KEY") and os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 
+# Initialize LangSmith callbacks if configured
 callbacks = [
     LangChainTracer(
         project_name="dynamic-agent",
@@ -54,89 +68,85 @@ callbacks = [
 
 async def generator(
     agent_id: int,
-    sessionId: str,
+    session_id: str,
     prompt: str,
     db,
     auth: dict,
-    request: Request = None
+    request: Request = None,
+    pdf_base64: Optional[str] = None,
+    pdf_filename: Optional[str] = None,
+    pdf_use_vision: bool = False
 ):
     """
     Generator function for streaming agent completion.
+    
     Dynamically configures agent based on agent config from database.
+    Supports optional PDF attachment (vision or text extraction mode).
+    
+    Args:
+        agent_id: The agent's database ID
+        session_id: The chat session UUID string
+        prompt: The user's prompt text
+        db: Database session
+        auth: Authentication info dict
+        request: FastAPI request object
+        pdf_base64: Optional base64-encoded PDF content
+        pdf_filename: Optional PDF filename
+        pdf_use_vision: If True, use vision mode; if False, use text extraction
     """
     try:
         account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
         
-        # Get agent and verify ownership
+        # ─────────────────────────────────────────────────────────────────────
+        # 1. Load and validate agent
+        # ─────────────────────────────────────────────────────────────────────
         agent = db.query(Agent).filter(
             Agent.id == agent_id,
             Agent.account_id == account_id
         ).first()
         
         if not agent:
-            
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Agent not found",
-                    "message": "The specified agent was not found or does not belong to you."
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Agent not found", "The specified agent was not found or does not belong to you.")
             return
         
-        # Extract config
         if not agent.config:
             print(f"[AGENT COMPLETION] Agent {agent_id} has no config")
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Invalid agent configuration",
-                    "message": "Agent configuration is missing."
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Invalid agent configuration", "Agent configuration is missing.")
             return
         
         config_data = agent.config.get('data', {})
         config_version = agent.config.get('version', 1)
-        system_prompt = config_data.get('systemPrompt', 'You are a helpful assistant.')
+        system_prompt_raw = config_data.get('systemPrompt', 'You are a helpful assistant.')
         
-        # Count tools/knowledge bases for logging
-        if config_version == 1:
-            tool_count = len(config_data.get('knowledgeBases', []))
-        else:
-            tool_count = len(config_data.get('tools', []))
+        # Escape curly braces in system prompt to prevent LangChain template interpretation
+        # This allows system prompts to contain JSON examples, code snippets, etc.
+        system_prompt = system_prompt_raw.replace("{", "{{").replace("}", "}}")
         
+        # Log config info
+        tool_count = len(config_data.get('knowledgeBases' if config_version == 1 else 'tools', []))
         print(f"[AGENT COMPLETION] Config v{config_version} - system_prompt length: {len(system_prompt)}, tools: {tool_count}")
         
-        # Get OpenAI API key
+        # ─────────────────────────────────────────────────────────────────────
+        # 2. Get OpenAI API key
+        # ─────────────────────────────────────────────────────────────────────
         credential = db.query(Credential).filter(
             Credential.account_id == account_id,
             Credential.service_name == ServiceName.OPENAI_API_KEY
         ).first()
         
         if not credential:
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "OpenAI API key required",
-                    "message": "Please add your OpenAI API key in your account settings."
-                }
-            }, separators=(',', ':'))
+            yield sse_error("OpenAI API key required", "Please add your OpenAI API key in your account settings.")
             return
         
         try:
             openai_api_key = get_credential_value(credential, "api_key")
         except Exception as e:
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Failed to retrieve API key",
-                    "message": str(e)
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Failed to retrieve API key", str(e))
             return
         
-        # Initialize LLM
+        # ─────────────────────────────────────────────────────────────────────
+        # 3. Initialize LLM
+        # ─────────────────────────────────────────────────────────────────────
         llm = ChatOpenAI(
             temperature=0,
             streaming=True,
@@ -145,104 +155,54 @@ async def generator(
             model="gpt-4o-mini",
         )
         
-        # Get session and messages
+        # ─────────────────────────────────────────────────────────────────────
+        # 4. Get or create chat session
+        # ─────────────────────────────────────────────────────────────────────
         try:
-            session_uuid = uuid.UUID(sessionId)
-            session = db.query(ChatSession).filter(
-                ChatSession.session_id == session_uuid,
-                ChatSession.account_id == account_id
-            ).first()
-            
-            # Auto-create session if it doesn't exist
-            if not session:
-                print(f"[AGENT COMPLETION] Session {sessionId} not found, creating automatically...")
-                try:
-                    session = ChatSession(
-                        session_id=session_uuid,
-                        agent_id=agent_id,  # Associate with this agent
-                        account_id=account_id,
-                        title=f"Chat with Agent {agent_id}"
-                    )
-                    db.add(session)
-                    db.commit()
-                    db.refresh(session)
-                    print(f"[AGENT COMPLETION] Created new session with ID: {session.id}")
-                except Exception as e:
-                    db.rollback()
-                    print(f"[AGENT COMPLETION] Failed to create session: {e}")
-                    yield json.dumps({
-                        "event": "error",
-                        "data": {
-                            "error": "Failed to create session",
-                            "message": f"Could not create chat session: {str(e)}"
-                        }
-                    }, separators=(',', ':'))
-                    return
-            
-            db_messages = db.query(ChatMessage).filter(
-                ChatMessage.chat_session_id == session.id
-            ).order_by(ChatMessage.created_at.asc()).all()
-            
+            session_uuid = uuid.UUID(session_id)
         except ValueError:
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Invalid sessionId format",
-                    "message": "The sessionId must be a valid UUID format."
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Invalid sessionId format", "The sessionId must be a valid UUID format.")
             return
         
-        # Build message history
-        message_history = ChatMessageHistory()
-        for msg in db_messages:
-            message_data = msg.message
-            if isinstance(message_data, dict) and 'role' in message_data and 'content' in message_data:
-                role = message_data['role']
-                content = message_data['content']
-                if role == 'human':
-                    message_history.add_user_message(content)
-                elif role == 'ai':
-                    message_history.add_ai_message(content)
+        session = db.query(ChatSession).filter(
+            ChatSession.session_id == session_uuid,
+            ChatSession.account_id == account_id
+        ).first()
         
-        # Create tools using the tool factory
-        # This supports both v1 (knowledgeBases) and v2 (tools) configs
-        tool_calls = []  # Will be populated when tools are executed during agent run
+        # Auto-create session if it doesn't exist
+        if not session:
+            print(f"[AGENT COMPLETION] Session {session_id} not found, creating automatically...")
+            try:
+                session = ChatSession(
+                    session_id=session_uuid,
+                    agent_id=agent_id,
+                    account_id=account_id,
+                    title=f"Chat with Agent {agent_id}"
+                )
+                db.add(session)
+                db.commit()
+                db.refresh(session)
+                print(f"[AGENT COMPLETION] Created new session with ID: {session.id}")
+            except Exception as e:
+                db.rollback()
+                print(f"[AGENT COMPLETION] Failed to create session: {e}")
+                yield sse_error("Failed to create session", f"Could not create chat session: {str(e)}")
+                return
         
-        # Extract authentication token for passing to embedding API
-        # This handles both JWT and API key authentication
-        auth_token = None
-        if request:
-            auth_type = auth.get('auth_type', 'jwt')
-            
-            if auth_type == 'jwt':
-                # JWT authentication - extract JWT token
-                jwt_token = request.cookies.get("jwt")
-                # If not in cookie, try Authorization header
-                if not jwt_token:
-                    auth_header = request.headers.get("Authorization", "")
-                    if auth_header.startswith("Bearer "):
-                        jwt_token = auth_header.replace("Bearer ", "").strip()
-                auth_token = jwt_token
-            
-            elif auth_type == 'api_key':
-                # API key authentication - extract the Kalygo API key
-                api_key = None
-                
-                # Check Authorization header: "Bearer kalygo_live_..."
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header.startswith("Bearer "):
-                    api_key = auth_header.replace("Bearer ", "").strip()
-                
-                # Also check X-API-Key header
-                if not api_key:
-                    api_key = request.headers.get("X-API-Key", "").strip()
-                
-                auth_token = api_key
-                print(f"[AGENT COMPLETION] Using API key authentication for embedding API")
+        # ─────────────────────────────────────────────────────────────────────
+        # 5. Build message history from database
+        # ─────────────────────────────────────────────────────────────────────
+        db_messages = db.query(ChatMessage).filter(
+            ChatMessage.chat_session_id == session.id
+        ).order_by(ChatMessage.created_at.asc()).all()
         
-        # Create tools from agent config using factory
-        # Automatically handles v1 (knowledgeBases) and v2 (tools) formats
+        message_history = build_message_history(db_messages)
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # 6. Create tools from agent config
+        # ─────────────────────────────────────────────────────────────────────
+        auth_token = extract_auth_token(request, auth)
+        
         try:
             tools = await create_tools_from_agent_config(
                 agent_config=agent.config,
@@ -250,43 +210,30 @@ async def generator(
                 db=db,
                 auth_token=auth_token,
                 request=request,
-                chat_session_id=session_uuid  # Pass session UUID for tools that need it (e.g., dbTableWrite with injectChatSessionId)
+                chat_session_id=session_uuid
             )
         except CredentialError as e:
             print(f"[AGENT COMPLETION] Tool configuration error: {e}")
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Tool configuration error",
-                    "message": str(e)
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Tool configuration error", str(e))
             return
         except ValueError as e:
             print(f"[AGENT COMPLETION] Tool configuration error: {e}")
-            yield json.dumps({
-                "event": "error",
-                "data": {
-                    "error": "Invalid tool configuration",
-                    "message": str(e)
-                }
-            }, separators=(',', ':'))
+            yield sse_error("Invalid tool configuration", str(e))
             return
         
         print(f"[AGENT COMPLETION] Created {len(tools)} tools, using {'agent executor' if tools else 'simple chat'} mode")
         
-        # Create agent with system prompt
+        # ─────────────────────────────────────────────────────────────────────
+        # 7. Create agent or prompt template
+        # ─────────────────────────────────────────────────────────────────────
         if tools:
             # Agent with tools (RAG agent)
-            # Use local prompt template instead of pulling from LangChain Hub
-            # This avoids dependency on external LangSmith API
             prompt_template = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("human", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad")
             ])
-            # Bind tools to LLM (required for tool calling)
             llm_with_tools = llm.bind_tools(tools)
             agent_langchain = create_openai_tools_agent(
                 llm_with_tools.with_config({"tags": ["agent_llm"]}),
@@ -295,23 +242,24 @@ async def generator(
             )
             print(f"[AGENT COMPLETION] Agent created with {len(tools)} tools bound to LLM")
         else:
-            # Simple chat agent without tools - we'll handle this in the streaming loop
+            # Simple chat agent without tools
             prompt_template = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("human", "{input}")
             ])
-            agent_langchain = None  # Will use prompt_template directly
+            agent_langchain = None
         
-        # Create memory
+        # ─────────────────────────────────────────────────────────────────────
+        # 8. Create memory and agent executor
+        # ─────────────────────────────────────────────────────────────────────
         memory = ConversationBufferMemory(
-            memory_key="chat_history",  # Always use "chat_history" as the memory key
+            memory_key="chat_history",
             chat_memory=message_history,
             return_messages=True,
             output_key="output" if tools else None
         )
         
-        # Create agent executor
         user_email = auth.get('email', 'unknown')
         
         if tools:
@@ -326,371 +274,220 @@ async def generator(
                 "metadata": {
                     "user_email": user_email,
                     "agent_id": agent_id,
-                    "session_id": str(session_uuid)  # Use UUID for LangSmith tracing
+                    "session_id": str(session_uuid)
                 },
                 "tags": [f"user:{user_email}", f"agent:{agent_id}"]
             })
-            print(f"[AGENT COMPLETION] Agent EXECUTOR created with {len(tools)} tools, callbacks: {len(callbacks) if callbacks else 0}")
+            print(f"[AGENT COMPLETION] Agent executor created with {len(tools)} tools")
         else:
-            # For simple chat without tools, we'll use the prompt template directly
             agent_executor = None
         
-        # Track if user message is stored
-        user_message_stored = False
-        
-        # Stream events - matching kalygoAgent structure exactly
-        if agent_executor:
-            print("POSTGRES_URL", os.getenv("POSTGRES_URL"))
-            print(f"[AGENT COMPLETION] Streaming events from agent executor")
-            print(f"[AGENT COMPLETION] Agent executor type: {type(agent_executor)}")
-            print(f"[AGENT COMPLETION] Prompt: {prompt}")
-            
-            # Direct async for loop - matching kalygoAgent exactly
-            async for event in agent_executor.astream_events(
-                {
-                    "input": prompt
-                },
-                version="v1",
-            ):
-                kind = event["event"]
-                print(f"[AGENT COMPLETION] Event: {kind}", flush=True)
-                if kind == "on_chain_start":
-                    if (
-                        event["name"] == "Agent"
-                    ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                        print(
-                            f"Starting agent: {event['name']} with input: {event['data'].get('input')}"
-                        )
-
-                        yield json.dumps({
-                            "event": "on_chain_start",
-                        }, separators=(',', ':'))
-                elif kind == "on_chain_end":
-                    if (
-                        event["name"] == "Agent"
-                    ):  # Was assigned when creating the agent with `.with_config({"run_name": "Agent"})`
-                        content = event['data'].get('output')['output']
-                        print()
-                        print("--")
-                        print(
-                            f"Done agent: {event['name']}"
-                        )
-                        print(f"[AGENT COMPLETION] Tool calls made: {len(tool_calls)}")
-                        
-                        if content:
-                        # Empty content in the context of OpenAI means
-                        # that the model is asking for a tool to be invoked.
-                        # So we only print non-empty content
-                            try: # Store the AI's response into the session message history
-                                # Build message object according to schema
-                                message_obj = {
-                                    "role": "ai",
-                                    "content": content
-                                }
-                                
-                                # Add toolCalls if any tools were executed
-                                if tool_calls:
-                                    message_obj["toolCalls"] = tool_calls
-                                
-                                # Validate message against schema v2
-                                try:
-                                    validate_against_schema(message_obj, "chat_message", 2)
-                                except Exception as validation_error:
-                                    print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
-                                    # Continue anyway - don't fail the request, but log the error
-                                
-                                ai_message = ChatMessage(
-                                    message=message_obj,
-                                    chat_session_id=session.id
-                                )
-                                db.add(ai_message)
-                                db.commit()
-                                db.refresh(ai_message)
-                                print(f"Stored AI response with ID: {ai_message.id}")
-                            except Exception as e:
-                                print(f"Failed to store AI response: {e}")
-                                db.rollback()
-
-                            # print(content, end="|")
-
-                            yield json.dumps({
-                                "event": "on_chain_end",
-                                "data": content,
-                                "toolCalls": tool_calls
-                            }, separators=(',', ':'))
-                if kind == "on_chat_model_start":
-                    # Only store the user message once, even if on_chat_model_start fires multiple times
-                    # (which happens when the agent makes multiple LLM calls for tool usage)
-                    if not user_message_stored:
-                        try: # Store the latest prompt into the session message history
-                            message_obj = {
-                                "role": "human",
-                                "content": prompt
-                            }
-                            
-                            # Validate message against schema
-                            try:
-                                validate_against_schema(message_obj, "message", 1)
-                            except Exception as validation_error:
-                                print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
-                                # Continue anyway - don't fail the request, but log the error
-                            
-                            user_message = ChatMessage(
-                                message=message_obj,
-                                chat_session_id=session.id
-                            )
-                            db.add(user_message)
-                            db.commit()
-                            db.refresh(user_message)
-                            user_message_id = user_message.id
-                            print(f"Stored user message with ID: {user_message_id}")
-                            user_message_stored = True
-                        except Exception as e:
-                            print(f"Failed to store user message: {e}")
-                            db.rollback()
-                    
-                    yield json.dumps({
-                        "event": "on_chat_model_start",
-                        "toolCalls": tool_calls
-                    }, separators=(',', ':'))
-                elif kind == "on_chat_model_stream":
-                    content = event["data"]["chunk"].content
-                    if content:
-                        # Empty content in the context of OpenAI means
-                        # that the model is asking for a tool to be invoked.
-                        # So we only print non-empty content
-                        print(content, end="|", flush=True)
-                        yield json.dumps({
-                            "event": "on_chat_model_stream",
-                            "data": content
-                        }, separators=(',', ':'))
-                elif kind == "on_chat_model_end":
-                    print("!!! on_chat_model_end !!!") # It seems that `on_chat_model_end` is not a relevant event for this `agent_executor` abstraction
-                elif kind == "on_tool_start":
-                    print("--")
-                    print(f"⚡⚡⚡ Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
-                    print("--")
-                    yield json.dumps({
-                        "event": "on_tool_start",
-                        "data": f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}"
-                    }, separators=(',', ':'))
-                elif kind == "on_tool_end":
-                    print("--")
-                    print(f"✅✅✅ Tool finished: {event['name']}")
-                    # print(f"Tool output was: {event['data'].get('output')}")
-                    print("--")
-                    
-                    # Track tool calls for all supported tool types
-                    tool_name = event['name']
-                    tool_input = event['data'].get('input', {})
-                    tool_output = event['data'].get('output', {})
-                    
-                    # Validate tool_output
-                    if not isinstance(tool_output, dict):
-                        print(f"[AGENT COMPLETION] Warning: tool_output is not a dict (type: {type(tool_output)}), skipping tool call tracking")
-                        continue
-                    
-                    # Handle vector search tools
-                    if tool_name.startswith("search_") or tool_name.startswith("search_rerank_"):
-                        # Determine tool type based on tool name
-                        if tool_name.startswith("search_rerank_"):
-                            tool_type = "vectorSearchWithReranking"
-                        else:
-                            tool_type = "vectorSearch"
-                        
-                        # Get results from tool output
-                        results = tool_output.get('results', [])
-                        
-                        # Format results according to v2 schema (keep metadata as-is)
-                        formatted_results = []
-                        for result in results:
-                            formatted_results.append({
-                                "id": result.get("id", ""),
-                                "score": result.get("score", 0.0),
-                                "metadata": result.get("metadata", {})
-                            })
-                        
-                        # Structure tool call according to chat_message.v2.json schema
-                        tool_calls.append({
-                            "toolType": tool_type,
-                            "toolName": tool_name,
-                            "input": {
-                                "query": tool_input.get('query', ''),
-                                "topK": tool_input.get('top_k', tool_input.get('topK'))
-                            },
-                            "output": {
-                                "results": formatted_results,
-                                "namespace": tool_output.get('namespace', ''),
-                                "index": tool_output.get('index', '')
-                            }
-                        })
-                    
-                    # Handle database read tools
-                    elif tool_name.startswith("query_"):
-                        tool_type = "dbTableRead"
-                        
-                        # Structure tool call according to chat_message.v2.json schema
-                        tool_calls.append({
-                            "toolType": tool_type,
-                            "toolName": tool_name,
-                            "input": {
-                                "filters": tool_input.get('filters'),
-                                "limit": tool_input.get('limit'),
-                                "offset": tool_input.get('offset')
-                            },
-                            "output": {
-                                "results": tool_output.get('results', []),
-                                "table": tool_output.get('table', ''),
-                                "count": tool_output.get('count', 0)
-                            }
-                        })
-                    
-                    # Handle database write tools
-                    elif tool_name.startswith("insert_") or tool_name.startswith("create_"):
-                        tool_type = "dbTableWrite"
-                        
-                        # Structure tool call according to chat_message.v2.json schema
-                        # Note: input is now flat (column fields directly) instead of nested under "data"
-                        tool_calls.append({
-                            "toolType": tool_type,
-                            "toolName": tool_name,
-                            "input": {
-                                "data": tool_input  # The flat input IS the data
-                            },
-                            "output": {
-                                "success": tool_output.get('success', False),
-                                "table": tool_output.get('table', ''),
-                                "inserted": tool_output.get('inserted', {}),
-                                "message": tool_output.get('message', ''),
-                                "error": tool_output.get('error')
-                            }
-                        })
-                    
-                    yield json.dumps({
-                        "event": "on_tool_end",
-                    }, separators=(',', ':'))
+        # ─────────────────────────────────────────────────────────────────────
+        # 9. Build input (with optional PDF)
+        # ─────────────────────────────────────────────────────────────────────
+        if pdf_base64:
+            agent_input = build_pdf_message(
+                prompt=prompt,
+                pdf_base64=pdf_base64,
+                pdf_filename=pdf_filename,
+                use_vision=pdf_use_vision,
+                max_pages=10 if pdf_use_vision else 50
+            )
+            mode = "vision" if pdf_use_vision else "text extraction"
+            print(f"[AGENT COMPLETION] Built PDF message using {mode} mode")
         else:
-            # Simple chat without tools - use prompt template with streaming
-            print(f"[AGENT COMPLETION] Using simple chat mode (no tools)")
-            if not user_message_stored:
-                try:
-                    message_obj = {
-                        "role": "human",
-                        "content": prompt
-                    }
-                    
-                    # Validate message against schema
-                    try:
-                        validate_against_schema(message_obj, "message", 1)
-                    except Exception as validation_error:
-                        print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
-                        # Continue anyway - don't fail the request, but log the error
-                    
-                    user_message = ChatMessage(
-                        message=message_obj,
-                        chat_session_id=session.id
-                    )
-                    db.add(user_message)
-                    db.commit()
-                    user_message_stored = True
-                    print(f"[AGENT COMPLETION] Stored user message")
-                except Exception as e:
-                    print(f"Failed to store user message: {e}")
-                    db.rollback()
-            
-            yield json.dumps({
-                "event": "on_chat_model_start",
-            }, separators=(',', ':'))
-            
-            # Use prompt template to format messages properly
-            print(f"[AGENT COMPLETION] Streaming with prompt template, history has {len(message_history.messages)} messages")
-            
-            # Stream response using the prompt template
-            full_response = ""
-            chunk_count = 0
-            try:
-                # Use astream_events for consistent event handling
-                # Pass callbacks as a config parameter
-                config = {"callbacks": callbacks} if callbacks else {}
-                async for event in llm.astream_events(
-                    prompt_template.format_messages(
-                        chat_history=message_history.messages,
-                        input=prompt
-                    ),
-                    version="v1",
-                    config=config  # Add callbacks here
-                ):
-                    kind = event["event"]
-                    
-                    if kind == "on_chat_model_stream":
-                        # print(f"[AGENT COMPLETION] on_chat_model_stream")
-                        content = event["data"]["chunk"].content
-                        if content:
-                            chunk_count += 1
-                            full_response += content
-                            # print(f"[AGENT COMPLETION] Chunk {chunk_count}: {content[:50]}...")
-                            yield json.dumps({
-                                "event": "on_chat_model_stream",
-                                "data": content
-                            }, separators=(',', ':'))
+            agent_input = prompt
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # 10. Stream completion
+        # ─────────────────────────────────────────────────────────────────────
+        user_message_stored = False
+        tool_calls = []
+        
+        if agent_executor:
+            # Stream with agent executor (has tools)
+            async for event_data in _stream_agent_executor(
+                agent_executor=agent_executor,
+                agent_input=agent_input,
+                prompt=prompt,
+                pdf_filename=pdf_filename,
+                db=db,
+                session=session,
+                tool_calls=tool_calls,
+                user_message_stored=user_message_stored
+            ):
+                yield event_data
+        else:
+            # Stream simple chat (no tools)
+            async for event_data in _stream_simple_chat(
+                llm=llm,
+                prompt_template=prompt_template,
+                message_history=message_history,
+                agent_input=agent_input,
+                prompt=prompt,
+                pdf_filename=pdf_filename,
+                db=db,
+                session=session,
+                callbacks=callbacks
+            ):
+                yield event_data
                 
-                print(f"[AGENT COMPLETION] Finished streaming - {chunk_count} chunks, total length: {len(full_response)}")
-            except Exception as e:
-                print(f"[AGENT COMPLETION] Error during streaming: {e}")
-                import traceback
-                traceback.print_exc()
-                yield json.dumps({
-                    "event": "error",
-                    "data": {
-                        "error": "Streaming error",
-                        "message": str(e)
-                    }
-                }, separators=(',', ':'))
-                return
-            
-            # Store AI response
-            if full_response:
-                try:
-                    message_obj = {
-                        "role": "ai",
-                        "content": full_response
-                    }
-                    
-                    # Validate message against schema v2
-                    try:
-                        validate_against_schema(message_obj, "chat_message", 2)
-                    except Exception as validation_error:
-                        print(f"[AGENT COMPLETION] Message validation error: {validation_error}")
-                        # Continue anyway - don't fail the request, but log the error
-                    
-                    ai_message = ChatMessage(
-                        message=message_obj,
-                        chat_session_id=session.id
-                    )
-                    db.add(ai_message)
-                    db.commit()
-                    print(f"[AGENT COMPLETION] Stored AI response")
-                except Exception as e:
-                    print(f"Failed to store AI response: {e}")
-                    db.rollback()
-            
-            yield json.dumps({
-                "event": "on_chain_end",
-                "data": full_response
-            }, separators=(',', ':'))
-            
     except Exception as e:
         print(f"[AGENT COMPLETION] Fatal error in generator: {e}")
         import traceback
         traceback.print_exc()
-        yield json.dumps({
-            "event": "error",
-            "data": {
-                "error": "Internal server error",
-                "message": str(e)
-            }
-        }, separators=(',', ':'))
+        yield sse_error("Internal server error", str(e))
 
+
+async def _stream_agent_executor(
+    agent_executor,
+    agent_input,
+    prompt: str,
+    pdf_filename: Optional[str],
+    db,
+    session,
+    tool_calls: list,
+    user_message_stored: bool
+):
+    """
+    Stream events from an agent executor with tools.
+    
+    This is an internal generator that handles the agent executor streaming loop.
+    """
+    print(f"[AGENT COMPLETION] Streaming events from agent executor")
+    print(f"[AGENT COMPLETION] Prompt: {prompt[:100]}...")
+    
+    async for event in agent_executor.astream_events(
+        {"input": agent_input},
+        version="v1",
+    ):
+        kind = event["event"]
+        
+        if kind == "on_chain_start":
+            if event["name"] == "Agent":
+                print(f"Starting agent: {event['name']}")
+                yield sse_event("on_chain_start")
+                
+        elif kind == "on_chain_end":
+            if event["name"] == "Agent":
+                content = event['data'].get('output', {}).get('output', '')
+                print(f"Done agent: {event['name']}, tool_calls: {len(tool_calls)}")
+                
+                if content:
+                    # Store AI response
+                    store_ai_message(db, session.id, content, tool_calls if tool_calls else None)
+                    yield sse_event("on_chain_end", data=content, tool_calls=tool_calls)
+                    
+        elif kind == "on_chat_model_start":
+            if not user_message_stored:
+                store_user_message(db, session.id, prompt, pdf_filename)
+                user_message_stored = True
+            yield sse_event("on_chat_model_start", tool_calls=tool_calls)
+            
+        elif kind == "on_chat_model_stream":
+            content = event["data"]["chunk"].content
+            if content:
+                print(content, end="|", flush=True)
+                yield sse_event("on_chat_model_stream", data=content)
+                
+        elif kind == "on_tool_start":
+            print(f"⚡ Starting tool: {event['name']}")
+            yield sse_event("on_tool_start", data=f"Starting tool: {event['name']} with inputs: {event['data'].get('input')}")
+            
+        elif kind == "on_tool_end":
+            print(f"✅ Tool finished: {event['name']}")
+            
+            # Format and track tool call
+            formatted = format_tool_call(
+                tool_name=event['name'],
+                tool_input=event['data'].get('input', {}),
+                tool_output=event['data'].get('output', {})
+            )
+            if formatted:
+                tool_calls.append(formatted)
+            
+            yield sse_event("on_tool_end")
+
+
+async def _stream_simple_chat(
+    llm,
+    prompt_template,
+    message_history,
+    agent_input,
+    prompt: str,
+    pdf_filename: Optional[str],
+    db,
+    session,
+    callbacks: list
+):
+    """
+    Stream a simple chat completion without tools.
+    
+    This is an internal generator that handles simple LLM streaming.
+    """
+    print(f"[AGENT COMPLETION] Using simple chat mode (no tools)")
+    
+    # Store user message
+    store_user_message(db, session.id, prompt, pdf_filename)
+    
+    yield sse_event("on_chat_model_start")
+    
+    print(f"[AGENT COMPLETION] Streaming with history of {len(message_history.messages)} messages")
+    
+    full_response = ""
+    chunk_count = 0
+    
+    try:
+        # Prepare input - handle both string and HumanMessage
+        if isinstance(agent_input, str):
+            formatted_input = prompt_template.format_messages(
+                chat_history=message_history.messages,
+                input=agent_input
+            )
+        else:
+            # For multimodal messages (PDF), we need to handle differently
+            # Replace the human message placeholder with our multimodal message
+            messages = [
+                ("system", prompt_template.messages[0].prompt.template),
+            ]
+            for msg in message_history.messages:
+                messages.append(msg)
+            messages.append(agent_input)  # Our HumanMessage with PDF content
+            formatted_input = messages
+        
+        config = {"callbacks": callbacks} if callbacks else {}
+        
+        async for event in llm.astream_events(
+            formatted_input,
+            version="v1",
+            config=config
+        ):
+            if event["event"] == "on_chat_model_stream":
+                content = event["data"]["chunk"].content
+                if content:
+                    chunk_count += 1
+                    full_response += content
+                    yield sse_event("on_chat_model_stream", data=content)
+        
+        print(f"[AGENT COMPLETION] Finished - {chunk_count} chunks, {len(full_response)} chars")
+        
+    except Exception as e:
+        print(f"[AGENT COMPLETION] Error during streaming: {e}")
+        import traceback
+        traceback.print_exc()
+        yield sse_error("Streaming error", str(e))
+        return
+    
+    # Store AI response
+    if full_response:
+        store_ai_message(db, session.id, full_response)
+    
+    yield sse_event("on_chain_end", data=full_response)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/{agent_id}/completion")
 @limiter.limit("10/minute")
@@ -703,21 +500,40 @@ async def agent_completion(
 ):
     """
     Stream completion from a dynamically configured agent.
+    
     The agent is configured based on its config stored in the database.
+    Supports optional PDF attachments for document-based queries.
+    
+    Args:
+        agent_id: The agent's database ID
+        request_body: The request containing prompt, sessionId, and optional PDF
+        
+    Request Body:
+        - prompt: The user's message/question
+        - sessionId: UUID of the chat session
+        - pdf: Optional base64-encoded PDF content
+        - pdfFilename: Optional filename for the PDF
+        - pdfUseVision: If true, use vision mode (images); if false, use text extraction
+        
+    Returns:
+        StreamingResponse with Server-Sent Events
     """
-    # Debug logging
     print(f"[AGENT COMPLETION] Received request for agent_id: {agent_id}")
-    print(f"[AGENT COMPLETION] Request body: sessionId={request_body.sessionId}, prompt={request_body.prompt[:50]}...")
-    print(f"[AGENT COMPLETION] Auth: {auth}")
+    print(f"[AGENT COMPLETION] sessionId={request_body.sessionId}, prompt={request_body.prompt[:50]}...")
+    if request_body.pdf:
+        print(f"[AGENT COMPLETION] PDF attached: {request_body.pdfFilename}, vision={request_body.pdfUseVision}")
     
     return StreamingResponse(
         generator(
             agent_id=agent_id,
-            sessionId=request_body.sessionId,
+            session_id=request_body.sessionId,
             prompt=request_body.prompt,
             db=db,
             auth=auth,
-            request=request
+            request=request,
+            pdf_base64=request_body.pdf,
+            pdf_filename=request_body.pdfFilename,
+            pdf_use_vision=request_body.pdfUseVision or False
         ),
         media_type='text/event-stream'
     )
