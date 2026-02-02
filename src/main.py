@@ -20,7 +20,8 @@ from .routers import (
   vectorStores,
   agents,
   apiKeys,
-  accounts
+  accounts,
+  prompts
 )
 
 from src.db.database import Base, engine
@@ -235,4 +236,10 @@ app.include_router(
     accounts.router,
     prefix="/api/accounts",
     tags=['Accounts'],
+)
+
+app.include_router(
+    prompts.router,
+    prefix="/api/prompts",
+    tags=['Prompts'],
 )

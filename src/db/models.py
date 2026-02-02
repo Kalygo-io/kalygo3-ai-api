@@ -22,6 +22,7 @@ class Account(Base):
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
+    prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -303,3 +304,26 @@ class Lead(Base):
     
     def __repr__(self):
         return f'<Lead {self.id}: {self.name}>'
+
+
+class Prompt(Base):
+    """
+    Stores reusable prompt templates.
+    
+    Prompts are text templates that can be saved and reused
+    across different agents or contexts.
+    """
+    __tablename__ = 'prompts'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    account = relationship('Account', back_populates='prompts')
+    
+    def __repr__(self):
+        return f'<Prompt {self.id}: {self.name}>'
