@@ -51,7 +51,7 @@ async def create_agent(
       }
     }
     
-    Version 2 (Tool-centric, recommended):
+    Version 2 (Tool-centric):
     {
       "schema": "agent_config",
       "version": 2,
@@ -70,8 +70,24 @@ async def create_agent(
       }
     }
     
+    Version 3 (Model configuration, recommended):
+    {
+      "schema": "agent_config",
+      "version": 3,
+      "data": {
+        "systemPrompt": "The system prompt for the agent",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-4o-mini"
+        },
+        "tools": []
+      }
+    }
+    
+    Supported model providers: openai, anthropic, ollama
+    
     The request body is validated against the agent JSON schema matching the version
-    specified in the config (v1 or v2).
+    specified in the config (v1, v2, or v3).
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
@@ -95,10 +111,10 @@ async def create_agent(
         config_version = request_body.config.get("version", 1)
         
         # Validate version is supported
-        if config_version not in [1, 2]:
+        if config_version not in [1, 2, 3]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2"
+                detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3"
             )
         
         print(f"[CREATE AGENT] Validating against agent_config v{config_version}")

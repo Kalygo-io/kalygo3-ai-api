@@ -11,6 +11,12 @@ from .message_history import (
 from .auth import extract_auth_token
 from .tool_calls import format_tool_call
 from .sse_events import sse_event, sse_error
+from .llm_factory import (
+    get_model_config,
+    create_llm,
+    get_required_credential_type,
+    DEFAULT_MODEL_CONFIG,
+)
 
 __all__ = [
     # Message history
@@ -24,4 +30,9 @@ __all__ = [
     # SSE events
     "sse_event",
     "sse_error",
+    # LLM factory
+    "get_model_config",
+    "create_llm",
+    "get_required_credential_type",
+    "DEFAULT_MODEL_CONFIG",
 ]

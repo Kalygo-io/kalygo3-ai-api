@@ -155,8 +155,8 @@ async def create_tools_from_agent_config(
             if tool:
                 tools.append(tool)
     
-    elif version == 2:
-        # v2: tools format
+    elif version in [2, 3]:
+        # v2/v3: tools format (v3 adds model config but uses same tools structure)
         tool_configs = config_data.get('tools', [])
         print(f"[TOOL FACTORY] Found {len(tool_configs)} tools (v2 format)")
         

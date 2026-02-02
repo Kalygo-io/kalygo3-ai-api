@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/agent-v3.schema.json",
+  "title": "Agent v3",
+  "description": "Agent schema v3 - adds model configuration for selecting LLM provider and model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "config"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable agent name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of what the agent does."
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "data"
+      ],
+      "properties": {
+        "schema": {
+          "type": "string",
+          "const": "agent_config"
+        },
+        "version": {
+          "type": "integer",
+          "const": 3
+        },
+        "data": {
+          "type": "object",
+          "required": [
+            "systemPrompt"
+          ],
+          "properties": {
+            "systemPrompt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": "object",
+              "required": ["provider", "model"],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": ["openai", "anthropic", "ollama"]
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Agent configuration v3 containing schema, version, and data (systemPrompt, model, tools, etc.)."
+    }
+  },
+  "examples": [
+    {
+      "name": "GPT-4o Assistant",
+      "description": "A powerful assistant using GPT-4o",
+      "config": {
+        "schema": "agent_config",
+        "version": 3,
+        "data": {
+          "systemPrompt": "You are a helpful AI assistant powered by GPT-4o.",
+          "model": {
+            "provider": "openai",
+            "model": "gpt-4o"
+          },
+          "tools": []
+        }
+      }
+    },
+    {
+      "name": "Claude Assistant",
+      "description": "An assistant using Anthropic's Claude",
+      "config": {
+        "schema": "agent_config",
+        "version": 3,
+        "data": {
+          "systemPrompt": "You are Claude, a helpful AI assistant created by Anthropic.",
+          "model": {
+            "provider": "anthropic",
+            "model": "claude-3-5-sonnet-20241022"
+          }
+        }
+      }
+    },
+    {
+      "name": "Local Llama Agent",
+      "description": "An agent using locally-hosted Llama via Ollama",
+      "config": {
+        "schema": "agent_config",
+        "version": 3,
+        "data": {
+          "systemPrompt": "You are a helpful local AI assistant.",
+          "model": {
+            "provider": "ollama",
+            "model": "llama3.2"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -21,7 +21,6 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -43,6 +42,9 @@ from src.routers.agents.helpers import (
     format_tool_call,
     sse_event,
     sse_error,
+    get_model_config,
+    create_llm,
+    get_required_credential_type,
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -127,33 +129,51 @@ async def generator(
         print(f"[AGENT COMPLETION] Config v{config_version} - system_prompt length: {len(system_prompt)}, tools: {tool_count}")
         
         # ─────────────────────────────────────────────────────────────────────
-        # 2. Get OpenAI API key
+        # 2. Get model configuration and credentials
         # ─────────────────────────────────────────────────────────────────────
-        credential = db.query(Credential).filter(
-            Credential.account_id == account_id,
-            Credential.service_name == ServiceName.OPENAI_API_KEY
-        ).first()
+        model_config = get_model_config(agent.config)
+        provider = model_config['provider']
+        model_name = model_config['model']
+        print(f"[AGENT COMPLETION] Using model: {provider}/{model_name}")
         
-        if not credential:
-            yield sse_error("OpenAI API key required", "Please add your OpenAI API key in your account settings.")
-            return
+        # Get the required credential for this provider
+        required_credential_type = get_required_credential_type(provider)
+        credentials = {}
         
-        try:
-            openai_api_key = get_credential_value(credential, "api_key")
-        except Exception as e:
-            yield sse_error("Failed to retrieve API key", str(e))
-            return
+        if required_credential_type:
+            credential = db.query(Credential).filter(
+                Credential.account_id == account_id,
+                Credential.service_name == required_credential_type
+            ).first()
+            
+            if not credential:
+                yield sse_error(
+                    f"{provider.title()} API key required", 
+                    f"Please add your {provider.title()} API key in account settings to use {model_name}."
+                )
+                return
+            
+            try:
+                api_key = get_credential_value(credential, "api_key")
+                credentials[provider] = api_key
+            except Exception as e:
+                yield sse_error("Failed to retrieve API key", str(e))
+                return
         
         # ─────────────────────────────────────────────────────────────────────
         # 3. Initialize LLM
         # ─────────────────────────────────────────────────────────────────────
-        llm = ChatOpenAI(
-            temperature=0,
-            streaming=True,
-            api_key=openai_api_key,
-            stream_usage=True,
-            model="gpt-4o-mini",
-        )
+        try:
+            llm, llm_provider = create_llm(
+                model_config=model_config,
+                credentials=credentials,
+                streaming=True,
+                temperature=0,
+            )
+            print(f"[AGENT COMPLETION] Initialized {llm_provider} LLM: {model_name}")
+        except ValueError as e:
+            yield sse_error("LLM initialization failed", str(e))
+            return
         
         # ─────────────────────────────────────────────────────────────────────
         # 4. Get or create chat session

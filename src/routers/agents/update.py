@@ -45,7 +45,7 @@ async def update_agent(
       }
     }
     
-    Version 2 (Tool-centric, recommended):
+    Version 2 (Tool-centric):
     {
       "schema": "agent_config",
       "version": 2,
@@ -62,6 +62,22 @@ async def update_agent(
         ]
       }
     }
+    
+    Version 3 (Model configuration, recommended):
+    {
+      "schema": "agent_config",
+      "version": 3,
+      "data": {
+        "systemPrompt": "The system prompt for the agent",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-4o-mini"
+        },
+        "tools": []
+      }
+    }
+    
+    Supported model providers: openai, anthropic, ollama
     
     Only allows updating agents belonging to the authenticated user.
     The account_id (owner) cannot be changed.
@@ -111,10 +127,10 @@ async def update_agent(
             config_version = request_body.config.get("version", 1)
             
             # Validate version is supported
-            if config_version not in [1, 2]:
+            if config_version not in [1, 2, 3]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2"
+                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3"
                 )
             
             print(f"[UPDATE AGENT] Validating against agent_config v{config_version}")
