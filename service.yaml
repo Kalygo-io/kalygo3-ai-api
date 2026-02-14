@@ -4,33 +4,20 @@ metadata:
   name: kalygo-fastapi-service
 spec:
   template:
-    metadata:
-      annotations:
-        # Autoscaling configuration for thousands of concurrent users
-        # Concurrency: Max requests per instance (100-1000, default 80)
-        # Lower = more instances, fewer DB connections per instance
-        # Higher = fewer instances, more DB connections per instance
-        # 100 is a good balance for FastAPI with database operations
-        autoscaling.knative.dev/maxScale: "100"  # Max 100 instances (optimized for Pro tier with 200 DB connections)
-        autoscaling.knative.dev/minScale: "2"    # Keep 2 instances warm to avoid cold starts
-        run.googleapis.com/cpu-throttling: "false"  # Don't throttle CPU
-        run.googleapis.com/execution-environment: gen2  # Use 2nd gen execution environment
     spec:
-      containerConcurrency: 100  # Max concurrent requests per instance (100-1000)
-      timeoutSeconds: 300  # 5 minutes timeout for long-running LLM requests
       containers:
         - image: us-central1-docker.pkg.dev/kalygo-436411/kalygo-fastapi/kalygo-fastapi
           resources:
             limits:
-              memory: "4Gi"  # Sufficient for 100 concurrent requests with LLM operations
-              cpu: "4"       # 4 vCPU for handling concurrent requests efficiently
+              memory: "4Gi" # Sufficient for 100 concurrent requests with LLM operations
+              cpu: "4" # 4 vCPU for handling concurrent requests efficiently
             requests:
-              memory: "2Gi"  # Minimum memory request
-              cpu: "2"       # Minimum CPU request
+              memory: "2Gi" # Minimum memory request
+              cpu: "2" # Minimum CPU request
           # Health check configuration
           startupProbe:
             httpGet:
-              path: /  # Health check endpoint (returns {"status": "OK!"})
+              path: / # Health check endpoint (returns {"status": "OK!"})
               port: 8080
             initialDelaySeconds: 0
             timeoutSeconds: 1
@@ -38,7 +25,7 @@ spec:
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /  # Health check endpoint
+              path: / # Health check endpoint
               port: 8080
             initialDelaySeconds: 0
             timeoutSeconds: 1
@@ -55,13 +42,13 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: COHERE_API_KEY
-                  key: latest      
+                  key: latest
 
             - name: REPLICATE_API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: REPLICATE_API_TOKEN
-                  key: latest      
+                  key: latest
 
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -74,7 +61,7 @@ spec:
                 secretKeyRef:
                   name: OPENAI_API_KEY
                   key: latest
-            
+
             - name: AUTH_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -85,7 +72,7 @@ spec:
                 secretKeyRef:
                   name: AUTH_ALGORITHM
                   key: latest
-            
+
             # Langchain/Langsmith
 
             - name: LANGSMITH_ENDPOINT
@@ -114,7 +101,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: AWS_REGION
-                  key: latest      
+                  key: latest
 
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
@@ -151,13 +138,13 @@ spec:
             #     secretKeyRef:
             #       name: SERPER_API_KEY
             #       key: latest
-            
+
             - name: EMBEDDINGS_API_URL
               valueFrom:
                 secretKeyRef:
                   name: EMBEDDINGS_API_URL
                   key: latest
-            
+
             # Pinecone
 
             - name: PINECONE_API_KEY
@@ -177,11 +164,11 @@ spec:
                 secretKeyRef:
                   name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
                   key: latest
-            
+
             # Google Cloud Storage and PubSub
             - name: GCS_BUCKET_NAME
               value: "kalygo-kb-ingest-storage"
-            
+
             - name: GOOGLE_CLOUD_PROJECT
               value: "kalygo-436411"
 
@@ -214,13 +201,13 @@ spec:
             # - PgBouncer pools these efficiently: ~2-3 actual DB connections per instance at peak
             # - 100 instances × 2 DB connections = ~200 DB connections (matches Pro tier limit)
             - name: DB_POOL_SIZE
-              value: "20"  # Base pool size per instance (conservative for multi-instance scaling)
+              value: "20" # Base pool size per instance (conservative for multi-instance scaling)
             - name: DB_MAX_OVERFLOW
-              value: "10"  # Additional connections when pool is exhausted
+              value: "10" # Additional connections when pool is exhausted
             - name: DB_POOL_TIMEOUT
-              value: "30"  # Seconds to wait for connection
+              value: "30" # Seconds to wait for connection
             - name: DB_POOL_RECYCLE
-              value: "300"  # Recycle connections every 5 minutes
+              value: "300" # Recycle connections every 5 minutes
 
           ports:
             - containerPort: 8080
