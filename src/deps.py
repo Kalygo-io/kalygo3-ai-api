@@ -16,6 +16,13 @@ SECRET_KEY = os.getenv('AUTH_SECRET_KEY')
 ALGORITHM = os.getenv('AUTH_ALGORITHM')
 
 def get_db():
+    """
+    Database session dependency.
+    
+    The engine is configured with pool_pre_ping=True and a checkout
+    event listener that validates SSL connections, so stale connections
+    are automatically replaced before being handed out.
+    """
     db = SessionLocal()
     try:
         yield db
