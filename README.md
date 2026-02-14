@@ -85,4 +85,4 @@ gcloud secrets add-iam-policy-binding <ENV_VAR_NAME_HERE> \
 
 ## For triggering CICD
 
-8
+9
