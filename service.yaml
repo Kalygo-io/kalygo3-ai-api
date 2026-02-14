@@ -15,22 +15,24 @@ spec:
               memory: "2Gi" # Minimum memory request
               cpu: "2" # Minimum CPU request
           # Health check configuration
+          # Startup probe: More lenient to allow app to fully start (FastAPI + DB connections)
           startupProbe:
             httpGet:
               path: / # Health check endpoint (returns {"status": "OK!"})
               port: 8080
-            initialDelaySeconds: 0
-            timeoutSeconds: 1
-            periodSeconds: 3
-            failureThreshold: 3
+            initialDelaySeconds: 10  # Wait 10s before first check (allows app to start)
+            timeoutSeconds: 5  # 5s timeout per check
+            periodSeconds: 5  # Check every 5s
+            failureThreshold: 12  # Allow up to 60s total startup time (12 × 5s)
+          # Liveness probe: Check periodically after startup
           livenessProbe:
             httpGet:
               path: / # Health check endpoint
               port: 8080
             initialDelaySeconds: 0
-            timeoutSeconds: 1
-            periodSeconds: 10
-            failureThreshold: 3
+            timeoutSeconds: 3  # 3s timeout per check
+            periodSeconds: 30  # Check every 30s (less frequent)
+            failureThreshold: 3  # Restart after 3 failures
           env:
             - name: POSTGRES_URL
               valueFrom:
