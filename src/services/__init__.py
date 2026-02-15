@@ -1,1 +1,1 @@
-from .fetch_embedding import * 
+# Services module

@@ -21,7 +21,8 @@ from .routers import (
   agents,
   apiKeys,
   accounts,
-  prompts
+  prompts,
+  accessGroups,
 )
 
 from src.db.database import Base, engine
@@ -242,4 +243,10 @@ app.include_router(
     prompts.router,
     prefix="/api/prompts",
     tags=['Prompts'],
+)
+
+app.include_router(
+    accessGroups.router,
+    prefix="/api/access-groups",
+    tags=['Access Groups'],
 )

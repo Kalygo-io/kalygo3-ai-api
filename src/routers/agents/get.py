@@ -1,9 +1,14 @@
 """
 Get agent details endpoint.
+
+Uses ``can_access_agent`` so that both owners and group members can
+retrieve agent details.  Returns 404 when access is denied to avoid
+leaking existence.
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Agent, Account
+from src.services.agent_access import can_access_agent
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AgentResponse
@@ -23,7 +28,10 @@ async def get_agent(
 ):
     """
     Get a specific agent by ID.
-    Only returns agents belonging to the authenticated user.
+
+    Returns agents the authenticated user owns **or** has access to via
+    an access group.  Returns 404 when the agent does not exist or the
+    user has no access (to avoid leaking existence).
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
@@ -35,13 +43,10 @@ async def get_agent(
                 detail="Account not found"
             )
         
-        # Query agent by ID and account_id to ensure it belongs to the user
-        agent = db.query(Agent).filter(
-            Agent.id == agent_id,
-            Agent.account_id == account_id
-        ).first()
+        # Load agent by ID (no ownership filter – access check follows)
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
         
-        if not agent:
+        if not agent or not can_access_agent(db, account_id, agent_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found"
@@ -50,7 +55,8 @@ async def get_agent(
         return AgentResponse(
             id=agent.id,
             name=agent.name,
-            config=agent.config
+            config=agent.config,
+            is_owner=(agent.account_id == account_id),
         )
         
     except HTTPException:
