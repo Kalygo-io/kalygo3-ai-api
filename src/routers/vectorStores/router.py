@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import Credential, Account
+from src.db.models import Credential, Account, VectorDbIngestionLog
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import get_credential_value
 from pinecone import Pinecone
@@ -478,3 +478,146 @@ async def create_index(
         )
 
 
+class DeleteVectorsRequest(BaseModel):
+    namespace: str
+
+
+class DeleteVectorsResponse(BaseModel):
+    success: bool
+    index_name: str
+    namespace: str
+    vectors_deleted: Optional[int] = None
+    log_id: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.delete("/indexes/{index_name}/namespaces/{namespace}/vectors", response_model=DeleteVectorsResponse)
+@limiter.limit("10/minute")
+async def delete_vectors_in_namespace(
+    index_name: str,
+    namespace: str,
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+):
+    """
+    Delete **all** vectors in a specific namespace of a Pinecone index.
+
+    Uses the caller's stored Pinecone API key and logs the operation to the
+    vector DB ingestion log with ``operation_type='DELETE'``.
+    """
+    try:
+        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account = db.query(Account).filter(Account.id == account_id).first()
+
+        if not account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Account not found",
+            )
+
+        # Get Pinecone API key for this account
+        api_key = get_pinecone_api_key(db, account_id)
+
+        # Initialise Pinecone client and connect to the index
+        pc = Pinecone(api_key=api_key)
+
+        try:
+            index = pc.Index(index_name)
+            # Quick sanity check that the index is reachable
+            stats_before = index.describe_index_stats()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index '{index_name}' not found or not accessible: {str(e)}",
+            )
+
+        # Check the namespace exists and get a pre-delete vector count
+        namespaces_data = stats_before.get("namespaces", {})
+        ns_info = namespaces_data.get(namespace)
+        if ns_info is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Namespace '{namespace}' not found in index '{index_name}'",
+            )
+
+        vectors_before = ns_info.get("vector_count", 0)
+        print(
+            f"[DELETE VECTORS] Deleting all vectors in "
+            f"index='{index_name}' namespace='{namespace}' "
+            f"(vector_count={vectors_before})"
+        )
+
+        # ── Perform the delete ────────────────────────────────────────
+        index.delete(namespace=namespace, delete_all=True)
+
+        print(
+            f"[DELETE VECTORS] Successfully deleted vectors in "
+            f"index='{index_name}' namespace='{namespace}'"
+        )
+
+        # ── Log to VectorDbIngestionLog ───────────────────────────────
+        log_id = None
+        try:
+            ingestion_log = VectorDbIngestionLog(
+                account_id=account_id,
+                provider="pinecone",
+                index_name=index_name,
+                namespace=namespace,
+                filenames=None,
+                comment=f"Deleted all vectors in namespace '{namespace}'",
+                vectors_added=0,
+                vectors_deleted=vectors_before,
+                vectors_failed=0,
+            )
+            ingestion_log.operation_type = "DELETE"
+            ingestion_log.status = "SUCCESS"
+
+            db.add(ingestion_log)
+            db.commit()
+            db.refresh(ingestion_log)
+            log_id = str(ingestion_log.id)
+        except Exception as log_err:
+            print(f"[DELETE VECTORS] Warning: failed to create ingestion log: {str(log_err)}")
+            db.rollback()
+
+        return DeleteVectorsResponse(
+            success=True,
+            index_name=index_name,
+            namespace=namespace,
+            vectors_deleted=vectors_before,
+            log_id=log_id,
+            message=f"Deleted all {vectors_before} vectors in namespace '{namespace}'",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[DELETE VECTORS] Error: {str(e)}")
+
+        # Attempt to log the failed operation
+        try:
+            ingestion_log = VectorDbIngestionLog(
+                account_id=int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id'],
+                provider="pinecone",
+                index_name=index_name,
+                namespace=namespace,
+                filenames=None,
+                comment=f"Failed to delete vectors in namespace '{namespace}'",
+                vectors_added=0,
+                vectors_deleted=0,
+                vectors_failed=0,
+                error_message=str(e),
+            )
+            ingestion_log.operation_type = "DELETE"
+            ingestion_log.status = "FAILED"
+
+            db.add(ingestion_log)
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete vectors: {str(e)}",
+        )
