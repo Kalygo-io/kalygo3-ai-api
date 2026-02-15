@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from .database import Base
@@ -23,6 +23,8 @@ class Account(Base):
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
+    access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
+    group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -241,6 +243,7 @@ class Agent(Base):
     config = Column(JSON, nullable=True)  # JSONB in PostgreSQL, JSON in SQLAlchemy
     
     chat_sessions = relationship('ChatSession', back_populates='agent', cascade='all, delete-orphan')
+    access_grants = relationship('AgentAccessGrant', back_populates='agent', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Agent {self.id}: {self.name}>'
@@ -327,3 +330,71 @@ class Prompt(Base):
     
     def __repr__(self):
         return f'<Prompt {self.id}: {self.name}>'
+
+
+class AccessGroup(Base):
+    """
+    Named group owned by an account. The owner can add/remove members
+    and other account holders (agent owners) can grant the group access
+    to their agents.
+    """
+    __tablename__ = 'access_groups'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    owner_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+    
+    owner = relationship('Account', back_populates='access_groups')
+    members = relationship('AccessGroupMember', back_populates='group', cascade='all, delete-orphan')
+    agent_grants = relationship('AgentAccessGrant', back_populates='access_group', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<AccessGroup {self.id}: {self.name}>'
+
+
+class AccessGroupMember(Base):
+    """
+    Junction table linking accounts to access groups they are members of.
+    Only the group owner can add/remove members.
+    """
+    __tablename__ = 'access_group_members'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('access_group_id', 'account_id', name='uq_access_group_members_group_account'),
+    )
+    
+    group = relationship('AccessGroup', back_populates='members')
+    account = relationship('Account', back_populates='group_memberships')
+    
+    def __repr__(self):
+        return f'<AccessGroupMember group={self.access_group_id} account={self.account_id}>'
+
+
+class AgentAccessGrant(Base):
+    """
+    Grants an access group permission to use a specific agent.
+    Only the agent owner can create/revoke grants.
+    """
+    __tablename__ = 'agent_access_grants'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey('agents.id', ondelete='CASCADE'), nullable=False, index=True)
+    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('agent_id', 'access_group_id', name='uq_agent_access_grants_agent_group'),
+    )
+    
+    agent = relationship('Agent', back_populates='access_grants')
+    access_group = relationship('AccessGroup', back_populates='agent_grants')
+    
+    def __repr__(self):
+        return f'<AgentAccessGrant agent={self.agent_id} group={self.access_group_id}>'

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import ChatSession, ChatMessage, Account
+from src.services.agent_access import can_access_agent
 import uuid
 from datetime import datetime
 
@@ -79,6 +80,15 @@ async def create_session(
     """Create a new chat session"""
     try:
         print('Create a new chat session')
+
+        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+
+        # Verify the caller can access the requested agent
+        if sessionData.agentId and not can_access_agent(db, account_id, sessionData.agentId):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this agent"
+            )
 
         # Generate a new UUID for the session
         session_uuid = str(uuid.uuid4())

@@ -17,6 +17,7 @@ from sqlalchemy.exc import OperationalError
 from src.deps import db_dependency, auth_dependency
 from src.db.database import SessionLocal
 from src.db.models import Agent, ChatSession, ChatMessage, Credential
+from src.services.agent_access import can_access_agent
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import get_credential_value
 from src.core.schemas.ChatSessionPrompt import ChatSessionPrompt
@@ -110,14 +111,11 @@ async def generator(
         agent = _db_retry_once(
             db,
             "load agent",
-            lambda: db.query(Agent).filter(
-                Agent.id == agent_id,
-                Agent.account_id == account_id
-            ).first(),
+            lambda: db.query(Agent).filter(Agent.id == agent_id).first(),
         )
 
-        if not agent:
-            yield sse_error("Agent not found", "The specified agent was not found or does not belong to you.")
+        if not agent or not can_access_agent(db, account_id, agent_id):
+            yield sse_error("Agent not found", "The specified agent was not found or you do not have access.")
             return
 
         if not agent.config:

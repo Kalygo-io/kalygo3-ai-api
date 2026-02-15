@@ -25,6 +25,7 @@ class AgentResponse(BaseModel):
     id: int
     name: str
     config: Optional[Dict[str, Any]] = None
+    is_owner: Optional[bool] = None
     
     # Extract systemPrompt from config for convenience
     @property
