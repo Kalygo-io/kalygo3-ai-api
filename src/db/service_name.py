@@ -21,6 +21,9 @@ class ServiceName(str, Enum):
     # Vector Database
     PINECONE_API_KEY = "PINECONE_API_KEY"
     
+    # Voice / Audio
+    ELEVENLABS_API_KEY = "ELEVENLABS_API_KEY"
+    
     # Database Services
     SUPABASE = "SUPABASE"
 
