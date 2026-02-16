@@ -26,4 +26,3 @@ class ServiceName(str, Enum):
     
     # Database Services
     SUPABASE = "SUPABASE"
-

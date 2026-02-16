@@ -25,6 +25,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
+from src.utils.template_variables import resolve_template_variables, build_variable_context
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -126,7 +127,9 @@ async def generator(
         config_data = agent.config.get('data', {})
         config_version = agent.config.get('version', 1)
         system_prompt_raw = config_data.get('systemPrompt', 'You are a helpful assistant.')
-        system_prompt = system_prompt_raw.replace("{", "{{").replace("}", "}}")
+        var_context = build_variable_context(agent_name=agent.name)
+        system_prompt_resolved = resolve_template_variables(system_prompt_raw, var_context)
+        system_prompt = system_prompt_resolved.replace("{", "{{").replace("}", "}}")
         tool_count = len(config_data.get('knowledgeBases' if config_version == 1 else 'tools', []))
         print(f"[AGENT COMPLETION] Config v{config_version} - system_prompt length: {len(system_prompt)}, tools: {tool_count}")
 
