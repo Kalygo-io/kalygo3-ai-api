@@ -23,6 +23,7 @@ from .routers import (
   accounts,
   prompts,
   accessGroups,
+  similaritySearch
 )
 
 from src.db.database import Base, engine
@@ -185,11 +186,11 @@ app.include_router(
 #     tags=['multimodal'],
 # )
 
-# app.include_router(
-#     similaritySearch.router,
-#     prefix="/api/similarity-search",
-#     tags=['Similarity Search'],
-# )
+app.include_router(
+    similaritySearch.router,  # pyright: ignore[reportUndefinedVariable]
+    prefix="/api/similarity-search",
+    tags=['Similarity Search'],
+)
 
 # app.include_router(
 #     reranking.router,

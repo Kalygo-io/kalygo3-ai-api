@@ -21,7 +21,7 @@ class Query(BaseModel):
 @limiter.limit("50/minute")
 async def similarity_search(
     query: Query,
-    namespace: str = "similarity_search",
+    namespace: str = "prompts",
     decoded_jwt: jwt_dependency = None,
     request: Request = None
 ):
@@ -29,11 +29,17 @@ async def similarity_search(
     Perform similarity search using vector embeddings.
     """
     try:
-        # Get JWT token for embedding service
-        jwt = request.cookies.get("jwt") if request else None
-        
+        # Extract JWT from cookie or Authorization header
+        token = None
+        if request:
+            token = request.cookies.get("jwt")
+            if not token:
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header.removeprefix("Bearer ").strip()
+
         # Get embedding for the query
-        embedding = await fetch_embedding(jwt, query.query)
+        embedding = await fetch_embedding(token, query.query)
         
         if embedding is None:
             return {
