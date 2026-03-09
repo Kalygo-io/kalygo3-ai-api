@@ -1,0 +1,38 @@
+{
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.*",
+    ".venv"
+  ],
+  "extraPaths": [
+    "/code",
+    "/code/src"
+  ],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Linux",
+  "venvPath": "/code",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "/code",
+      "pythonVersion": "3.12",
+      "pythonPlatform": "Linux",
+      "extraPaths": [
+        "/code",
+        "/code/src"
+      ],
+      "pythonPlatform": "Linux"
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "stubPath": "",
+  "defineConstant": {
+    "DEBUG": true
+  }
+}

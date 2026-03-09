@@ -63,16 +63,25 @@ async def update_agent(
       }
     }
     
-    Version 3 (Model configuration, recommended):
+    Version 3 (Model configuration):
     {
       "schema": "agent_config",
       "version": 3,
       "data": {
         "systemPrompt": "The system prompt for the agent",
-        "model": {
-          "provider": "openai",
-          "model": "gpt-4o-mini"
-        },
+        "model": { "provider": "openai", "model": "gpt-4o-mini" },
+        "tools": []
+      }
+    }
+    
+    Version 4 (adds optional ElevenLabs voice for TTS):
+    {
+      "schema": "agent_config",
+      "version": 4,
+      "data": {
+        "systemPrompt": "The system prompt for the agent",
+        "model": { "provider": "openai", "model": "gpt-4o-mini" },
+        "elevenlabsVoiceId": "optional-voice-id",
         "tools": []
       }
     }
@@ -127,10 +136,10 @@ async def update_agent(
             config_version = request_body.config.get("version", 1)
             
             # Validate version is supported
-            if config_version not in [1, 2, 3]:
+            if config_version not in [1, 2, 3, 4]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3"
+                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3, 4"
                 )
             
             print(f"[UPDATE AGENT] Validating against agent_config v{config_version}")

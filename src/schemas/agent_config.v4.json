@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalygo.example/schemas/agent-config-v4.schema.json",
+  "title": "Agent Config v4",
+  "description": "Agent configuration schema v4 - adds optional ElevenLabs voice_id for TTS/voice anthropomorphization via the ElevenLabs API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "agent_config"
+    },
+    "version": {
+      "type": "integer",
+      "const": 4
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "systemPrompt"
+      ],
+      "properties": {
+        "systemPrompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The system prompt that defines the agent's behavior and personality."
+        },
+        "model": {
+          "$ref": "#/$defs/modelConfig",
+          "description": "Configuration for the LLM that powers this agent. If not specified, defaults to OpenAI gpt-4o-mini."
+        },
+        "elevenlabsVoiceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional ElevenLabs voice ID used to anthropomorphize the agent through voice when using the ElevenLabs API for text-to-speech (e.g. in TTS Chat or Multi-Agent TTS Chat). If omitted, a default voice or browser TTS may be used."
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 0,
+          "description": "Array of tools available to the agent. Can be empty for simple chat agents. Each tool extends the agent's capabilities.",
+          "items": {
+            "$ref": "#/$defs/tool"
+          },
+          "default": []
+        }
+      }
+    }
+  },
+  "$defs": {
+    "modelConfig": {
+      "type": "object",
+      "description": "Configuration for the LLM provider and model.",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "ollama"
+          ],
+          "description": "The LLM provider. Each provider has different available models and may require different credentials."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The model identifier. Examples: 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet-20241022', 'llama3.2'."
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "description": "A tool that the agent can use. Tool type determines available properties.",
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "$ref": "#/$defs/vectorSearchTool"
+        },
+        {
+          "$ref": "#/$defs/vectorSearchWithRerankingTool"
+        },
+        {
+          "$ref": "#/$defs/dbTableReadTool"
+        },
+        {
+          "$ref": "#/$defs/dbTableWriteTool"
+        }
+      ]
+    },
+    "vectorSearchTool": {
+      "type": "object",
+      "description": "Vector database search tool for semantic retrieval from knowledge bases.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "provider",
+        "index",
+        "namespace"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "vectorSearch" },
+        "provider": { "type": "string", "enum": ["pinecone"] },
+        "index": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "topK": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+      }
+    },
+    "vectorSearchWithRerankingTool": {
+      "type": "object",
+      "description": "Vector database search with re-ranking.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "provider",
+        "index",
+        "namespace"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "vectorSearchWithReranking" },
+        "provider": { "type": "string", "enum": ["pinecone"] },
+        "index": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "topK": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+        "topN": { "type": "integer", "minimum": 1, "maximum": 50, "default": 5 }
+      }
+    },
+    "dbTableReadTool": {
+      "type": "object",
+      "description": "Database read tool.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId",
+        "table"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "dbTableRead" },
+        "credentialId": { "type": "integer", "minimum": 1 },
+        "table": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 50, "pattern": "^[a-z_][a-z0-9_]*$" },
+        "description": { "type": "string", "minLength": 1 },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "maxLimit": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100 }
+      }
+    },
+    "dbTableWriteTool": {
+      "type": "object",
+      "description": "Database write tool.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId",
+        "table",
+        "columns"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "dbTableWrite" },
+        "credentialId": { "type": "integer", "minimum": 1 },
+        "table": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 50, "pattern": "^[a-z_][a-z0-9_]*$" },
+        "description": { "type": "string", "minLength": 1 },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "requiredColumns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "injectAccountId": { "type": "boolean", "default": false },
+        "injectChatSessionId": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}
