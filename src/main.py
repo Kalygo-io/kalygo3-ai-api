@@ -23,7 +23,8 @@ from .routers import (
   accounts,
   prompts,
   accessGroups,
-  similaritySearch
+  similaritySearch,
+  contacts,
 )
 
 from src.db.database import Base, engine
@@ -250,4 +251,10 @@ app.include_router(
     accessGroups.router,
     prefix="/api/access-groups",
     tags=['Access Groups'],
+)
+
+app.include_router(
+    contacts.router,
+    prefix="/api/contacts",
+    tags=['Contacts'],
 )

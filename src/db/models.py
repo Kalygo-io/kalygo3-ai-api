@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text, Boolean, UniqueConstraint
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from .database import Base
@@ -22,6 +23,7 @@ class Account(Base):
     vector_db_logs = relationship('VectorDbIngestionLog', back_populates='account')
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
+    contacts = relationship('Contact', back_populates='account', cascade='all, delete-orphan')
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
     access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
@@ -398,3 +400,74 @@ class AgentAccessGrant(Base):
     
     def __repr__(self):
         return f'<AgentAccessGrant agent={self.agent_id} group={self.access_group_id}>'
+
+
+class Contact(Base):
+    """
+    Stores CRM contact records.
+
+    A Contact belongs to an Account and can have a chronological log of
+    ContactEvents (calls, emails, meetings, notes, etc.).
+    """
+    __tablename__ = 'contacts'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    # Required fields
+    first_name = Column(String(255), nullable=False)
+    last_name = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=False, index=True)
+
+    # Optional contact details
+    phone = Column(String(50), nullable=True)
+    company = Column(String(255), nullable=True, index=True)
+    title = Column(String(255), nullable=True)
+
+    @hybrid_property
+    def name(self) -> str:
+        """Full display name combining first and last name."""
+        if self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name
+
+    # CRM metadata
+    source = Column(String(100), nullable=True)   # e.g. "website", "referral", "chat_bot", "import"
+    status = Column(String(50), nullable=True, index=True)  # e.g. "lead", "prospect", "customer", "churned"
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='contacts')
+    events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Contact {self.id}: {self.name}>'
+
+
+class ContactEvent(Base):
+    """
+    Chronological log of interactions with a Contact.
+
+    Each event captures what happened (event_type), a short title, optional
+    description, and when it occurred (occurred_at supports backdating).
+    """
+    __tablename__ = 'contact_events'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    # e.g. "note", "call", "email", "meeting", "demo", "proposal_sent", "contract_signed"
+    event_type = Column(String(100), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    occurred_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    contact = relationship('Contact', back_populates='events')
+
+    def __repr__(self):
+        return f'<ContactEvent {self.id}: {self.event_type} for contact {self.contact_id}>'

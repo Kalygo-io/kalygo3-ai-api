@@ -1,0 +1,65 @@
+"""
+List contacts endpoint.
+"""
+from typing import List
+from fastapi import APIRouter, HTTPException, status, Request, Query
+from src.deps import db_dependency, jwt_dependency
+from src.db.models import Contact, Account
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from .models import ContactSummaryResponse
+
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter()
+
+
+@router.get("/", response_model=List[ContactSummaryResponse])
+@limiter.limit("60/minute")
+async def list_contacts(
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+    status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None),
+):
+    """
+    List all contacts for the authenticated user.
+
+    Supports optional filtering by ?status= and full-text ?search= over
+    name, email, and company.
+    """
+    try:
+        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account = db.query(Account).filter(Account.id == account_id).first()
+
+        if not account:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+        query = db.query(Contact).filter(Contact.account_id == account_id)
+
+        if status_filter:
+            query = query.filter(Contact.status == status_filter)
+
+        if search:
+            term = f"%{search.lower()}%"
+            from sqlalchemy import func as sqlfunc
+            query = query.filter(
+                sqlfunc.lower(Contact.first_name).like(term)
+                | sqlfunc.lower(Contact.last_name).like(term)
+                | sqlfunc.lower(Contact.email).like(term)
+                | sqlfunc.lower(Contact.company).like(term)
+            )
+
+        contacts = query.order_by(Contact.updated_at.desc()).all()
+
+        return contacts
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[LIST CONTACTS] Error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list contacts: {str(e)}",
+        )
