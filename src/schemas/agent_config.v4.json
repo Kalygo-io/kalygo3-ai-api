@@ -67,6 +67,7 @@
           "enum": [
             "openai",
             "anthropic",
+            "google",
             "ollama"
           ],
           "description": "The LLM provider. Each provider has different available models and may require different credentials."
