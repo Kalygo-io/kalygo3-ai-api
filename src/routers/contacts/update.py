@@ -2,7 +2,7 @@
 Update contact endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -19,11 +19,11 @@ async def update_contact(
     contact_id: int,
     request_body: UpdateContactRequest,
     db: db_dependency,
-    jwt: jwt_dependency,
+    auth: auth_dependency,
     request: Request,
 ):
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
         account = db.query(Account).filter(Account.id == account_id).first()
 
         if not account:
