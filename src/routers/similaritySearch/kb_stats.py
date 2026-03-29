@@ -1,9 +1,12 @@
+import logging
 from fastapi import APIRouter, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import os
 from src.core.clients import pc
 from src.deps import jwt_dependency
+
+logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -35,8 +38,9 @@ def get_knowledge_base_stats(decoded_jwt: jwt_dependency, request: Request):
             "namespace_vector_count": namespace_stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
         }
     except Exception as e:
+        logger.error("[KB STATS] %s: %s", type(e).__name__, e)
         return {
-            "error": f"Failed to retrieve knowledge base statistics: {str(e)}",
+            "error": "An unexpected error occurred. Please try again.",
             "index_name": os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"),
-            "namespace": "similarity_search"
-        } 
+            "namespace": "similarity_search",
+        }

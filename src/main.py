@@ -1,13 +1,17 @@
+import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from src.middleware.dynamic_cors import DynamicCORSMiddleware
+
+logger = logging.getLogger(__name__)
 
 from .routers import (
   healthcheck,
@@ -26,6 +30,7 @@ from .routers import (
   similaritySearch,
   contacts,
 )
+from .routers.contact_lists.router import router as contact_lists_router
 
 from src.db.database import Base, engine
 
@@ -85,6 +90,44 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "path": str(request.url.path)
         }
     )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    """Catch any SQLAlchemy IntegrityError that bubbles past a router."""
+    logger.error("[INTEGRITY ERROR] Path: %s | %s: %s", request.url.path, type(exc).__name__, exc)
+    orig = getattr(exc, "orig", None)
+    msg = str(orig).lower() if orig else str(exc).lower()
+    if "unique" in msg or "duplicate" in msg:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "A record with that value already exists."},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": "The request conflicts with existing data."},
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
+    """Catch any other SQLAlchemy error that bubbles past a router."""
+    logger.error("[DB ERROR] Path: %s | %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "A database error occurred. Please try again."},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Last-resort handler — never let raw exception details reach the client."""
+    logger.error("[UNHANDLED] Path: %s | %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "An unexpected error occurred. Please try again."},
+    )
+
 
 # Let Alembic handle all database schema changes
 # Base.metadata.create_all(bind=engine)
@@ -257,4 +300,10 @@ app.include_router(
     contacts.router,
     prefix="/api/contacts",
     tags=['Contacts'],
+)
+
+app.include_router(
+    contact_lists_router,
+    prefix="/api/contact-lists",
+    tags=['Contact Lists'],
 )

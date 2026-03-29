@@ -7,6 +7,7 @@ from src.db.models import Agent, AccessGroup, AgentAccessGrant
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import CreateGrantRequest, AgentAccessGrantResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -73,7 +74,4 @@ async def create_grant(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create grant: {str(e)}",
-        )
+        raise handle_db_error(e, "[CREATE GRANT]")

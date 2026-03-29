@@ -8,6 +8,7 @@ from src.db.models import AccessGroup, AccessGroupMember
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AccessGroupResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -67,7 +68,4 @@ async def get_access_group(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get access group: {str(e)}",
-        )
+        raise handle_db_error(e, "[GET ACCESS GROUP]")

@@ -15,6 +15,7 @@ import stripe
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -126,7 +127,7 @@ async def create_account(db: db_dependency, create_account_request: AccountCreat
     except Exception as e:
         db.rollback()
         print(f'create_user error: {e}')
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
     
 
 @router.post('/log-in')
@@ -173,7 +174,7 @@ async def validate_token(request: Request, authorization: str = Header(...)):
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
 
 @router.get('/me', response_model=CurrentUserResponse)
 async def get_current_user_info(current_user: jwt_dependency, request: Request):

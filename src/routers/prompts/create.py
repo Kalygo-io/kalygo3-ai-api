@@ -15,6 +15,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from .models import CreatePromptRequest, PromptResponse
+from src.utils.errors import handle_db_error
 
 PINECONE_INDEX = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
 PROMPTS_NAMESPACE = "prompts"
@@ -112,8 +113,4 @@ async def create_prompt(
         raise
     except Exception as e:
         db.rollback()
-        print(f"[CREATE PROMPT] Error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create prompt: {str(e)}"
-        )
+        raise handle_db_error(e, "[CREATE PROMPT]")

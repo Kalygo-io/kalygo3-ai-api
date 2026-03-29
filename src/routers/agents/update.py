@@ -9,6 +9,7 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import UpdateAgentRequest, AgentResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -150,10 +151,11 @@ async def update_agent(
             except JsonSchemaValidationError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Config validation failed for schema 'agent_config' v{config_version}: {str(e)}"
+                    detail=f"Agent config failed validation (schema 'agent_config' v{config_version}).",
                 )
             except FileNotFoundError as e:
-                print(f"Warning: Config schema validation skipped - {str(e)}")
+                import logging as _log
+                _log.getLogger(__name__).warning("[UPDATE AGENT] Config schema file not found: %s", e)
             
             agent.config = request_body.config
         
@@ -172,10 +174,11 @@ async def update_agent(
             except JsonSchemaValidationError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Validation failed for schema 'agent' v{config_version}: {str(e)}"
+                    detail=f"Agent configuration failed validation (schema 'agent' v{config_version}).",
                 )
             except FileNotFoundError as e:
-                print(f"Warning: Agent schema validation skipped - {str(e)}")
+                import logging as _log
+                _log.getLogger(__name__).warning("[UPDATE AGENT] Schema file not found: %s", e)
         
         # Commit the changes
         db.commit()
@@ -191,14 +194,7 @@ async def update_agent(
         raise
     except ValueError as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid agent ID: {str(e)}"
-        )
+        raise handle_db_error(e, "[UPDATE AGENT VALUE ERROR]")
     except Exception as e:
         db.rollback()
-        print(f"Error updating agent: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while updating agent: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR UPDATING AGENT]")

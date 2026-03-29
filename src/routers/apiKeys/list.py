@@ -8,6 +8,7 @@ from src.db.models import ApiKey
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import ApiKeyResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -45,8 +46,4 @@ async def list_api_keys(
         ]
         
     except Exception as e:
-        print(f"Error listing API keys: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing API keys: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING API KEYS]")

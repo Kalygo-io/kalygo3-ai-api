@@ -18,6 +18,7 @@ from slowapi.util import get_remote_address
 from .ingestion_logs import router as ingestion_logs_router
 # Import upload router
 from .upload import router as upload_router
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -85,10 +86,7 @@ def get_pinecone_api_key(db, account_id: int) -> str:
         api_key = get_credential_value(credential, "api_key")
         return api_key
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to decrypt Pinecone API key: {str(e)}"
-        )
+        raise handle_db_error(e, "[DECRYPT PINECONE API KEY]")
 
 
 @router.get("/indexes", response_model=List[IndexResponse])
@@ -150,11 +148,7 @@ async def list_indexes(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error listing indexes: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing indexes: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING INDEXES]")
 
 
 @router.get("/indexes/{index_name}/ingestion-logs")
@@ -231,7 +225,7 @@ async def list_namespaces(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index '{index_name}' not found: {str(e)}"
+                detail="An unexpected error occurred. Please try again.",
             )
         
         # Get index stats which includes namespace information
@@ -254,11 +248,7 @@ async def list_namespaces(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error listing namespaces: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing namespaces: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING NAMESPACES]")
 
 
 @router.post("/indexes/{index_name}/namespaces", status_code=status.HTTP_201_CREATED, response_model=NamespaceResponse)
@@ -303,7 +293,7 @@ async def create_namespace(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index '{index_name}' not found or not accessible: {str(e)}"
+                detail="An unexpected error occurred. Please try again.",
             )
         
         # Validate namespace name (Pinecone namespace naming rules)
@@ -365,20 +355,12 @@ async def create_namespace(
         except HTTPException:
             raise
         except Exception as e:
-            print(f"[CREATE NAMESPACE] Error during namespace creation: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create namespace: {str(e)}"
-            )
+            raise handle_db_error(e, "[CREATE NAMESPACE]")
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating namespace: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating namespace: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING NAMESPACE]")
 
 
 @router.post("/indexes", status_code=status.HTTP_201_CREATED, response_model=IndexResponse)
@@ -455,7 +437,7 @@ async def create_index(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create index: {str(e)}"
+                detail="An unexpected error occurred. Please try again.",
             )
         
         # Return the created index information
@@ -471,11 +453,7 @@ async def create_index(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating index: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating index: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING INDEX]")
 
 
 class DeleteVectorsRequest(BaseModel):
@@ -529,7 +507,7 @@ async def delete_vectors_in_namespace(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index '{index_name}' not found or not accessible: {str(e)}",
+                detail="An unexpected error occurred. Please try again.",
             )
 
         # Check the namespace exists and get a pre-delete vector count
@@ -617,7 +595,4 @@ async def delete_vectors_in_namespace(
         except Exception:
             db.rollback()
 
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete vectors: {str(e)}",
-        )
+        raise handle_db_error(e, "[DELETE VECTORS]")

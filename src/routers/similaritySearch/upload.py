@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -7,6 +8,8 @@ from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
 from src.services.file_upload_service import FileUploadService
+
+logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -118,7 +121,8 @@ async def upload_single_file(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("[SIMILARITY SEARCH UPLOAD] %s: %s", type(e).__name__, e)
         return {
             "success": False,
-            "error": f"Failed to upload file: {str(e)}"
+            "error": "An unexpected error occurred. Please try again.",
         }

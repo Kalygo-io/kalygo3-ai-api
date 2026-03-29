@@ -10,6 +10,7 @@ from datetime import datetime
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -115,7 +116,7 @@ async def create_session(
         }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
 
 @router.get("/sessions", response_model=List[ChatSessionResponse])
 @limiter.limit("30/minute")
@@ -148,7 +149,7 @@ async def get_sessions(
 
         return sessions
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
 
 @router.get("/sessions/{session_id}", response_model=ChatSessionWithMessagesResponse)
 @limiter.limit("30/minute")
@@ -220,7 +221,7 @@ async def get_session(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
 
 # @router.put("/sessions/{session_id}", response_model=ChatAppSessionResponse)
 # @limiter.limit("10/minute")
@@ -252,7 +253,7 @@ async def get_session(
 #         raise
 #     except Exception as e:
 #         db.rollback()
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+#         raise handle_db_error(e, "[OPERATION]")
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
@@ -285,7 +286,7 @@ async def delete_session(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise handle_db_error(e, "[OPERATION]")
 
 @router.delete("/sessions/{session_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
@@ -336,12 +337,8 @@ async def clear_session_messages(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[CLEAR MESSAGES] Error: {str(e)}")
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"Failed to clear session messages: {str(e)}"
-        )
+        raise handle_db_error(e, "[CLEAR MESSAGES]")
 
 # CRUD Operations for ChatMessage
 
@@ -380,7 +377,7 @@ async def clear_session_messages(
 #         raise
 #     except Exception as e:
 #         db.rollback()
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+#         raise handle_db_error(e, "[OPERATION]")
 
 # @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageResponse])
 # @limiter.limit("30/minute")
@@ -411,7 +408,7 @@ async def clear_session_messages(
 #     except HTTPException:
 #         raise
 #     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+#         raise handle_db_error(e, "[OPERATION]")
 
 # @router.get("/sessions/{session_id}/messages/{message_id}", response_model=ChatMessageResponse)
 # @limiter.limit("30/minute")
@@ -445,7 +442,7 @@ async def clear_session_messages(
 #     except HTTPException:
 #         raise
 #     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+#         raise handle_db_error(e, "[OPERATION]")
 
 # @router.delete("/sessions/{session_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 # @limiter.limit("10/minute")
@@ -483,4 +480,4 @@ async def clear_session_messages(
 #         raise
 #     except Exception as e:
 #         db.rollback()
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+#         raise handle_db_error(e, "[OPERATION]")

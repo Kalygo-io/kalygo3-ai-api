@@ -8,6 +8,7 @@ import stripe
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -64,20 +65,12 @@ async def get_user_payment_methods(
                 "stripe_customer_id": account.stripe_customer_id
             }
         except stripe.error.StripeError as e:
-            print(f"Stripe error retrieving payment methods: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve payment methods: {str(e)}"
-            )
+            raise handle_db_error(e, "[STRIPE ERROR RETRIEVING PAYMENT METHODS]")
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error retrieving payment methods: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving payment methods: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING PAYMENT METHODS]")
 
 
 @router.post("/payment-methods")
@@ -114,10 +107,7 @@ async def add_payment_method(
             except stripe.error.StripeError as e:
                 print(f"Failed to create Stripe customer: {str(e)}")
                 db.rollback()
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to create Stripe customer: {str(e)}"
-                )
+                raise handle_db_error(e, "[CREATE STRIPE CUSTOMER]")
         
         # Attach the payment method to the Stripe customer
         try:
@@ -134,21 +124,14 @@ async def add_payment_method(
                 "message": "Payment method added successfully"
             }
         except stripe.error.StripeError as e:
-            print(f"Stripe error attaching payment method: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to add payment method: {str(e)}"
-            )
+            raise handle_db_error(e, "[STRIPE ERROR ATTACHING PAYMENT METHOD]")
             
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error adding payment method: {str(e)}")
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while adding payment method: {str(e)}"
-        )
+        raise handle_db_error(e, "[AN ERROR OCCURRED WHILE ADDING PAYMENT METHOD]")
 
 
 @router.delete("/payment-methods/{payment_method_id}")
@@ -211,23 +194,12 @@ async def delete_payment_method(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Payment method not found or already deleted"
                 )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid payment method: {str(e)}"
-            )
+            raise handle_db_error(e, "[STRIPE INVALID PAYMENT METHOD]")
         except stripe.error.StripeError as e:
-            print(f"Stripe error deleting payment method: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to delete payment method: {str(e)}"
-            )
+            raise handle_db_error(e, "[STRIPE ERROR DELETING PAYMENT METHOD]")
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error deleting payment method: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while deleting payment method: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR DELETING PAYMENT METHOD]")
 

@@ -7,6 +7,7 @@ from src.db.models import Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import UpdateAccountRequest, AccountResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -89,8 +90,4 @@ async def update_account(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error updating account: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while updating account: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR UPDATING ACCOUNT]")

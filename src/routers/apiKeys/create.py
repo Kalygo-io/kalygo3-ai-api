@@ -8,6 +8,7 @@ from src.utils.api_key_utils import generate_api_key
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import CreateApiKeyRequest, CreateApiKeyResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -66,8 +67,4 @@ async def create_api_key(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error creating API key: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating API key: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING API KEY]")

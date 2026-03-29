@@ -9,6 +9,7 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import CreateAgentRequest, AgentResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -137,16 +138,13 @@ async def create_agent(
         except JsonSchemaValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Validation failed for schema 'agent' v{config_version}: {str(e)}"
+                detail=f"Agent configuration failed validation (schema 'agent' v{config_version}).",
             )
         except FileNotFoundError as e:
-            # Schema file not found - log error but don't fail the request
-            print(f"Warning: Schema validation skipped - {str(e)}")
+            import logging as _log
+            _log.getLogger(__name__).warning("[CREATE AGENT] Schema file not found: %s", e)
         except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Schema validation error: {str(e)}"
-            )
+            raise handle_db_error(e, "[SCHEMA VALIDATION ERROR]")
         
         # Validate config structure separately against agent_config schema (validates schema, version, and data)
         try:
@@ -154,10 +152,11 @@ async def create_agent(
         except JsonSchemaValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Config validation failed for schema 'agent_config' v{config_version}: {str(e)}"
+                detail=f"Agent config failed validation (schema 'agent_config' v{config_version}).",
             )
         except FileNotFoundError as e:
-            print(f"Warning: Config schema validation skipped - {str(e)}")
+            import logging as _log
+            _log.getLogger(__name__).warning("[CREATE AGENT] Config schema file not found: %s", e)
         
         # Create the agent with the provided config (already includes schema, version, and data)
         agent = Agent(
@@ -180,14 +179,7 @@ async def create_agent(
         raise
     except ValueError as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise handle_db_error(e, "[CREATE AGENT VALUE ERROR]")
     except Exception as e:
         db.rollback()
-        print(f"Error creating agent: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating agent: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING AGENT]")

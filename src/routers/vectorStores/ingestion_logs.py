@@ -11,6 +11,7 @@ from src.db.models import VectorDbIngestionLog, Account, OperationType, Operatio
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import and_, or_
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -184,11 +185,7 @@ async def list_ingestion_logs(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error listing ingestion logs: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing ingestion logs: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING INGESTION LOGS]")
 
 
 @router.get("/indexes/{index_name}/ingestion-logs", response_model=IngestionLogsListResponse)
@@ -294,11 +291,7 @@ async def get_ingestion_log(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error retrieving ingestion log: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving ingestion log: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING INGESTION LOG]")
 
 
 @router.get("/ingestion-logs/stats/summary", response_model=dict)
@@ -389,9 +382,5 @@ async def get_ingestion_logs_summary(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error getting ingestion logs summary: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while getting ingestion logs summary: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR GETTING INGESTION LOGS SUMMARY]")
 

@@ -8,6 +8,7 @@ from src.db.models import AccessGroup, AccessGroupMember, Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AccessGroupMemberResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -69,7 +70,4 @@ async def list_members(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list members: {str(e)}",
-        )
+        raise handle_db_error(e, "[LIST MEMBERS]")

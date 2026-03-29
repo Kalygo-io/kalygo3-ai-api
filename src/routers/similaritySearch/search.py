@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from slowapi import Limiter
@@ -7,6 +8,8 @@ import json
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
+
+logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -83,7 +86,8 @@ async def similarity_search(
         }
         
     except Exception as e:
+        logger.error("[SIMILARITY SEARCH] %s: %s", type(e).__name__, e)
         return {
             "success": False,
-            "error": f"Failed to perform similarity search: {str(e)}"
+            "error": "An unexpected error occurred. Please try again.",
         }

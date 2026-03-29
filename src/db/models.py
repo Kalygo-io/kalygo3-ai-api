@@ -24,6 +24,7 @@ class Account(Base):
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
     contacts = relationship('Contact', back_populates='account', cascade='all, delete-orphan')
+    contact_lists = relationship('ContactList', back_populates='account', cascade='all, delete-orphan')
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
     access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
@@ -417,7 +418,7 @@ class Contact(Base):
     # Required fields
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=True)
-    email = Column(String(255), nullable=False, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
 
     # Optional contact details
     phone = Column(String(50), nullable=True)
@@ -441,9 +442,59 @@ class Contact(Base):
 
     account = relationship('Account', back_populates='contacts')
     events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
+    list_memberships = relationship('ContactListMember', back_populates='contact', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Contact {self.id}: {self.name}>'
+
+
+class ContactList(Base):
+    """
+    A named subset of contacts for targeted outbound campaigns, sequences, etc.
+
+    A ContactList belongs to an Account and holds references to a subset of that
+    account's Contacts via the ContactListMember join table.
+    """
+    __tablename__ = 'contact_lists'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='contact_lists')
+    members = relationship('ContactListMember', back_populates='contact_list', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<ContactList {self.id}: {self.name}>'
+
+
+class ContactListMember(Base):
+    """
+    Join table linking a ContactList to its member Contacts.
+    """
+    __tablename__ = 'contact_list_members'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contact_list_id = Column(Integer, ForeignKey('contact_lists.id', ondelete='CASCADE'), nullable=False, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    added_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    contact_list = relationship('ContactList', back_populates='members')
+    contact = relationship('Contact', back_populates='list_memberships')
+
+    __table_args__ = (
+        UniqueConstraint('contact_list_id', 'contact_id', name='uq_contact_list_member'),
+    )
+
+    def __repr__(self):
+        return f'<ContactListMember list={self.contact_list_id} contact={self.contact_id}>'
 
 
 class ContactEvent(Base):

@@ -7,6 +7,7 @@ from src.db.models import Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AccountResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -44,8 +45,4 @@ async def get_account(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error retrieving account: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving account: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING ACCOUNT]")

@@ -2,6 +2,7 @@
 Upload router for Vector Stores module.
 Handles file uploads to cloud storage and triggers async processing via Pub/Sub.
 """
+import logging
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Form
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -10,6 +11,8 @@ from src.deps import jwt_dependency, db_dependency
 from src.services.vector_stores_upload_service import VectorStoresUploadService
 from src.db.models import VectorDbIngestionLog, Account
 import uuid
+
+logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -116,7 +119,7 @@ async def upload_csv_file(
             result["log_id"] = str(ingestion_log.id)
             
         except Exception as e:
-            print(f"Warning: Failed to create ingestion log entry: {str(e)}")
+            logger.warning("[UPLOAD CSV] Failed to create ingestion log entry: %s: %s", type(e).__name__, e)
             # Don't fail the upload if logging fails
             db.rollback()
         
@@ -125,12 +128,11 @@ async def upload_csv_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error uploading CSV file: {str(e)}")
         import traceback
-        traceback.print_exc()
+        logger.error("[UPLOAD CSV] %s: %s\n%s", type(e).__name__, e, traceback.format_exc())
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload file: {str(e)}"
+            detail="An unexpected error occurred. Please try again.",
         )
 
 
@@ -232,7 +234,7 @@ async def upload_text_file(
             result["log_id"] = str(ingestion_log.id)
             
         except Exception as e:
-            print(f"Warning: Failed to create ingestion log entry: {str(e)}")
+            logger.warning("[UPLOAD TEXT] Failed to create ingestion log entry: %s: %s", type(e).__name__, e)
             # Don't fail the upload if logging fails
             db.rollback()
         
@@ -241,11 +243,10 @@ async def upload_text_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error uploading text file: {str(e)}")
         import traceback
-        traceback.print_exc()
+        logger.error("[UPLOAD TEXT] %s: %s\n%s", type(e).__name__, e, traceback.format_exc())
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to upload file: {str(e)}"
+            detail="An unexpected error occurred. Please try again.",
         )
 

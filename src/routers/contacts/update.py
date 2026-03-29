@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from .models import UpdateContactRequest, ContactSummaryResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -77,8 +78,4 @@ async def update_contact(
         raise
     except Exception as e:
         db.rollback()
-        print(f"[UPDATE CONTACT] Error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update contact: {str(e)}",
-        )
+        raise handle_db_error(e, "[UPDATE CONTACT]")

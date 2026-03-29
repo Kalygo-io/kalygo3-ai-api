@@ -9,6 +9,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..models import CreateContactEventRequest, ContactEventResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -65,8 +66,4 @@ async def create_contact_event(
         raise
     except Exception as e:
         db.rollback()
-        print(f"[CREATE CONTACT EVENT] Error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create contact event: {str(e)}",
-        )
+        raise handle_db_error(e, "[CREATE CONTACT EVENT]")

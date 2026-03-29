@@ -11,6 +11,7 @@ from src.routers.auth.background_tasks import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
 from src.deps import db_dependency, bcrypt_context
+from src.utils.errors import handle_db_error
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -37,5 +38,5 @@ async def create_account(db: db_dependency, body: JoinWaitlistRequestBody, reque
 
         return Response(status_code=status.HTTP_201_CREATED)
     except Exception as e:
-        print('create_user error', e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        db.rollback()
+        raise handle_db_error(e, "[JOIN WAITLIST]")

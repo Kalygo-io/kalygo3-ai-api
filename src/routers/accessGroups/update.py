@@ -7,6 +7,7 @@ from src.db.models import AccessGroup
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import UpdateAccessGroupRequest, AccessGroupResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -48,7 +49,4 @@ async def update_access_group(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update access group: {str(e)}",
-        )
+        raise handle_db_error(e, "[UPDATE ACCESS GROUP]")

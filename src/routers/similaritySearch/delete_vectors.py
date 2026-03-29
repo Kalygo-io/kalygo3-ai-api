@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Request
 from src.core.schemas.DeleteVectorsRequest import DeleteVectorsRequest
 from slowapi import Limiter
@@ -5,6 +6,8 @@ from slowapi.util import get_remote_address
 import os
 from src.core.clients import pc
 from src.deps import jwt_dependency
+
+logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -33,8 +36,9 @@ def delete_vectors_in_namespace(request_body: DeleteVectorsRequest, decoded_jwt:
             "namespace": namespace
         }
     except Exception as e:
+        logger.error("[DELETE VECTORS] %s: %s", type(e).__name__, e)
         return {
             "success": False,
             "namespace": request_body.namespace,
-            "error": f"Failed to delete vectors: {str(e)}"
-        } 
+            "error": "An unexpected error occurred. Please try again.",
+        }

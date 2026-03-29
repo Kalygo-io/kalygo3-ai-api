@@ -6,6 +6,7 @@ from src.deps import db_dependency, jwt_dependency
 from src.db.models import AccessGroup, AccessGroupMember
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -45,7 +46,4 @@ async def remove_member(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove member: {str(e)}",
-        )
+        raise handle_db_error(e, "[REMOVE MEMBER]")

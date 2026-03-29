@@ -13,6 +13,7 @@ from .encryption import (
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -165,17 +166,15 @@ async def create_credential(
         raise
     except ValueError as e:
         db.rollback()
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
         db.rollback()
-        print(f"Error creating credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING CREDENTIAL]")
 
 
 @router.get("/", response_model=List[CredentialResponse])
@@ -218,11 +217,7 @@ async def list_credentials(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error listing credentials: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing credentials: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING CREDENTIALS]")
 
 
 @router.get("/{credential_id}", response_model=CredentialDetailResponse)
@@ -277,16 +272,14 @@ async def get_credential(
     except HTTPException:
         raise
     except ValueError as e:
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
-        print(f"Error retrieving credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING CREDENTIAL]")
 
 
 @router.put("/{credential_id}", response_model=CredentialResponse)
@@ -348,17 +341,15 @@ async def update_credential(
         raise
     except ValueError as e:
         db.rollback()
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
         db.rollback()
-        print(f"Error updating credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while updating credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR UPDATING CREDENTIAL]")
 
 
 @router.delete("/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -403,11 +394,7 @@ async def delete_credential(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error deleting credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while deleting credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR DELETING CREDENTIAL]")
 
 
 @router.get("/service/{service_name}", response_model=CredentialDetailResponse)
@@ -462,16 +449,14 @@ async def get_credential_by_service(
     except HTTPException:
         raise
     except ValueError as e:
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
-        print(f"Error retrieving credential by service: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING CREDENTIAL BY SERVICE]")
 
 
 # =============================================================================
@@ -555,17 +540,15 @@ async def create_flexible_credential(
         raise
     except ValueError as e:
         db.rollback()
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
         db.rollback()
-        print(f"Error creating flexible credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while creating credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR CREATING FLEXIBLE CREDENTIAL]")
 
 
 @router.get("/{credential_id}/full", response_model=FlexibleCredentialDetailResponse)
@@ -617,16 +600,14 @@ async def get_credential_full(
     except HTTPException:
         raise
     except ValueError as e:
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
-        print(f"Error retrieving full credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING FULL CREDENTIAL]")
 
 
 @router.put("/{credential_id}/full", response_model=CredentialResponse)
@@ -687,17 +668,15 @@ async def update_credential_full(
         raise
     except ValueError as e:
         db.rollback()
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
         db.rollback()
-        print(f"Error updating flexible credential: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while updating credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR UPDATING FLEXIBLE CREDENTIAL]")
 
 
 @router.get("/service/{service_name}/full", response_model=FlexibleCredentialDetailResponse)
@@ -749,14 +728,12 @@ async def get_credential_by_service_full(
     except HTTPException:
         raise
     except ValueError as e:
+        import logging as _log
+        _log.getLogger(__name__).error('[CREDENTIALS] ValueError: %s', e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail='Invalid credential data.',
         )
     except Exception as e:
-        print(f"Error retrieving full credential by service: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving credential: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING FULL CREDENTIAL BY SERVICE]")
 

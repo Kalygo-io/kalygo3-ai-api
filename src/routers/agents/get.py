@@ -12,6 +12,7 @@ from src.services.agent_access import can_access_agent
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AgentResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -62,13 +63,6 @@ async def get_agent(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid agent ID: {str(e)}"
-        )
+        raise handle_db_error(e, "[GET AGENT VALUE ERROR]")
     except Exception as e:
-        print(f"Error retrieving agent: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while retrieving agent: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR RETRIEVING AGENT]")

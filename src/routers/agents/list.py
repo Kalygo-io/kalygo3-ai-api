@@ -13,6 +13,7 @@ from src.services.agent_access import get_accessible_agent_ids
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from .models import AgentResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -80,8 +81,4 @@ async def list_agents(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error listing agents: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while listing agents: {str(e)}"
-        )
+        raise handle_db_error(e, "[ERROR LISTING AGENTS]")

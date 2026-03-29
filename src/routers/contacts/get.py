@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from .models import ContactResponse
+from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -41,8 +42,4 @@ async def get_contact(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[GET CONTACT] Error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get contact: {str(e)}",
-        )
+        raise handle_db_error(e, "[GET CONTACT]")

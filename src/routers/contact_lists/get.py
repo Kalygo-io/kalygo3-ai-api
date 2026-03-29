@@ -1,21 +1,23 @@
 """
-Delete contact endpoint.
+Get single contact list endpoint (includes full member list).
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
-from src.db.models import Contact, Account
+from src.db.models import ContactList, Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+from .models import ContactListResponse
 from src.utils.errors import handle_db_error
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
-@router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
-@limiter.limit("30/minute")
-async def delete_contact(
-    contact_id: int,
+@router.get("/{list_id}", response_model=ContactListResponse)
+@limiter.limit("60/minute")
+async def get_contact_list(
+    list_id: int,
     db: db_dependency,
     auth: auth_dependency,
     request: Request,
@@ -27,21 +29,17 @@ async def delete_contact(
         if not account:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
-        contact = db.query(Contact).filter(
-            Contact.id == contact_id,
-            Contact.account_id == account_id,
+        contact_list = db.query(ContactList).filter(
+            ContactList.id == list_id,
+            ContactList.account_id == account_id,
         ).first()
 
-        if not contact:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        if not contact_list:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact list not found")
 
-        db.delete(contact)
-        db.commit()
-
-        return None
+        return contact_list
 
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
-        raise handle_db_error(e, "[DELETE CONTACT]")
+        raise handle_db_error(e, "[GET CONTACT LIST]")
