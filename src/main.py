@@ -31,6 +31,7 @@ from .routers import (
   contacts,
 )
 from .routers.contact_lists.router import router as contact_lists_router
+from .routers.tool_approvals.router import router as tool_approvals_router
 
 from src.db.database import Base, engine
 
@@ -306,4 +307,10 @@ app.include_router(
     contact_lists_router,
     prefix="/api/contact-lists",
     tags=['Contact Lists'],
+)
+
+app.include_router(
+    tool_approvals_router,
+    prefix="/api/tool-approvals",
+    tags=['Tool Approvals'],
 )

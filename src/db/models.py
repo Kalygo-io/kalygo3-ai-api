@@ -28,6 +28,7 @@ class Account(Base):
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
     access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
+    tool_approvals = relationship('PendingToolApproval', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -523,3 +524,36 @@ class ContactEvent(Base):
 
     def __repr__(self):
         return f'<ContactEvent {self.id}: {self.event_type} for contact {self.contact_id}>'
+
+
+class PendingToolApproval(Base):
+    """
+    Durable queue entry created when a HITL-gated tool (e.g. sendTxtEmail)
+    wants to execute.  The record holds everything needed to act on an approval
+    *without* persisting decrypted credentials — the credential_id in the
+    payload is re-looked-up at execution time.
+
+    Lifecycle: pending → approved (→ executed) | rejected | expired
+    """
+    __tablename__ = 'pending_tool_approvals'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey('agents.id', ondelete='SET NULL'), nullable=True, index=True)
+    chat_session_id = Column(Integer, ForeignKey('chat_sessions.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    tool_type = Column(String(100), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default='pending', index=True)
+
+    # Stores tool arguments.  MUST NOT contain decrypted secrets.
+    # For sendTxtEmail: {credential_id, to_email, subject, body}
+    payload = Column(JSON, nullable=False)
+
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='tool_approvals')
+
+    def __repr__(self):
+        return f'<PendingToolApproval {self.id}: {self.tool_type} [{self.status}]>'
