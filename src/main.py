@@ -39,7 +39,7 @@ import debugpy
 
 load_dotenv()
 
-debugpy.listen(("0.0.0.0", 5678))
+# debugpy.listen(("0.0.0.0", 5678))
 # debugpy.wait_for_client()
 
 # Enable redirect_slashes - we handle HTTPS redirects in CORS middleware
