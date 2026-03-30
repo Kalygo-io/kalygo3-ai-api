@@ -15,6 +15,8 @@ class Account(Base):
     reset_token = Column(String)
     stripe_customer_id = Column(String, nullable=True)
     newsletter_subscribed = Column(Boolean, default=False, nullable=False)
+    login_otp = Column(String, nullable=True)
+    login_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     logins = relationship('Logins', back_populates='account')
     chat_sessions = relationship('ChatSession', back_populates='account')

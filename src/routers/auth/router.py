@@ -1,4 +1,6 @@
 from datetime import timedelta, datetime, timezone
+import hashlib
+import random
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Response, BackgroundTasks, Request
 from pydantic import BaseModel
@@ -9,6 +11,7 @@ from src.db.models import Account, UsageCredits
 from src.routers.auth.background_tasks import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
+from src.routers.auth.background_tasks.send_login_code_email_ses import send_login_code_email_ses
 from src.deps import db_dependency, bcrypt_context, jwt_dependency
 from src.clients.stripe_client import create_stripe_customer
 import stripe
@@ -49,6 +52,34 @@ class Token(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     email: str
+
+class RequestCodeBody(BaseModel):
+    email: str
+
+class VerifyCodeBody(BaseModel):
+    email: str
+    code: str
+
+
+OTP_TTL_MINUTES = 10
+
+def _hash_otp(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def _issue_jwt_cookie(response: Response, account: Account) -> Response:
+    token = create_access_token(account.email, account.id, timedelta(hours=12))
+    response.set_cookie(
+        key="jwt",
+        value=token,
+        httponly=True,
+        expires=60 * 30 * 24,
+        secure=True,
+        samesite="None",
+        domain=os.getenv("COOKIE_DOMAIN"),
+        path="/",
+    )
+    return response
 
 def authenticate(email: str, password: str, db):
     print("authenticate...")
@@ -232,6 +263,92 @@ def reset_password(background_tasks: BackgroundTasks, request_body: PasswordRese
         send_password_has_been_reset_email_ses(account.email)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@router.post("/request-code", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+async def request_login_code(body: RequestCodeBody, db: db_dependency, request: Request, background_tasks: BackgroundTasks):
+    """
+    Step 1 of OTP login/signup.
+    Creates the account if it doesn't exist, then emails a 6-digit code.
+    Always returns 200 to avoid leaking whether the email is registered.
+    """
+    try:
+        account = db.query(Account).filter(Account.email == body.email).first()
+
+        if not account:
+            # Auto-create account (dev cap still applies)
+            account_count = db.query(Account).count()
+            if account_count >= 50:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account creation is currently limited.",
+                )
+            stripe_customer_id = None
+            try:
+                stripe_customer_id = create_stripe_customer(body.email)
+            except Exception:
+                pass
+
+            account = Account(
+                email=body.email,
+                stripe_customer_id=stripe_customer_id,
+            )
+            db.add(account)
+            db.flush()
+
+            try:
+                usage_credits = UsageCredits(account_id=account.id, amount=1.00)
+                db.add(usage_credits)
+            except Exception:
+                pass
+
+            db.commit()
+            db.refresh(account)
+
+        code = str(random.randint(100000, 999999))
+        account.login_otp = _hash_otp(code)
+        account.login_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=OTP_TTL_MINUTES)
+        db.commit()
+
+        background_tasks.add_task(send_login_code_email_ses, account.email, code)
+        return {"detail": "Code sent"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise handle_db_error(e, "[REQUEST CODE]")
+
+
+@router.post("/verify-code")
+@limiter.limit("10/minute")
+async def verify_login_code(body: VerifyCodeBody, db: db_dependency, request: Request, background_tasks: BackgroundTasks):
+    """
+    Step 2 of OTP login/signup.
+    Validates the 6-digit code and issues a JWT session cookie.
+    """
+    invalid_exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code")
+
+    account = db.query(Account).filter(Account.email == body.email).first()
+    if not account or not account.login_otp or not account.login_otp_expires_at:
+        raise invalid_exc
+
+    if datetime.now(timezone.utc) > account.login_otp_expires_at:
+        raise invalid_exc
+
+    if account.login_otp != _hash_otp(body.code):
+        raise invalid_exc
+
+    account.login_otp = None
+    account.login_otp_expires_at = None
+    db.commit()
+
+    ip_address = request.client.host
+    background_tasks.add_task(record_login, account.id, account.email, ip_address, db)
+
+    response = Response()
+    return _issue_jwt_cookie(response, account)
+
 
 @router.get("/check-cookies")
 def check_cookies(request: Request):
