@@ -103,6 +103,7 @@ class CredentialType(str, Enum):
     OAUTH = "oauth"
     SSH_KEY = "ssh_key"
     CERTIFICATE = "certificate"
+    AWS_ACCESS_KEY_PAIR = "aws_access_key_pair"
 
 
 class Credential(Base):

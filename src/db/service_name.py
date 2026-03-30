@@ -27,3 +27,6 @@ class ServiceName(str, Enum):
     
     # Database Services
     SUPABASE = "SUPABASE"
+    
+    # Email Services
+    AWS_SES = "AWS_SES"

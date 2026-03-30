@@ -75,7 +75,7 @@ class CreateFlexibleCredentialRequest(BaseModel):
     - Database: {"service_name": "MY_DATABASE", "credential_type": "db_connection", "credential_data": {"host": "...", "port": 5432, ...}}
     """
     service_name: ServiceName
-    credential_type: str = Field(default="api_key", description="Type of credential: api_key, db_connection, oauth, ssh_key, certificate")
+    credential_type: str = Field(default="api_key", description="Type of credential: api_key, db_connection, oauth, ssh_key, certificate, aws_access_key_pair")
     credential_data: Dict[str, Any] = Field(..., description="The credential data structure (varies by type)")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Non-sensitive metadata (display name, description, etc.)")
 
@@ -480,6 +480,7 @@ async def create_flexible_credential(
     - OAuth: {"client_id": "...", "client_secret": "...", "access_token": "...", "refresh_token": "..."}
     - SSH keys: {"private_key": "-----BEGIN...", "passphrase": "..."}
     - Certificates: {"certificate": "...", "private_key": "..."}
+    - AWS access key pairs: {"aws_access_key_id": "AKIA...", "aws_secret_access_key": "...", "aws_region": "...", "from_email": "..."}
     
     Example request:
     {
