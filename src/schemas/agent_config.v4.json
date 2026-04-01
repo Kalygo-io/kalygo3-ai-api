@@ -100,6 +100,9 @@
         },
         {
           "$ref": "#/$defs/sendTxtEmailTool"
+        },
+        {
+          "$ref": "#/$defs/sendTxtEmailWithGoogleTool"
         }
       ]
     },
@@ -207,6 +210,28 @@
           "type": "integer",
           "minimum": 1,
           "description": "ID of the stored AWS SES credential (service_name = AWS_SES). Must contain aws_access_key_id, aws_secret_access_key, aws_region, and from_email."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional description shown to the LLM to guide when and how to use the tool."
+        }
+      }
+    },
+    "sendTxtEmailWithGoogleTool": {
+      "type": "object",
+      "description": "Plain-text email sending tool via Google Gmail API. Sends emails using a Google OAuth credential stored in the caller's credentials database. The agent provides the recipient, subject, and body at runtime.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "sendTxtEmailWithGoogle" },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the stored Google OAuth credential (service_name = GOOGLE_OAUTH). Must contain client_id, client_secret, refresh_token, and from_email."
         },
         "description": {
           "type": "string",

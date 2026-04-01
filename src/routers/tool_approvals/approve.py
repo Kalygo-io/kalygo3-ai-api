@@ -1,10 +1,12 @@
 """
 Approve a pending tool action and execute it.
 
-Currently handles: sendTxtEmail — decrypts the stored credential at execution
-time (the payload stores only the credential_id, never plaintext secrets) and
-sends the email via AWS SES.
+Handles:
+  - sendTxtEmail            — sends via AWS SES
+  - sendTxtEmailWithGoogle  — sends via Google Gmail API (OAuth refresh token)
 """
+import base64
+import email as email_lib
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
@@ -37,6 +39,58 @@ def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> st
         },
     )
     return response.get("MessageId", "unknown")
+
+
+def _send_gmail_email(google_cfg: dict, to_email: str, subject: str, body: str) -> str:
+    """
+    Send plain-text email via the Gmail REST API using an OAuth refresh token.
+
+    Exchanges the refresh token for a fresh access token, then calls
+    gmail.users.messages.send.  Returns the Gmail message ID.
+
+    Required google_cfg keys: client_id, client_secret, refresh_token, from_email.
+    """
+    import httpx
+
+    # Step 1 — refresh the access token
+    token_resp = httpx.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id": google_cfg["client_id"],
+            "client_secret": google_cfg["client_secret"],
+            "refresh_token": google_cfg["refresh_token"],
+            "grant_type": "refresh_token",
+        },
+        timeout=15,
+    )
+    if token_resp.status_code != 200:
+        raise RuntimeError(
+            f"Failed to refresh Google access token: {token_resp.status_code} {token_resp.text}"
+        )
+    access_token = token_resp.json().get("access_token")
+    if not access_token:
+        raise RuntimeError("Google token response did not contain an access_token")
+
+    # Step 2 — build the RFC-2822 message and base64url-encode it
+    msg = email_lib.message.EmailMessage()
+    msg["From"] = google_cfg["from_email"]
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+    # Step 3 — call Gmail API
+    send_resp = httpx.post(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"raw": raw},
+        timeout=15,
+    )
+    if send_resp.status_code not in (200, 201):
+        raise RuntimeError(
+            f"Gmail API send failed: {send_resp.status_code} {send_resp.text}"
+        )
+    return send_resp.json().get("id", "unknown")
 
 
 @router.post("/{approval_id}/approve", response_model=ApproveToolApprovalResponse)
@@ -113,6 +167,53 @@ async def approve_tool_approval(
         except Exception as e:
             print(f"[TOOL APPROVAL] ❌ SES send failed — approval_id={approval_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
+
+        approval.status = "approved"
+        db.commit()
+
+        return ApproveToolApprovalResponse(
+            id=approval.id,
+            status="approved",
+            message=f"Email sent to {to_email}",
+        )
+
+    elif approval.tool_type == "sendTxtEmailWithGoogle":
+        payload = approval.payload
+        credential_id = payload.get("credential_id")
+        to_email = payload.get("to_email", "")
+        subject = payload.get("subject", "")
+        body = payload.get("body", "")
+
+        if not credential_id:
+            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
+
+        credential = db.query(Credential).filter(
+            Credential.id == credential_id,
+            Credential.account_id == account_id,
+        ).first()
+
+        if not credential:
+            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
+
+        try:
+            cred_data = decrypt_credential_data(credential.encrypted_data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
+
+        required = ["client_id", "client_secret", "refresh_token", "from_email"]
+        missing = [k for k in required if not cred_data.get(k)]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Credential is missing required Google OAuth fields: {missing}",
+            )
+
+        try:
+            message_id = _send_gmail_email(cred_data, to_email, subject, body)
+            print(f"[TOOL APPROVAL] ✅ Gmail sent — approval_id={approval_id} MessageId={message_id}")
+        except Exception as e:
+            print(f"[TOOL APPROVAL] ❌ Gmail send failed — approval_id={approval_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to send email via Gmail: {e}")
 
         approval.status = "approved"
         db.commit()
