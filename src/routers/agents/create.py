@@ -25,156 +25,85 @@ async def create_agent(
     request: Request
 ):
     """
-    Create a new agent.
-    
-    The agent will have:
-    - name: The name of the agent (required)
-    - config: Agent configuration object (required)
-    
-    The config must include schema, version, and data.
-    
-    Supported versions:
-    
-    Version 1 (Knowledge Base-centric):
-    {
-      "schema": "agent_config",
-      "version": 1,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "knowledgeBases": [
-          {
-            "provider": "pinecone",
-            "index": "all-MiniLM-L6-v2",
-            "namespace": "ai_school_kb",
-            "description": "Optional description"
-          }
-        ]
-      }
-    }
-    
-    Version 2 (Tool-centric):
-    {
-      "schema": "agent_config",
-      "version": 2,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "tools": [
-          {
-            "type": "vectorSearch",
-            "provider": "pinecone",
-            "index": "all-MiniLM-L6-v2",
-            "namespace": "ai_school_kb",
-            "description": "Optional description",
-            "topK": 10
-          }
-        ]
-      }
-    }
-    
-    Version 3 (Model configuration):
-    {
-      "schema": "agent_config",
-      "version": 3,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "model": { "provider": "openai", "model": "gpt-4o-mini" },
-        "tools": []
-      }
-    }
-    
-    Version 4 (adds optional ElevenLabs voice for TTS):
+    Create a new agent with a v4 config:
     {
       "schema": "agent_config",
       "version": 4,
       "data": {
-        "systemPrompt": "The system prompt for the agent",
+        "systemPrompt": "You are a helpful assistant.",
         "model": { "provider": "openai", "model": "gpt-4o-mini" },
         "elevenlabsVoiceId": "optional-voice-id-for-tts",
         "tools": []
       }
     }
-    
-    Supported model providers: openai, anthropic, ollama
-    
-    The request body is validated against the agent JSON schema matching the version
-    specified in the config (v1, v2, v3, or v4).
+    Supported model providers: openai, anthropic, google, ollama
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
-        # Validate agent name
+
         agent_name = request_body.name.strip()
         if not agent_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Agent name cannot be empty"
             )
-        
-        # Extract version from config to validate against the correct schema
-        config_version = request_body.config.get("version", 1)
-        
-        # Validate version is supported
-        if config_version not in [1, 2, 3, 4]:
+
+        config_version = request_body.config.get("version")
+        if config_version != 4:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3, 4"
+                detail="Only config version 4 is supported."
             )
-        
-        print(f"[CREATE AGENT] Validating against agent_config v{config_version}")
-        
-        # Convert Pydantic model to dict for JSON schema validation
+
         request_dict = request_body.model_dump(exclude_none=False)
-        
-        # Validate against JSON schema (validates name and full config structure including schema/version/data)
+
         try:
-            validate_against_schema(request_dict, "agent", config_version)
-        except JsonSchemaValidationError as e:
+            validate_against_schema(request_dict, "agent", 4)
+        except JsonSchemaValidationError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Agent configuration failed validation (schema 'agent' v{config_version}).",
+                detail="Agent configuration failed validation (schema 'agent' v4).",
             )
         except FileNotFoundError as e:
             import logging as _log
             _log.getLogger(__name__).warning("[CREATE AGENT] Schema file not found: %s", e)
         except Exception as e:
             raise handle_db_error(e, "[SCHEMA VALIDATION ERROR]")
-        
-        # Validate config structure separately against agent_config schema (validates schema, version, and data)
+
         try:
-            validate_against_schema(request_body.config, "agent_config", config_version)
-        except JsonSchemaValidationError as e:
+            validate_against_schema(request_body.config, "agent_config", 4)
+        except JsonSchemaValidationError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Agent config failed validation (schema 'agent_config' v{config_version}).",
+                detail="Agent config failed validation (schema 'agent_config' v4).",
             )
         except FileNotFoundError as e:
             import logging as _log
             _log.getLogger(__name__).warning("[CREATE AGENT] Config schema file not found: %s", e)
-        
-        # Create the agent with the provided config (already includes schema, version, and data)
+
         agent = Agent(
             account_id=account_id,
             name=agent_name,
             config=request_body.config
         )
-        
+
         db.add(agent)
         db.commit()
         db.refresh(agent)
-        
+
         return AgentResponse(
             id=agent.id,
             name=agent.name,
             config=agent.config
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:

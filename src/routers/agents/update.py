@@ -26,102 +26,37 @@ async def update_agent(
     request: Request
 ):
     """
-    Update an agent by ID.
-    
-    Allows updating:
-    - name: The name of the agent (optional)
-    - config: Agent configuration object (optional)
-    
-    The config must follow the agent_config schema structure if provided.
-    
-    Supported versions:
-    
-    Version 1 (Knowledge Base-centric):
-    {
-      "schema": "agent_config",
-      "version": 1,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "knowledgeBases": [...]
-      }
-    }
-    
-    Version 2 (Tool-centric):
-    {
-      "schema": "agent_config",
-      "version": 2,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "tools": [
-          {
-            "type": "vectorSearch",
-            "provider": "pinecone",
-            "index": "index-name",
-            "namespace": "namespace",
-            "topK": 10
-          }
-        ]
-      }
-    }
-    
-    Version 3 (Model configuration):
-    {
-      "schema": "agent_config",
-      "version": 3,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "model": { "provider": "openai", "model": "gpt-4o-mini" },
-        "tools": []
-      }
-    }
-    
-    Version 4 (adds optional ElevenLabs voice for TTS):
-    {
-      "schema": "agent_config",
-      "version": 4,
-      "data": {
-        "systemPrompt": "The system prompt for the agent",
-        "model": { "provider": "openai", "model": "gpt-4o-mini" },
-        "elevenlabsVoiceId": "optional-voice-id",
-        "tools": []
-      }
-    }
-    
-    Supported model providers: openai, anthropic, ollama
-    
+    Update an agent by ID (name and/or config).
+    Config must be version 4 if provided.
     Only allows updating agents belonging to the authenticated user.
-    The account_id (owner) cannot be changed.
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
-        # Query agent by ID and account_id to ensure it belongs to the user
+
         agent = db.query(Agent).filter(
             Agent.id == agent_id,
             Agent.account_id == account_id
         ).first()
-        
+
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found"
             )
-        
-        # Check if at least one field is being updated
+
         if request_body.name is None and request_body.config is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least one field (name or config) must be provided for update"
             )
-        
-        # Update name if provided
+
         if request_body.name is not None:
             agent_name = request_body.name.strip()
             if not agent_name:
@@ -130,66 +65,50 @@ async def update_agent(
                     detail="Agent name cannot be empty"
                 )
             agent.name = agent_name
-        
-        # Update config if provided
+
         if request_body.config is not None:
-            # Extract version from config to validate against the correct schema
-            config_version = request_body.config.get("version", 1)
-            
-            # Validate version is supported
-            if config_version not in [1, 2, 3, 4]:
+            config_version = request_body.config.get("version")
+            if config_version != 4:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported config version: {config_version}. Supported versions: 1, 2, 3, 4"
+                    detail="Only config version 4 is supported."
                 )
-            
-            print(f"[UPDATE AGENT] Validating against agent_config v{config_version}")
-            
-            # Validate config structure against agent_config schema
+
             try:
-                validate_against_schema(request_body.config, "agent_config", config_version)
-            except JsonSchemaValidationError as e:
+                validate_against_schema(request_body.config, "agent_config", 4)
+            except JsonSchemaValidationError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Agent config failed validation (schema 'agent_config' v{config_version}).",
+                    detail="Agent config failed validation (schema 'agent_config' v4).",
                 )
             except FileNotFoundError as e:
                 import logging as _log
                 _log.getLogger(__name__).warning("[UPDATE AGENT] Config schema file not found: %s", e)
-            
+
             agent.config = request_body.config
-        
-        # Validate the updated agent structure if both fields are present
+
         if request_body.name is not None and request_body.config is not None:
-            # Use the version from the updated config
-            config_version = agent.config.get("version", 1)
-            
-            # Create a full agent structure for validation
-            agent_dict = {
-                "name": agent.name,
-                "config": agent.config
-            }
+            agent_dict = {"name": agent.name, "config": agent.config}
             try:
-                validate_against_schema(agent_dict, "agent", config_version)
-            except JsonSchemaValidationError as e:
+                validate_against_schema(agent_dict, "agent", 4)
+            except JsonSchemaValidationError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Agent configuration failed validation (schema 'agent' v{config_version}).",
+                    detail="Agent configuration failed validation (schema 'agent' v4).",
                 )
             except FileNotFoundError as e:
                 import logging as _log
                 _log.getLogger(__name__).warning("[UPDATE AGENT] Schema file not found: %s", e)
-        
-        # Commit the changes
+
         db.commit()
         db.refresh(agent)
-        
+
         return AgentResponse(
             id=agent.id,
             name=agent.name,
             config=agent.config
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:

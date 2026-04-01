@@ -41,7 +41,7 @@ def _resolve_file_reference(uri: str, current_dir: Path) -> Dict[str, Any]:
     Handles both relative paths (./filename.json) and absolute file:// URIs.
     
     Args:
-        uri: The URI to resolve (e.g., "./agent_config.v1.json" or "file:///path/to/file.json")
+        uri: The URI to resolve (e.g., "./agent_config.v4.json" or "file:///path/to/file.json")
         current_dir: The directory to resolve relative paths from
         
     Returns:
@@ -155,17 +155,15 @@ def validate_against_schema(
     # This prevents the resolver from trying to fetch them as URLs
     store[schema.get("$id", base_uri)] = schema
     
-    # Also register common schema files by their $id patterns
-    # Load agent_config schema if it exists and register it
+    # Pre-register agent_config v4 schema so internal $ref resolution works
     try:
-        config_schema = load_schema("agent_config", 1)
+        config_schema = load_schema("agent_config", 4)
         if "$id" in config_schema:
             store[config_schema["$id"]] = config_schema
-        # Also register by filename pattern
-        store["./agent_config.v1.json"] = config_schema
-        store["agent_config.v1.json"] = config_schema
+        store["./agent_config.v4.json"] = config_schema
+        store["agent_config.v4.json"] = config_schema
     except FileNotFoundError:
-        pass  # Config schema might not exist, that's okay
+        pass
     
     # Load chat_message schema if it exists and register it
     try:
