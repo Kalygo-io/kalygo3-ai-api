@@ -3,10 +3,11 @@ Approve a pending tool action and execute it.
 
 Handles:
   - sendTxtEmail            — sends via AWS SES
-  - sendTxtEmailWithGoogle  — sends via Google Gmail API (OAuth refresh token)
+  - sendTxtEmailWithGoogle  — sends via Gmail SMTP + App Password
 """
-import base64
-import email as email_lib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
@@ -41,56 +42,21 @@ def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> st
     return response.get("MessageId", "unknown")
 
 
-def _send_gmail_email(google_cfg: dict, to_email: str, subject: str, body: str) -> str:
+def _send_gmail_smtp_email(smtp_cfg: dict, to_email: str, subject: str, body: str) -> None:
     """
-    Send plain-text email via the Gmail REST API using an OAuth refresh token.
+    Send plain-text email via Gmail SMTP using an App Password.
 
-    Exchanges the refresh token for a fresh access token, then calls
-    gmail.users.messages.send.  Returns the Gmail message ID.
-
-    Required google_cfg keys: client_id, client_secret, refresh_token, from_email.
+    Required smtp_cfg keys: from_email, app_password.
     """
-    import httpx
-
-    # Step 1 — refresh the access token
-    token_resp = httpx.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": google_cfg["client_id"],
-            "client_secret": google_cfg["client_secret"],
-            "refresh_token": google_cfg["refresh_token"],
-            "grant_type": "refresh_token",
-        },
-        timeout=15,
-    )
-    if token_resp.status_code != 200:
-        raise RuntimeError(
-            f"Failed to refresh Google access token: {token_resp.status_code} {token_resp.text}"
-        )
-    access_token = token_resp.json().get("access_token")
-    if not access_token:
-        raise RuntimeError("Google token response did not contain an access_token")
-
-    # Step 2 — build the RFC-2822 message and base64url-encode it
-    msg = email_lib.message.EmailMessage()
-    msg["From"] = google_cfg["from_email"]
+    msg = MIMEMultipart("alternative")
+    msg["From"] = smtp_cfg["from_email"]
     msg["To"] = to_email
     msg["Subject"] = subject
-    msg.set_content(body)
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+    msg.attach(MIMEText(body, "plain"))
 
-    # Step 3 — call Gmail API
-    send_resp = httpx.post(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-        headers={"Authorization": f"Bearer {access_token}"},
-        json={"raw": raw},
-        timeout=15,
-    )
-    if send_resp.status_code not in (200, 201):
-        raise RuntimeError(
-            f"Gmail API send failed: {send_resp.status_code} {send_resp.text}"
-        )
-    return send_resp.json().get("id", "unknown")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(smtp_cfg["from_email"], smtp_cfg["app_password"])
+        server.sendmail(smtp_cfg["from_email"], to_email, msg.as_string())
 
 
 @router.post("/{approval_id}/approve", response_model=ApproveToolApprovalResponse)
@@ -200,19 +166,19 @@ async def approve_tool_approval(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
 
-        required = ["client_id", "client_secret", "refresh_token", "from_email"]
+        required = ["from_email", "app_password"]
         missing = [k for k in required if not cred_data.get(k)]
         if missing:
             raise HTTPException(
                 status_code=422,
-                detail=f"Credential is missing required Google OAuth fields: {missing}",
+                detail=f"Credential is missing required Gmail SMTP fields: {missing}",
             )
 
         try:
-            message_id = _send_gmail_email(cred_data, to_email, subject, body)
-            print(f"[TOOL APPROVAL] ✅ Gmail sent — approval_id={approval_id} MessageId={message_id}")
+            _send_gmail_smtp_email(cred_data, to_email, subject, body)
+            print(f"[TOOL APPROVAL] ✅ Gmail SMTP sent — approval_id={approval_id}")
         except Exception as e:
-            print(f"[TOOL APPROVAL] ❌ Gmail send failed — approval_id={approval_id}: {e}")
+            print(f"[TOOL APPROVAL] ❌ Gmail SMTP send failed — approval_id={approval_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to send email via Gmail: {e}")
 
         approval.status = "approved"
