@@ -208,13 +208,6 @@
           "minimum": 1,
           "description": "ID of the stored AWS SES credential (service_name = AWS_SES). Must contain aws_access_key_id, aws_secret_access_key, aws_region, and from_email."
         },
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 50,
-          "pattern": "^[a-z_][a-z0-9_]*$",
-          "description": "Optional custom name for the tool as seen by the LLM. Defaults to 'send_txt_email'."
-        },
         "description": {
           "type": "string",
           "minLength": 1,
