@@ -102,7 +102,10 @@
           "$ref": "#/$defs/sendTxtEmailTool"
         },
         {
-          "$ref": "#/$defs/sendTxtEmailWithGoogleTool"
+          "$ref": "#/$defs/sendTxtEmailWithGoogleOAuthTool"
+        },
+        {
+          "$ref": "#/$defs/sendTxtEmailWithGoogleSmtpTool"
         }
       ]
     },
@@ -218,20 +221,42 @@
         }
       }
     },
-    "sendTxtEmailWithGoogleTool": {
+    "sendTxtEmailWithGoogleOAuthTool": {
       "type": "object",
-      "description": "Plain-text email sending tool via Google Gmail API. Sends emails using a Google OAuth credential stored in the caller's credentials database. The agent provides the recipient, subject, and body at runtime.",
+      "description": "Plain-text email sending tool via Google Gmail API using OAuth. Sends emails using a Google OAuth credential stored in the caller's credentials database.",
       "additionalProperties": false,
       "required": [
         "type",
         "credentialId"
       ],
       "properties": {
-        "type": { "type": "string", "const": "sendTxtEmailWithGoogle" },
+        "type": { "type": "string", "const": "sendTxtEmailWithGoogleOAuth" },
         "credentialId": {
           "type": "integer",
           "minimum": 1,
           "description": "ID of the stored Google OAuth credential (service_name = GOOGLE_OAUTH). Must contain client_id, client_secret, refresh_token, and from_email."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional description shown to the LLM to guide when and how to use the tool."
+        }
+      }
+    },
+    "sendTxtEmailWithGoogleSmtpTool": {
+      "type": "object",
+      "description": "Plain-text email sending tool via Gmail SMTP using an App Password. Sends emails using a Gmail SMTP credential stored in the caller's credentials database.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "sendTxtEmailWithGoogleSmtp" },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the stored Gmail SMTP credential (service_name = GOOGLE_GMAIL_SMTP). Must contain from_email and app_password."
         },
         "description": {
           "type": "string",
