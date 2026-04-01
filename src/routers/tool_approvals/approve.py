@@ -111,6 +111,15 @@ def _send_gmail_smtp_email(smtp_cfg: dict, to_email: str, subject: str, body: st
         server.sendmail(smtp_cfg["from_email"], to_email, msg.as_string())
 
 
+from pydantic import BaseModel
+
+class ApproveOverrides(BaseModel):
+    """Optional user-edited values that override what the agent originally composed."""
+    to_email: str | None = None
+    subject: str | None = None
+    body: str | None = None
+
+
 @router.post("/{approval_id}/approve", response_model=ApproveToolApprovalResponse)
 @limiter.limit("60/minute")
 async def approve_tool_approval(
@@ -118,12 +127,13 @@ async def approve_tool_approval(
     db: db_dependency,
     auth: auth_dependency,
     request: Request,
+    overrides: ApproveOverrides | None = None,
 ):
     """
     Approve and immediately execute a pending tool action.
 
-    For sendTxtEmail: decrypts the stored AWS SES credential and sends the
-    email on behalf of the account.
+    An optional JSON body may supply overrides for to_email / subject / body,
+    allowing the user to edit the agent-composed email before sending.
     """
     account_id = int(auth["id"]) if isinstance(auth["id"], str) else auth["id"]
     now = datetime.now(timezone.utc)
@@ -148,12 +158,20 @@ async def approve_tool_approval(
         raise HTTPException(status_code=410, detail="This approval request has expired")
 
     # ── Execute the tool ────────────────────────────────────────────────────
+    # Helper: prefer user-edited override over original agent-composed value
+    def _resolve(field: str, fallback: str) -> str:
+        if overrides:
+            v = getattr(overrides, field, None)
+            if v is not None and v.strip():
+                return v.strip()
+        return fallback
+
     if approval.tool_type == "sendTxtEmail":
         payload = approval.payload
         credential_id = payload.get("credential_id")
-        to_email = payload.get("to_email", "")
-        subject = payload.get("subject", "")
-        body = payload.get("body", "")
+        to_email = _resolve("to_email", payload.get("to_email", ""))
+        subject = _resolve("subject", payload.get("subject", ""))
+        body = _resolve("body", payload.get("body", ""))
 
         if not credential_id:
             raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
@@ -198,9 +216,9 @@ async def approve_tool_approval(
     elif approval.tool_type == "sendTxtEmailWithGoogleOAuth":
         payload = approval.payload
         credential_id = payload.get("credential_id")
-        to_email = payload.get("to_email", "")
-        subject = payload.get("subject", "")
-        body = payload.get("body", "")
+        to_email = _resolve("to_email", payload.get("to_email", ""))
+        subject = _resolve("subject", payload.get("subject", ""))
+        body = _resolve("body", payload.get("body", ""))
 
         if not credential_id:
             raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
@@ -245,9 +263,9 @@ async def approve_tool_approval(
     elif approval.tool_type == "sendTxtEmailWithGoogleSmtp":
         payload = approval.payload
         credential_id = payload.get("credential_id")
-        to_email = payload.get("to_email", "")
-        subject = payload.get("subject", "")
-        body = payload.get("body", "")
+        to_email = _resolve("to_email", payload.get("to_email", ""))
+        subject = _resolve("subject", payload.get("subject", ""))
+        body = _resolve("body", payload.get("body", ""))
 
         if not credential_id:
             raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
