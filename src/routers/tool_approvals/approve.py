@@ -2,7 +2,7 @@
 Approve a pending tool action and execute it.
 
 Handles:
-  - sendTxtEmail                 — sends via AWS SES
+  - sendTxtEmailWithSes          — sends via AWS SES
   - sendTxtEmailWithGoogleOAuth  — sends via Google Gmail API (OAuth refresh token)
   - sendTxtEmailWithGoogleSmtp   — sends via Gmail SMTP + App Password
 """
@@ -166,7 +166,7 @@ async def approve_tool_approval(
                 return v.strip()
         return fallback
 
-    if approval.tool_type == "sendTxtEmail":
+    if approval.tool_type == "sendTxtEmailWithSes":
         payload = approval.payload
         credential_id = payload.get("credential_id")
         to_email = _resolve("to_email", payload.get("to_email", ""))

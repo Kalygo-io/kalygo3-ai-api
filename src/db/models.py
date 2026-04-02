@@ -530,7 +530,7 @@ class ContactEvent(Base):
 
 class PendingToolApproval(Base):
     """
-    Durable queue entry created when a HITL-gated tool (e.g. sendTxtEmail)
+    Durable queue entry created when a HITL-gated tool (e.g. sendTxtEmailWithSes)
     wants to execute.  The record holds everything needed to act on an approval
     *without* persisting decrypted credentials — the credential_id in the
     payload is re-looked-up at execution time.
@@ -548,7 +548,7 @@ class PendingToolApproval(Base):
     status = Column(String(20), nullable=False, default='pending', index=True)
 
     # Stores tool arguments.  MUST NOT contain decrypted secrets.
-    # For sendTxtEmail: {credential_id, to_email, subject, body}
+    # For sendTxtEmailWithSes: {credential_id, to_email, subject, body}
     payload = Column(JSON, nullable=False)
 
     expires_at = Column(DateTime(timezone=True), nullable=False)

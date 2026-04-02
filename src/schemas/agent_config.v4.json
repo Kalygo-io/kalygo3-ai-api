@@ -99,7 +99,7 @@
           "$ref": "#/$defs/dbTableWriteTool"
         },
         {
-          "$ref": "#/$defs/sendTxtEmailTool"
+          "$ref": "#/$defs/sendTxtEmailWithSesTool"
         },
         {
           "$ref": "#/$defs/sendTxtEmailWithGoogleOAuthTool"
@@ -199,7 +199,7 @@
         "injectChatSessionId": { "type": "boolean", "default": false }
       }
     },
-    "sendTxtEmailTool": {
+    "sendTxtEmailWithSesTool": {
       "type": "object",
       "description": "Plain-text email sending tool via AWS SES. Sends emails using AWS credentials stored in the caller's credentials database. The agent provides the recipient, subject, and body at runtime.",
       "additionalProperties": false,
@@ -208,7 +208,7 @@
         "credentialId"
       ],
       "properties": {
-        "type": { "type": "string", "const": "sendTxtEmail" },
+        "type": { "type": "string", "const": "sendTxtEmailWithSes" },
         "credentialId": {
           "type": "integer",
           "minimum": 1,
