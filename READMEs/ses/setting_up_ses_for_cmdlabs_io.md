@@ -26,4 +26,4 @@ Going through the SES config set setup process
       - Attach the subscription to the topic  
   - STEP 4: Add another topic to subscribe for "production" events
   - STEP 5: Send test email and watch the events flow
-      
+      - Note that HTML emails are required for tracking `open` and `click` events
