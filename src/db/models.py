@@ -598,9 +598,9 @@ class EmailEvent(Base):
     # Campaign grouping — nullable until a campaigns table is introduced
     campaign_id = Column(Integer, nullable=True, index=True)
 
-    # Recipient — contact_id may be null for externally-triggered events
+    # Recipient — nullable to support group/campaign sends where there is no single primary recipient
     contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'), nullable=True, index=True)
-    email_address = Column(String(320), nullable=False)
+    primary_recipient = Column(String(320), nullable=True)
 
     # Event classification
     event_type = Column(_email_event_type_pg, nullable=False, index=True)
@@ -621,4 +621,4 @@ class EmailEvent(Base):
     contact = relationship('Contact', back_populates='email_events')
 
     def __repr__(self):
-        return f'<EmailEvent {self.id}: {self.event_type} → {self.email_address}>'
+        return f'<EmailEvent {self.id}: {self.event_type} → {self.primary_recipient}>'

@@ -9,8 +9,8 @@ EmailEventType = Literal["send", "delivery", "open", "bounce", "complaint", "oth
 
 
 class CreateEmailEventRequest(BaseModel):
-    email_address: str
     event_type: EmailEventType
+    primary_recipient: Optional[str] = None
     tool_approval_id: Optional[int] = None
     campaign_id: Optional[int] = None
     contact_id: Optional[int] = None
@@ -34,7 +34,7 @@ class EmailEventResponse(BaseModel):
     tool_approval_id: Optional[int] = None
     campaign_id: Optional[int] = None
     contact_id: Optional[int] = None
-    email_address: str
+    primary_recipient: Optional[str] = None
     event_type: str
     provider: Optional[str] = None
     provider_message_id: Optional[str] = None

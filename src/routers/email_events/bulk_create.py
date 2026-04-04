@@ -37,7 +37,7 @@ async def bulk_create_email_events(
         events = [
             EmailEvent(
                 account_id=account_id,
-                email_address=e.email_address.strip().lower(),
+                primary_recipient=e.primary_recipient.strip().lower() if e.primary_recipient else None,
                 event_type=e.event_type,
                 tool_approval_id=e.tool_approval_id,
                 campaign_id=e.campaign_id,

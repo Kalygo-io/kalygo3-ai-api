@@ -36,9 +36,9 @@ def upgrade() -> None:
         # Campaign grouping (nullable until a campaigns table exists)
         sa.Column('campaign_id', sa.Integer(), nullable=True),
 
-        # Who received the email
+        # Who received the email — nullable for group/campaign sends
         sa.Column('contact_id', sa.Integer(), nullable=True),
-        sa.Column('email_address', sa.String(320), nullable=False),
+        sa.Column('primary_recipient', sa.String(320), nullable=True),
 
         # Event classification
         sa.Column(

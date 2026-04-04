@@ -28,7 +28,7 @@ async def create_email_event(
 
         event = EmailEvent(
             account_id=account_id,
-            email_address=request_body.email_address.strip().lower(),
+            primary_recipient=request_body.primary_recipient.strip().lower() if request_body.primary_recipient else None,
             event_type=request_body.event_type,
             tool_approval_id=request_body.tool_approval_id,
             campaign_id=request_body.campaign_id,
