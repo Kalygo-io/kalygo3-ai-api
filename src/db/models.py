@@ -31,6 +31,7 @@ class Account(Base):
     access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
     tool_approvals = relationship('PendingToolApproval', back_populates='account', cascade='all, delete-orphan')
+    email_events = relationship('EmailEvent', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -447,6 +448,7 @@ class Contact(Base):
     account = relationship('Account', back_populates='contacts')
     events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
     list_memberships = relationship('ContactListMember', back_populates='contact', cascade='all, delete-orphan')
+    email_events = relationship('EmailEvent', back_populates='contact')
 
     def __repr__(self):
         return f'<Contact {self.id}: {self.name}>'
@@ -556,6 +558,67 @@ class PendingToolApproval(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     account = relationship('Account', back_populates='tool_approvals')
+    email_events = relationship('EmailEvent', back_populates='tool_approval', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<PendingToolApproval {self.id}: {self.tool_type} [{self.status}]>'
+
+
+# PostgreSQL native enum type — mirrors the Alembic migration definition
+_email_event_type_pg = PG_ENUM(
+    'send', 'delivery', 'open', 'bounce', 'complaint', 'other',
+    name='emaileventtype',
+    create_type=False,  # managed by Alembic, not SQLAlchemy metadata
+)
+
+
+class EmailEvent(Base):
+    """
+    Records a single event in the lifecycle of an email sent through Kalygo.
+
+    One email send typically produces multiple events:
+      send → delivery → open (if tracking enabled)
+
+    Or for failures:
+      send → bounce / complaint
+
+    provider_message_id is the key for correlating inbound webhook payloads
+    (e.g. AWS SNS notifications from SES) back to a specific email record.
+    """
+    __tablename__ = 'email_events'
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Multi-tenant scoping — always filter by this first
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    # The HITL approval record that triggered the original send
+    tool_approval_id = Column(Integer, ForeignKey('pending_tool_approvals.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Campaign grouping — nullable until a campaigns table is introduced
+    campaign_id = Column(Integer, nullable=True, index=True)
+
+    # Recipient — contact_id may be null for externally-triggered events
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'), nullable=True, index=True)
+    email_address = Column(String(320), nullable=False)
+
+    # Event classification
+    event_type = Column(_email_event_type_pg, nullable=False, index=True)
+
+    # Sending provider (ses | google_oauth | google_smtp)
+    provider = Column(String(50), nullable=True)
+    # Provider-assigned message ID — used to match inbound webhook notifications
+    provider_message_id = Column(String(255), nullable=True, index=True)
+
+    # Arbitrary extra payload (bounce type/subtype, user-agent, IP, clicked URL, etc.)
+    event_metadata = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='email_events')
+    tool_approval = relationship('PendingToolApproval', back_populates='email_events')
+    contact = relationship('Contact', back_populates='email_events')
+
+    def __repr__(self):
+        return f'<EmailEvent {self.id}: {self.event_type} → {self.email_address}>'
