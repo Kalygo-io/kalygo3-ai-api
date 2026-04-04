@@ -2,7 +2,8 @@
 Approve a pending tool action and execute it.
 
 Handles:
-  - sendTxtEmailWithSes          — sends via AWS SES
+  - sendTxtEmailWithSes          — sends plain-text email via AWS SES
+  - sendHtmlEmailWithSes         — sends HTML email via AWS SES (body auto-converted to <p> tags)
   - sendTxtEmailWithGoogleOAuth  — sends via Google Gmail API (OAuth refresh token)
   - sendTxtEmailWithGoogleSmtp   — sends via Gmail SMTP + App Password
 """
@@ -24,6 +25,12 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
+def _text_to_html(body: str) -> str:
+    """Convert plain text to minimal HTML by wrapping each non-empty line in a <p> tag."""
+    paragraphs = [f"<p>{line}</p>" for line in body.split("\n") if line.strip()]
+    return "\n".join(paragraphs)
+
+
 def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> str:
     """Send plain-text email via boto3/SES. Returns the SES MessageId."""
     import boto3
@@ -40,6 +47,32 @@ def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> st
         Message={
             "Subject": {"Data": subject, "Charset": "UTF-8"},
             "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+        },
+    )
+    return response.get("MessageId", "unknown")
+
+
+def _send_ses_html_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> str:
+    """Send HTML email via boto3/SES. body is plain text converted to <p> paragraphs.
+    A plain-text fallback is included for non-HTML mail clients. Returns the SES MessageId."""
+    import boto3
+
+    html_body = _text_to_html(body)
+    client = boto3.client(
+        "ses",
+        region_name=ses_cfg["aws_region"],
+        aws_access_key_id=ses_cfg["aws_access_key_id"],
+        aws_secret_access_key=ses_cfg["aws_secret_access_key"],
+    )
+    response = client.send_email(
+        Source=ses_cfg["from_email"],
+        Destination={"ToAddresses": [to_email]},
+        Message={
+            "Subject": {"Data": subject, "Charset": "UTF-8"},
+            "Body": {
+                "Html": {"Data": html_body, "Charset": "UTF-8"},
+                "Text": {"Data": body, "Charset": "UTF-8"},
+            },
         },
     )
     return response.get("MessageId", "unknown")
@@ -211,6 +244,53 @@ async def approve_tool_approval(
             id=approval.id,
             status="approved",
             message=f"Email sent to {to_email}",
+        )
+
+    elif approval.tool_type == "sendHtmlEmailWithSes":
+        payload = approval.payload
+        credential_id = payload.get("credential_id")
+        to_email = _resolve("to_email", payload.get("to_email", ""))
+        subject = _resolve("subject", payload.get("subject", ""))
+        body = _resolve("body", payload.get("body", ""))
+
+        if not credential_id:
+            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
+
+        credential = db.query(Credential).filter(
+            Credential.id == credential_id,
+            Credential.account_id == account_id,
+        ).first()
+
+        if not credential:
+            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
+
+        try:
+            cred_data = decrypt_credential_data(credential.encrypted_data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
+
+        required = ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"]
+        missing = [k for k in required if not cred_data.get(k)]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Credential is missing required AWS SES fields: {missing}",
+            )
+
+        try:
+            message_id = _send_ses_html_email(cred_data, to_email, subject, body)
+            print(f"[TOOL APPROVAL] ✅ HTML email sent — approval_id={approval_id} MessageId={message_id}")
+        except Exception as e:
+            print(f"[TOOL APPROVAL] ❌ SES HTML send failed — approval_id={approval_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
+
+        approval.status = "approved"
+        db.commit()
+
+        return ApproveToolApprovalResponse(
+            id=approval.id,
+            status="approved",
+            message=f"HTML email sent to {to_email}",
         )
 
     elif approval.tool_type == "sendTxtEmailWithGoogleOAuth":

@@ -102,6 +102,9 @@
           "$ref": "#/$defs/sendTxtEmailWithSesTool"
         },
         {
+          "$ref": "#/$defs/sendHtmlEmailWithSesTool"
+        },
+        {
           "$ref": "#/$defs/sendTxtEmailWithGoogleOAuthTool"
         },
         {
@@ -213,6 +216,28 @@
           "type": "integer",
           "minimum": 1,
           "description": "ID of the stored AWS SES credential (service_name = AWS_SES). Must contain aws_access_key_id, aws_secret_access_key, aws_region, and from_email."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional description shown to the LLM to guide when and how to use the tool."
+        }
+      }
+    },
+    "sendHtmlEmailWithSesTool": {
+      "type": "object",
+      "description": "HTML email sending tool via AWS SES. The agent writes a plain-text body; each non-empty line is wrapped in a <p> tag at send time.",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "credentialId"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "sendHtmlEmailWithSes" },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the stored AWS SES credential (service_name = AWS_SES)."
         },
         "description": {
           "type": "string",
