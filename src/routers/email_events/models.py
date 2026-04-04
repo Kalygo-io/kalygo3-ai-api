@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
-EmailEventType = Literal["send", "delivery", "open", "bounce", "complaint", "other"]
+EmailEventType = Literal["send", "delivery", "open", "bounce", "complaint", "click", "other"]
 
 
 class CreateEmailEventRequest(BaseModel):
@@ -53,5 +53,6 @@ class EmailEventStatsResponse(BaseModel):
     open: int = 0
     bounce: int = 0
     complaint: int = 0
+    click: int = 0
     other: int = 0
     total: int = 0

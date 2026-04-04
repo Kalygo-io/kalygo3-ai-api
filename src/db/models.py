@@ -566,7 +566,7 @@ class PendingToolApproval(Base):
 
 # PostgreSQL native enum type — mirrors the Alembic migration definition
 _email_event_type_pg = PG_ENUM(
-    'send', 'delivery', 'open', 'bounce', 'complaint', 'other',
+    'send', 'delivery', 'open', 'bounce', 'complaint', 'click', 'other',
     name='emaileventtype',
     create_type=False,  # managed by Alembic, not SQLAlchemy metadata
 )
