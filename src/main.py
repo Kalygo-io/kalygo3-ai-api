@@ -32,6 +32,7 @@ from .routers import (
 )
 from .routers.contact_lists.router import router as contact_lists_router
 from .routers.tool_approvals.router import router as tool_approvals_router
+from .routers.email_events.router import router as email_events_router
 
 from src.db.database import Base, engine
 
@@ -256,4 +257,10 @@ app.include_router(
     tool_approvals_router,
     prefix="/api/tool-approvals",
     tags=['Tool Approvals'],
+)
+
+app.include_router(
+    email_events_router,
+    prefix="/api/email-events",
+    tags=['Email Events'],
 )
