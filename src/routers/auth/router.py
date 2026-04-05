@@ -182,7 +182,7 @@ async def request_login_code(body: RequestCodeBody, db: db_dependency, request: 
             db.commit()
             db.refresh(account)
 
-        code = str(random.randint(100000, 999999))
+        code = str(random.randint(10000000, 99999999))
         account.login_otp = _hash_otp(code)
         account.login_otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=OTP_TTL_MINUTES)
         db.commit()
