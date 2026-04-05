@@ -9,6 +9,7 @@ class TemplateVariable(BaseModel):
     name: str = Field(description="Token name used in the template, e.g. 'first_name'")
     label: str = Field(description="Human-readable label shown in the UI")
     default: Optional[str] = Field(default="", description="Default value if not provided")
+    required: bool = Field(default=False, description="Whether a non-empty value must be supplied at send time")
 
 
 class CreateEmailTemplateRequest(BaseModel):

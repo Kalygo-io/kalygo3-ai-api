@@ -15,7 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
-from src.db.models import PendingToolApproval, Credential, EmailEvent
+from src.db.models import PendingToolApproval, Credential, EmailEvent, EmailTemplate
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
 from slowapi import Limiter
@@ -399,6 +399,26 @@ async def approve_tool_approval(
                 status_code=422,
                 detail=f"Credential is missing required AWS SES fields: {missing}",
             )
+
+        # Validate required template variables if a template_id is present
+        template_id = payload.get("template_id")
+        if template_id:
+            tmpl = db.query(EmailTemplate).filter(
+                EmailTemplate.id == template_id,
+                EmailTemplate.account_id == account_id,
+            ).first()
+            if tmpl and tmpl.variables:
+                provided_vars: dict = payload.get("variables") or {}
+                missing_vars = [
+                    v["name"]
+                    for v in tmpl.variables
+                    if v.get("required") and not provided_vars.get(v["name"], "").strip()
+                ]
+                if missing_vars:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Missing required template variable(s): {missing_vars}",
+                    )
 
         # Inject open-tracking pixel with a fresh UUID as the tracking key
         tracking_id = str(_uuid.uuid4())
