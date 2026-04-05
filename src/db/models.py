@@ -32,6 +32,7 @@ class Account(Base):
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
     tool_approvals = relationship('PendingToolApproval', back_populates='account', cascade='all, delete-orphan')
     email_events = relationship('EmailEvent', back_populates='account', cascade='all, delete-orphan')
+    email_templates = relationship('EmailTemplate', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -622,3 +623,40 @@ class EmailEvent(Base):
 
     def __repr__(self):
         return f'<EmailEvent {self.id}: {self.event_type} → {self.primary_recipient}>'
+
+
+class EmailTemplate(Base):
+    """
+    A reusable, production-grade HTML email template with named variable slots.
+
+    Templates use {{variable_name}} tokens in both subject_template and
+    html_template.  The send_template_email_with_ses agent tool resolves those
+    tokens at invocation time before queuing the rendered email for approval.
+
+    The html_template MUST follow inbox-compatibility best practices:
+    - Single-column, table-based layout, max-width 600 px
+    - All CSS inline (no <style> blocks, no external sheets)
+    - An open-tracking pixel is injected automatically at send time
+    """
+    __tablename__ = 'email_templates'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    # Subject line — may contain {{variable}} tokens
+    subject_template = Column(String(998), nullable=False)
+    # Full production-grade HTML email body
+    html_template = Column(Text, nullable=False)
+    # Variable schema: [{"name": "first_name", "label": "First Name", "default": "there"}]
+    variables = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(),
+                        onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='email_templates')
+
+    def __repr__(self):
+        return f'<EmailTemplate {self.id}: {self.name}>'

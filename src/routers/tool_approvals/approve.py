@@ -25,7 +25,23 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
+import os as _os
 import re as _re
+import uuid as _uuid
+
+_TRACKING_BASE_URL = _os.getenv("TRACKING_BASE_URL", "http://127.0.0.1:4000")
+
+
+def _inject_tracking_pixel(html: str, tracking_id: str) -> str:
+    """Inject a 1×1 invisible open-tracking pixel just before </body>."""
+    pixel = (
+        f'<img src="{_TRACKING_BASE_URL}/t/o/{tracking_id}" '
+        f'width="1" height="1" style="display:none;border:0;" alt="" />'
+    )
+    if "</body>" in html.lower():
+        return _re.sub(r'</body>', f'{pixel}\n</body>', html, count=1, flags=_re.IGNORECASE)
+    return html + pixel
+
 
 def _strip_html_tags(html: str) -> str:
     """Strip HTML tags and collapse whitespace for a plain-text fallback."""
@@ -43,6 +59,7 @@ def _record_send_event(
     to_email: str,
     provider: str,
     message_id: str,
+    extra_metadata: dict | None = None,
 ) -> None:
     """Write an email_events row with event_type='send' after a successful send."""
     try:
@@ -53,6 +70,7 @@ def _record_send_event(
             event_type="send",
             provider=provider,
             message_id=message_id,
+            event_metadata=extra_metadata or None,
         )
         db.add(event)
         db.commit()
@@ -346,6 +364,78 @@ async def approve_tool_approval(
             id=approval.id,
             status="approved",
             message=f"HTML email sent to {to_email}",
+        )
+
+    elif approval.tool_type == "sendTemplateEmailWithSes":
+        payload = approval.payload
+        credential_id = payload.get("credential_id")
+        to_email = _resolve("to_email", payload.get("to_email", ""))
+        subject = _resolve("subject", payload.get("subject", ""))
+        html_body = (
+            (overrides.html_body.strip() if overrides and overrides.html_body and overrides.html_body.strip() else None)
+            or payload.get("html_body", "")
+        )
+
+        if not credential_id:
+            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
+
+        credential = db.query(Credential).filter(
+            Credential.id == credential_id,
+            Credential.account_id == account_id,
+        ).first()
+
+        if not credential:
+            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
+
+        try:
+            cred_data = decrypt_credential_data(credential.encrypted_data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
+
+        required = ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"]
+        missing = [k for k in required if not cred_data.get(k)]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Credential is missing required AWS SES fields: {missing}",
+            )
+
+        # Inject open-tracking pixel with a fresh UUID as the tracking key
+        tracking_id = str(_uuid.uuid4())
+        tracked_html = _inject_tracking_pixel(html_body, tracking_id)
+
+        try:
+            message_id = _send_ses_html_email(cred_data, to_email, subject, tracked_html)
+            print(
+                f"[TOOL APPROVAL] ✅ Template email sent — "
+                f"approval_id={approval_id} MessageId={message_id} tracking_id={tracking_id}"
+            )
+        except Exception as e:
+            print(f"[TOOL APPROVAL] ❌ SES template send failed — approval_id={approval_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
+
+        approval.status = "approved"
+        db.commit()
+
+        _record_send_event(
+            db,
+            account_id=account_id,
+            tool_approval_id=approval_id,
+            to_email=to_email,
+            provider="ses",
+            message_id=message_id,
+            extra_metadata={
+                "tracking_id": tracking_id,
+                "template_id": payload.get("template_id"),
+                "template_name": payload.get("template_name"),
+                "variables": payload.get("variables"),
+            },
+        )
+
+        return ApproveToolApprovalResponse(
+            id=approval.id,
+            status="approved",
+            message=f"Template email '{payload.get('template_name', '')}' sent to {to_email}",
         )
 
     elif approval.tool_type == "sendTxtEmailWithGoogleOAuth":

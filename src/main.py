@@ -33,6 +33,8 @@ from .routers import (
 from .routers.contact_lists.router import router as contact_lists_router
 from .routers.tool_approvals.router import router as tool_approvals_router
 from .routers.email_events.router import router as email_events_router
+from .routers.email_templates.router import router as email_templates_router
+from .routers.tracking.router import router as tracking_router
 
 from src.db.database import Base, engine
 
@@ -263,4 +265,16 @@ app.include_router(
     email_events_router,
     prefix="/api/email-events",
     tags=['Email Events'],
+)
+
+app.include_router(
+    email_templates_router,
+    prefix="/api/email-templates",
+    tags=['Email Templates'],
+)
+
+app.include_router(
+    tracking_router,
+    prefix="/t",
+    tags=['Tracking'],
 )
