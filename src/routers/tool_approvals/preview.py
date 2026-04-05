@@ -32,6 +32,23 @@ def _strip_html_tags(html: str) -> str:
     return text.strip()
 
 
+_PREVIEW_BANNER = """
+<div style="background:#f59e0b;color:#000;font-family:sans-serif;font-size:13px;
+            font-weight:700;text-align:center;padding:10px 16px;letter-spacing:0.05em;">
+  &#128065; PREVIEW — this email has NOT been sent to the recipient
+</div>
+"""
+
+
+def _inject_preview_banner(html: str) -> str:
+    """Prepend a bright preview banner just after <body> (or at the very top)."""
+    match = _re.search(r"(<body[^>]*>)", html, flags=_re.IGNORECASE)
+    if match:
+        pos = match.end()
+        return html[:pos] + _PREVIEW_BANNER + html[pos:]
+    return _PREVIEW_BANNER + html
+
+
 class PreviewOverrides(BaseModel):
     """Optional user-edited values — same shape as ApproveOverrides."""
     subject: str | None = None
@@ -117,6 +134,7 @@ async def preview_tool_approval(
         )
 
     preview_subject = f"[PREVIEW] {subject}"
+    preview_html = _inject_preview_banner(html_body)
     plain_fallback = _strip_html_tags(html_body)
 
     try:
@@ -133,7 +151,7 @@ async def preview_tool_approval(
             Message={
                 "Subject": {"Data": preview_subject, "Charset": "UTF-8"},
                 "Body": {
-                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                    "Html": {"Data": preview_html, "Charset": "UTF-8"},
                     "Text": {"Data": plain_fallback, "Charset": "UTF-8"},
                 },
             },

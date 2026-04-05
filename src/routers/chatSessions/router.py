@@ -185,14 +185,21 @@ async def get_session(
             parts = s.split('_')
             return parts[0] + ''.join(p.title() for p in parts[1:])
 
+        def _normalize_content(content) -> str:
+            """Coerce Anthropic-style content block lists to a plain string."""
+            if isinstance(content, list):
+                return "".join(
+                    block.get("text", "") if isinstance(block, dict) else str(block)
+                    for block in content
+                )
+            return content if isinstance(content, str) else str(content)
+
         def convert_shape_of_message(msg):
-            
-            print('convert_shape_of_message', msg)
 
             message_data = {
                 "id": msg.id,
                 "role": msg.message['role'],
-                "content": msg.message['content'],
+                "content": _normalize_content(msg.message['content']),
                 "createdAt": msg.created_at
             }
             
