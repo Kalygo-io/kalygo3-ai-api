@@ -5,7 +5,19 @@
   "slug": "branded-header-and-main-and-footer",
   "description": "Imported from Amazon SES",
   "subject_template": "{{ SUBJECT }}",
-  "variables": [],
+  "variables": [
+    {"name": "SUBJECT",               "label": "Email subject",             "default": ""},
+    {"name": "EMAIL_PREVIEW_TEXT",    "label": "Inbox preview text",        "default": ""},
+    {"name": "HEADER_LOGO_ONCLICK_URL","label": "Logo click-through URL",   "default": "https://kalygo.io"},
+    {"name": "HEADER_LOGO_IMAGE",     "label": "Logo image URL",            "default": ""},
+    {"name": "HEADER_TEXT",           "label": "Hero heading",              "default": ""},
+    {"name": "MAIN_SECTION_TEXT",     "label": "Main body copy",            "default": ""},
+    {"name": "CTA_URL",               "label": "CTA button URL",            "default": ""},
+    {"name": "CTA_TEXT",              "label": "CTA button label",          "default": "Get Started"},
+    {"name": "FOOTER_TEXT_TITLE",     "label": "Footer section heading",    "default": "Need help?"},
+    {"name": "FOOTER_CTA_URL",        "label": "Footer link URL",           "default": ""},
+    {"name": "FOOTER_CTA_TEXT",       "label": "Footer link text",          "default": "Contact support"}
+  ],
   "created_at": "2026-04-05T13:51:52.154776+00:00",
   "updated_at": "2026-04-05T13:51:52.154776+00:00",
   "synced_at": "2026-04-05T14:02:33.891836+00:00"
