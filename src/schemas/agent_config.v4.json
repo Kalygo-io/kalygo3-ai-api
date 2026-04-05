@@ -226,7 +226,7 @@
     },
     "sendHtmlEmailWithSesTool": {
       "type": "object",
-      "description": "HTML email sending tool via AWS SES. The agent writes a plain-text body; each non-empty line is wrapped in a <p> tag at send time.",
+      "description": "Templated HTML email sending tool via AWS SES. The agent selects a saved template by ID and supplies variable values (preferred mode), or provides a raw HTML document as a fallback. Open-tracking and human approval are always required before sending.",
       "additionalProperties": false,
       "required": [
         "type",
