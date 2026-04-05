@@ -8,8 +8,6 @@
   "variables": [
     {"name": "SUBJECT",               "label": "Email subject",             "default": ""},
     {"name": "EMAIL_PREVIEW_TEXT",    "label": "Inbox preview text",        "default": ""},
-    {"name": "HEADER_LOGO_ONCLICK_URL","label": "Logo click-through URL",   "default": "https://kalygo.io"},
-    {"name": "HEADER_LOGO_IMAGE",     "label": "Logo image URL",            "default": ""},
     {"name": "HEADER_TEXT",           "label": "Hero heading",              "default": ""},
     {"name": "MAIN_SECTION_TEXT",     "label": "Main body copy",            "default": ""},
     {"name": "CTA_URL",               "label": "CTA button URL",            "default": ""},
