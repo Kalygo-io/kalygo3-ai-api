@@ -22,10 +22,10 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         'email_templates',
-        sa.Column('id', sa.Integer(), primary_key=True, index=True),
+        sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('account_id', sa.Integer(),
                   sa.ForeignKey('accounts.id', ondelete='CASCADE'),
-                  nullable=False, index=True),
+                  nullable=False),
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         # Subject may also contain {{variable}} tokens
@@ -40,6 +40,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True),
                   server_default=sa.text('now()'), nullable=False),
     )
+    op.create_index('ix_email_templates_id', 'email_templates', ['id'])
     op.create_index('ix_email_templates_account_id', 'email_templates', ['account_id'])
     op.create_index('ix_email_templates_name', 'email_templates', ['account_id', 'name'])
 
@@ -47,4 +48,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index('ix_email_templates_name', 'email_templates')
     op.drop_index('ix_email_templates_account_id', 'email_templates')
+    op.drop_index('ix_email_templates_id', 'email_templates')
     op.drop_table('email_templates')
