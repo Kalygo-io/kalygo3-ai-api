@@ -15,7 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
-from src.db.models import PendingToolApproval, Credential
+from src.db.models import PendingToolApproval, Credential, EmailEvent
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
 from slowapi import Limiter
@@ -33,6 +33,32 @@ def _strip_html_tags(html: str) -> str:
     text = _re.sub(r"<[^>]+>", "", text)
     text = _re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _record_send_event(
+    db,
+    *,
+    account_id: int,
+    tool_approval_id: int,
+    to_email: str,
+    provider: str,
+    provider_message_id: str,
+) -> None:
+    """Write an email_events row with event_type='send' after a successful send."""
+    try:
+        event = EmailEvent(
+            account_id=account_id,
+            tool_approval_id=tool_approval_id,
+            primary_recipient=to_email.strip().lower(),
+            event_type="send",
+            provider=provider,
+            provider_message_id=provider_message_id,
+        )
+        db.add(event)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"[TOOL APPROVAL] ⚠️  Failed to record send event: {exc}")
 
 
 def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> str:
@@ -247,6 +273,15 @@ async def approve_tool_approval(
         approval.status = "approved"
         db.commit()
 
+        _record_send_event(
+            db,
+            account_id=account_id,
+            tool_approval_id=approval_id,
+            to_email=to_email,
+            provider="ses",
+            provider_message_id=message_id,
+        )
+
         return ApproveToolApprovalResponse(
             id=approval.id,
             status="approved",
@@ -297,6 +332,15 @@ async def approve_tool_approval(
 
         approval.status = "approved"
         db.commit()
+
+        _record_send_event(
+            db,
+            account_id=account_id,
+            tool_approval_id=approval_id,
+            to_email=to_email,
+            provider="ses",
+            provider_message_id=message_id,
+        )
 
         return ApproveToolApprovalResponse(
             id=approval.id,
