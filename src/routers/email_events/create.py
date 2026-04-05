@@ -34,7 +34,7 @@ async def create_email_event(
             campaign_id=request_body.campaign_id,
             contact_id=request_body.contact_id,
             provider=request_body.provider,
-            provider_message_id=request_body.provider_message_id,
+            message_id=request_body.message_id,
             event_metadata=request_body.event_metadata,
         )
 

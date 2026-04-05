@@ -608,7 +608,7 @@ class EmailEvent(Base):
     # Sending provider (ses | google_oauth | google_smtp)
     provider = Column(String(50), nullable=True)
     # Provider-assigned message ID — used to match inbound webhook notifications
-    provider_message_id = Column(String(255), nullable=True, index=True)
+    message_id = Column(String(255), nullable=True, index=True)
 
     # Arbitrary extra payload (bounce type/subtype, user-agent, IP, clicked URL, etc.)
     event_metadata = Column(JSON, nullable=True)

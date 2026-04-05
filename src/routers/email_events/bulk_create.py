@@ -43,7 +43,7 @@ async def bulk_create_email_events(
                 campaign_id=e.campaign_id,
                 contact_id=e.contact_id,
                 provider=e.provider,
-                provider_message_id=e.provider_message_id,
+                message_id=e.message_id,
                 event_metadata=e.event_metadata,
             )
             for e in request_body.events

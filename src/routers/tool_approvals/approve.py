@@ -42,7 +42,7 @@ def _record_send_event(
     tool_approval_id: int,
     to_email: str,
     provider: str,
-    provider_message_id: str,
+    message_id: str,
 ) -> None:
     """Write an email_events row with event_type='send' after a successful send."""
     try:
@@ -52,7 +52,7 @@ def _record_send_event(
             primary_recipient=to_email.strip().lower(),
             event_type="send",
             provider=provider,
-            provider_message_id=provider_message_id,
+            message_id=message_id,
         )
         db.add(event)
         db.commit()
@@ -279,7 +279,7 @@ async def approve_tool_approval(
             tool_approval_id=approval_id,
             to_email=to_email,
             provider="ses",
-            provider_message_id=message_id,
+            message_id=message_id,
         )
 
         return ApproveToolApprovalResponse(
@@ -339,7 +339,7 @@ async def approve_tool_approval(
             tool_approval_id=approval_id,
             to_email=to_email,
             provider="ses",
-            provider_message_id=message_id,
+            message_id=message_id,
         )
 
         return ApproveToolApprovalResponse(

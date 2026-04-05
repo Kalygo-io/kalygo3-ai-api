@@ -27,6 +27,7 @@ async def list_email_events(
     campaign_id: Optional[int] = Query(default=None),
     tool_approval_id: Optional[int] = Query(default=None),
     primary_recipient: Optional[str] = Query(default=None, description="Filter by primary recipient email (case-insensitive)"),
+    message_id: Optional[str] = Query(default=None, description="Filter by provider message ID"),
     provider: Optional[str] = Query(default=None, description="Filter by provider: ses|google_oauth|google_smtp"),
     from_date: Optional[datetime] = Query(default=None, description="Start of date range (ISO 8601)"),
     to_date: Optional[datetime] = Query(default=None, description="End of date range (ISO 8601)"),
@@ -58,6 +59,9 @@ async def list_email_events(
 
         if primary_recipient:
             query = query.filter(EmailEvent.primary_recipient == primary_recipient.strip().lower())
+
+        if message_id:
+            query = query.filter(EmailEvent.message_id == message_id)
 
         if provider:
             query = query.filter(EmailEvent.provider == provider)

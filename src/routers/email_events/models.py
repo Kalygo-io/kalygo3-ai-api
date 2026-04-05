@@ -15,7 +15,7 @@ class CreateEmailEventRequest(BaseModel):
     campaign_id: Optional[int] = None
     contact_id: Optional[int] = None
     provider: Optional[str] = None
-    provider_message_id: Optional[str] = None
+    message_id: Optional[str] = None
     event_metadata: Optional[Dict[str, Any]] = None
 
 
@@ -37,7 +37,7 @@ class EmailEventResponse(BaseModel):
     primary_recipient: Optional[str] = None
     event_type: str
     provider: Optional[str] = None
-    provider_message_id: Optional[str] = None
+    message_id: Optional[str] = None
     event_metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
