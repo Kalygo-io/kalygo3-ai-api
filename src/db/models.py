@@ -127,9 +127,10 @@ class Credential(Base):
     __tablename__ = 'credentials'
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
-    service_name = Column(Enum(ServiceName, name='service_name_enum'), nullable=False, index=True)
-    credential_type = Column(String(50), nullable=False, index=True, default='api_key')
-    
+    credential_type = Column(Enum(ServiceName, name='credential_type_enum'), nullable=False, index=True)
+    auth_type = Column(String(50), nullable=False, index=True, default='api_key')
+    credential_name = Column(String(255), nullable=True, index=True)
+
     # Encrypted storage (JSON structure, encrypted with Fernet)
     encrypted_data = Column(Text, nullable=False)
     
@@ -142,7 +143,8 @@ class Credential(Base):
     account = relationship('Account', back_populates='credentials')
     
     def __repr__(self):
-        return f'<Credential {self.service_name} ({self.credential_type}) for account {self.account_id}>'
+        name = self.credential_name or self.credential_type
+        return f'<Credential {name} ({self.auth_type}) for account {self.account_id}>'
 
 
 class ApiKeyStatus(str, Enum):

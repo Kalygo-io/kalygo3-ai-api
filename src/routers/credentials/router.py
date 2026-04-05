@@ -26,7 +26,7 @@ router = APIRouter()
 
 class CreateCredentialRequest(BaseModel):
     """Legacy request for creating API key credentials."""
-    service_name: ServiceName
+    credential_type: ServiceName
     api_key: str
 
 
@@ -38,8 +38,9 @@ class UpdateCredentialRequest(BaseModel):
 class CredentialResponse(BaseModel):
     """Response model for credential metadata (no sensitive data)."""
     id: int
-    service_name: ServiceName
-    credential_type: str = "api_key"
+    credential_type: ServiceName
+    auth_type: str = "api_key"
+    credential_name: Optional[str] = None
     created_at: str
     updated_at: str
     credential_metadata: Optional[Dict[str, Any]] = None
@@ -51,8 +52,9 @@ class CredentialResponse(BaseModel):
 class CredentialDetailResponse(BaseModel):
     """Response model with decrypted API key (legacy)."""
     id: int
-    service_name: ServiceName
-    credential_type: str = "api_key"
+    credential_type: ServiceName
+    auth_type: str = "api_key"
+    credential_name: Optional[str] = None
     api_key: str  # Decrypted API key (only returned when explicitly requested)
     created_at: str
     updated_at: str
@@ -69,19 +71,21 @@ class CredentialDetailResponse(BaseModel):
 class CreateFlexibleCredentialRequest(BaseModel):
     """
     Request for creating any type of credential.
-    
+
     Examples:
-    - API Key: {"service_name": "OPENAI_API_KEY", "credential_type": "api_key", "credential_data": {"api_key": "sk-..."}}
-    - Database: {"service_name": "MY_DATABASE", "credential_type": "db_connection", "credential_data": {"host": "...", "port": 5432, ...}}
+    - API Key: {"credential_type": "OPENAI_API_KEY", "auth_type": "api_key", "credential_data": {"api_key": "sk-..."}}
+    - Database: {"credential_type": "SUPABASE", "auth_type": "db_connection", "credential_data": {"host": "...", ...}}
     """
-    service_name: ServiceName
-    credential_type: str = Field(default="api_key", description="Type of credential: api_key, db_connection, oauth, ssh_key, certificate, aws_access_key_pair")
-    credential_data: Dict[str, Any] = Field(..., description="The credential data structure (varies by type)")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Non-sensitive metadata (display name, description, etc.)")
+    credential_type: ServiceName
+    auth_type: str = Field(default="api_key", description="Auth mechanism: api_key, db_connection, oauth, ssh_key, certificate, aws_access_key_pair")
+    credential_name: Optional[str] = Field(default=None, description="Human-readable name for this credential (e.g. 'Production', 'Staging')")
+    credential_data: Dict[str, Any] = Field(..., description="The credential data structure (varies by auth_type)")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Non-sensitive metadata (notes, environment, etc.)")
 
 
 class UpdateFlexibleCredentialRequest(BaseModel):
     """Request for updating any type of credential."""
+    credential_name: Optional[str] = Field(default=None, description="Updated human-readable name")
     credential_data: Dict[str, Any] = Field(..., description="The new credential data")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Updated metadata")
 
@@ -89,8 +93,9 @@ class UpdateFlexibleCredentialRequest(BaseModel):
 class FlexibleCredentialDetailResponse(BaseModel):
     """Response model with full decrypted credential data."""
     id: int
-    service_name: ServiceName
-    credential_type: str
+    credential_type: ServiceName
+    auth_type: str
+    credential_name: Optional[str] = None
     credential_data: Dict[str, Any]  # Decrypted credential structure
     created_at: str
     updated_at: str
@@ -111,57 +116,43 @@ async def create_credential(
     """
     Create a new credential (API key) for a third-party service.
     The API key will be encrypted before storage.
-    
+
     LEGACY ENDPOINT: For simple API key storage.
     For flexible credentials (DB connections, OAuth, etc.), use POST /flexible
     """
     try:
-        # Get the account from the database using the JWT account_id
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
-        # Check if a credential for this service already exists
-        existing_credential = db.query(Credential).filter(
-            Credential.account_id == account_id,
-            Credential.service_name == request_body.service_name
-        ).first()
-        
-        if existing_credential:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Credential for service '{request_body.service_name.value}' already exists. Use PUT to update it."
-            )
-        
-        # Encrypt the API key
+
         encrypted_data = encrypt_credential_data({"api_key": request_body.api_key})
-        
-        # Create the credential
+
         credential = Credential(
             account_id=account_id,
-            service_name=request_body.service_name,
-            credential_type="api_key",
+            credential_type=request_body.credential_type,
+            auth_type="api_key",
             encrypted_data=encrypted_data
         )
-        
+
         db.add(credential)
         db.commit()
         db.refresh(credential)
-        
+
         return CredentialResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -191,29 +182,30 @@ async def list_credentials(
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credentials = db.query(Credential).filter(
             Credential.account_id == account_id
         ).all()
-        
+
         return [
             CredentialResponse(
                 id=cred.id,
-                service_name=cred.service_name,
-                credential_type=cred.credential_type or "api_key",
+                credential_type=cred.credential_type,
+                auth_type=cred.auth_type or "api_key",
+                credential_name=cred.credential_name,
                 created_at=cred.created_at.isoformat(),
                 updated_at=cred.updated_at.isoformat(),
                 credential_metadata=cred.credential_metadata
             )
             for cred in credentials
         ]
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -231,44 +223,44 @@ async def get_credential(
     """
     Get a specific credential by ID, including the decrypted API key.
     Only returns credentials belonging to the authenticated user.
-    
+
     LEGACY ENDPOINT: Returns api_key field for backward compatibility.
     For full credential data (DB connections, etc.), use GET /{id}/full
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
-        
-        # Decrypt the API key
+
         decrypted_key = get_credential_value(credential, "api_key")
-        
+
         return CredentialDetailResponse(
             id=credential.id,
-            service_name=credential.service_name,
-            credential_type=credential.credential_type or "api_key",
+            credential_type=credential.credential_type,
+            auth_type=credential.auth_type or "api_key",
+            credential_name=credential.credential_name,
             api_key=decrypted_key,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -293,50 +285,48 @@ async def update_credential(
 ):
     """
     Update an existing credential's API key.
-    Only allows updating credentials belonging to the authenticated user.
-    
+
     LEGACY ENDPOINT: For simple API key updates.
     For flexible credentials, use PUT /{id}/full
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
-        
-        # Encrypt using new format
+
         encrypted_data = encrypt_credential_data({"api_key": request_body.api_key})
-        
-        # Update the credential
+
         credential.encrypted_data = encrypted_data
-        credential.credential_type = "api_key"
+        credential.auth_type = "api_key"
         db.commit()
         db.refresh(credential)
-        
+
         return CredentialResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -360,36 +350,33 @@ async def delete_credential(
     jwt: jwt_dependency,
     request: Request
 ):
-    """
-    Delete a credential.
-    Only allows deleting credentials belonging to the authenticated user.
-    """
+    """Delete a credential belonging to the authenticated user."""
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
-        
+
         db.delete(credential)
         db.commit()
-        
+
         return None
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -406,46 +393,45 @@ async def get_credential_by_service(
     request: Request
 ):
     """
-    Get a credential by service name, including the decrypted API key.
-    Useful for retrieving a specific service's API key.
-    
+    Get a credential by service/provider type (first match), including the decrypted API key.
+
     LEGACY ENDPOINT: Returns api_key field for backward compatibility.
-    For full credential data (DB connections, etc.), use GET /service/{service_name}/full
+    For full credential data, use GET /service/{service_name}/full
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.account_id == account_id,
-            Credential.service_name == service_name
+            Credential.credential_type == service_name
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Credential for service '{service_name.value}' not found"
             )
-        
-        # Use backward-compatible decryption
+
         decrypted_key = get_credential_value(credential, "api_key")
-        
+
         return CredentialDetailResponse(
             id=credential.id,
-            service_name=credential.service_name,
-            credential_type=credential.credential_type or "api_key",
+            credential_type=credential.credential_type,
+            auth_type=credential.auth_type or "api_key",
+            credential_name=credential.credential_name,
             api_key=decrypted_key,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -473,7 +459,7 @@ async def create_flexible_credential(
 ):
     """
     Create a new flexible credential for any type of service.
-    
+
     Supports:
     - API keys: {"api_key": "sk-..."}
     - Database connections: {"host": "...", "port": 5432, "username": "...", "password": "...", "database": "..."}
@@ -481,62 +467,51 @@ async def create_flexible_credential(
     - SSH keys: {"private_key": "-----BEGIN...", "passphrase": "..."}
     - Certificates: {"certificate": "...", "private_key": "..."}
     - AWS access key pairs: {"aws_access_key_id": "AKIA...", "aws_secret_access_key": "...", "aws_region": "...", "from_email": "..."}
-    
+
     Example request:
     {
-        "service_name": "OPENAI_API_KEY",
-        "credential_type": "api_key",
+        "credential_type": "OPENAI_API_KEY",
+        "auth_type": "api_key",
+        "credential_name": "Production",
         "credential_data": {"api_key": "sk-abc123..."},
-        "metadata": {"display_name": "Production API Key"}
+        "metadata": {"notes": "Main production key"}
     }
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
-        # Check if a credential for this service already exists
-        existing_credential = db.query(Credential).filter(
-            Credential.account_id == account_id,
-            Credential.service_name == request_body.service_name
-        ).first()
-        
-        if existing_credential:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Credential for service '{request_body.service_name.value}' already exists. Use PUT to update it."
-            )
-        
-        # Encrypt the credential data
+
         encrypted_data = encrypt_credential_data(request_body.credential_data)
-        
-        # Create the credential
+
         credential = Credential(
             account_id=account_id,
-            service_name=request_body.service_name,
             credential_type=request_body.credential_type,
+            auth_type=request_body.auth_type,
+            credential_name=request_body.credential_name,
             encrypted_data=encrypted_data,
             credential_metadata=request_body.metadata
         )
-        
+
         db.add(credential)
         db.commit()
         db.refresh(credential)
-        
+
         return CredentialResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -560,44 +535,41 @@ async def get_credential_full(
     jwt: jwt_dependency,
     request: Request
 ):
-    """
-    Get a specific credential with full decrypted data structure.
-    Use this for flexible credentials (DB connections, OAuth, etc.).
-    """
+    """Get a specific credential with full decrypted data structure."""
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
-        
-        # Decrypt the full credential data
+
         credential_data = decrypt_credential_data(credential.encrypted_data)
-        
+
         return FlexibleCredentialDetailResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             credential_data=credential_data,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -620,51 +592,49 @@ async def update_credential_full(
     jwt: jwt_dependency,
     request: Request
 ):
-    """
-    Update a credential with full flexible data structure.
-    Use this for flexible credentials (DB connections, OAuth, etc.).
-    """
+    """Update a credential with full flexible data structure."""
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
-        
-        # Encrypt the new credential data
+
         encrypted_data = encrypt_credential_data(request_body.credential_data)
-        
-        # Update the credential
+
         credential.encrypted_data = encrypted_data
+        if request_body.credential_name is not None:
+            credential.credential_name = request_body.credential_name
         if request_body.metadata is not None:
             credential.credential_metadata = request_body.metadata
-        
+
         db.commit()
         db.refresh(credential)
-        
+
         return CredentialResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -689,43 +659,42 @@ async def get_credential_by_service_full(
     request: Request
 ):
     """
-    Get a credential by service name with full decrypted data structure.
-    Use this for flexible credentials (DB connections, OAuth, etc.).
+    Get a credential by service/provider type (first match) with full decrypted data.
     """
     try:
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
         account = db.query(Account).filter(Account.id == account_id).first()
-        
+
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found"
             )
-        
+
         credential = db.query(Credential).filter(
             Credential.account_id == account_id,
-            Credential.service_name == service_name
+            Credential.credential_type == service_name
         ).first()
-        
+
         if not credential:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Credential for service '{service_name.value}' not found"
             )
-        
-        # Decrypt the full credential data
+
         credential_data = decrypt_credential_data(credential.encrypted_data)
-        
+
         return FlexibleCredentialDetailResponse(
             id=credential.id,
-            service_name=credential.service_name,
             credential_type=credential.credential_type,
+            auth_type=credential.auth_type,
+            credential_name=credential.credential_name,
             credential_data=credential_data,
             created_at=credential.created_at.isoformat(),
             updated_at=credential.updated_at.isoformat(),
             credential_metadata=credential.credential_metadata
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
@@ -737,4 +706,3 @@ async def get_credential_by_service_full(
         )
     except Exception as e:
         raise handle_db_error(e, "[ERROR RETRIEVING FULL CREDENTIAL BY SERVICE]")
-
