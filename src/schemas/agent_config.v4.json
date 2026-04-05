@@ -105,9 +105,6 @@
           "$ref": "#/$defs/sendHtmlEmailWithSesTool"
         },
         {
-          "$ref": "#/$defs/sendTemplateEmailWithSesTool"
-        },
-        {
           "$ref": "#/$defs/sendTxtEmailWithGoogleOAuthTool"
         },
         {
@@ -247,17 +244,6 @@
           "minLength": 1,
           "description": "Optional description shown to the LLM to guide when and how to use the tool."
         }
-      }
-    },
-    "sendTemplateEmailWithSesTool": {
-      "type": "object",
-      "description": "Sends a pre-designed HTML template email via AWS SES. The agent selects a template by ID and provides variable values. Open-tracking is injected automatically. Requires human approval before sending.",
-      "additionalProperties": false,
-      "required": ["type", "credentialId"],
-      "properties": {
-        "type": { "type": "string", "const": "sendTemplateEmailWithSes" },
-        "credentialId": { "type": "integer", "minimum": 1, "description": "ID of stored AWS SES credential." },
-        "description": { "type": "string", "minLength": 1, "description": "Guidance for the LLM on when and how to use this tool." }
       }
     },
     "sendTxtEmailWithGoogleOAuthTool": {
