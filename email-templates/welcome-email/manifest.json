@@ -1,0 +1,48 @@
+{
+  "id": 1,
+  "account_id": 1,
+  "name": "Welcome Email",
+  "slug": "welcome-email",
+  "description": "A clean, professional welcome email sent to new users after sign-up.",
+  "subject_template": "Welcome to {{company_name}}, {{first_name}}!",
+  "variables": [
+    {
+      "name": "subject",
+      "label": "Email subject",
+      "default": "Welcome to {{company_name}}"
+    },
+    {
+      "name": "preheader",
+      "label": "Preheader text",
+      "default": "We're glad to have you here."
+    },
+    {
+      "name": "company_name",
+      "label": "Company name",
+      "default": "Kalygo"
+    },
+    {
+      "name": "first_name",
+      "label": "Recipient first name",
+      "default": "there"
+    },
+    {
+      "name": "body",
+      "label": "Main body copy",
+      "default": "We're thrilled to have you with us. Click the button below to get started and explore everything we have to offer."
+    },
+    {
+      "name": "cta_url",
+      "label": "CTA button URL",
+      "default": "https://kalygo.io"
+    },
+    {
+      "name": "cta_label",
+      "label": "CTA button label",
+      "default": "Get Started \u2192"
+    }
+  ],
+  "created_at": "2026-04-05T13:12:32.405402+00:00",
+  "updated_at": "2026-04-05T13:12:32.405402+00:00",
+  "synced_at": "2026-04-05T14:02:33.929493+00:00"
+}
