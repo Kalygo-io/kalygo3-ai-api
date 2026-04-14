@@ -47,6 +47,7 @@ async def list_contacts(
             from sqlalchemy import func as sqlfunc
             query = query.filter(
                 sqlfunc.lower(Contact.first_name).like(term)
+                | sqlfunc.lower(Contact.middle_name).like(term)
                 | sqlfunc.lower(Contact.last_name).like(term)
                 | sqlfunc.lower(Contact.email).like(term)
                 | sqlfunc.lower(Contact.company).like(term)

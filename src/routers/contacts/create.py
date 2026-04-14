@@ -38,6 +38,7 @@ async def create_contact(
         contact = Contact(
             account_id=account_id,
             first_name=request_body.first_name.strip(),
+            middle_name=request_body.middle_name.strip() if request_body.middle_name else None,
             last_name=request_body.last_name.strip() if request_body.last_name else None,
             email=request_body.email.strip().lower(),
             phone=request_body.phone,

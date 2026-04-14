@@ -10,6 +10,7 @@ from datetime import datetime
 
 class CreateContactRequest(BaseModel):
     first_name: str
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None
     email: str
     phone: Optional[str] = None
@@ -22,6 +23,7 @@ class CreateContactRequest(BaseModel):
 
 class UpdateContactRequest(BaseModel):
     first_name: Optional[str] = None
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -50,8 +52,9 @@ class ContactResponse(BaseModel):
     id: int
     account_id: int
     first_name: str
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None
-    name: str  # hybrid property: "{first_name} {last_name}".strip()
+    name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
     phone: Optional[str] = None
     company: Optional[str] = None
@@ -72,8 +75,9 @@ class ContactSummaryResponse(BaseModel):
     id: int
     account_id: int
     first_name: str
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None
-    name: str  # hybrid property: "{first_name} {last_name}".strip()
+    name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
     phone: Optional[str] = None
     company: Optional[str] = None

@@ -43,6 +43,9 @@ async def update_contact(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contact first name cannot be empty")
             contact.first_name = request_body.first_name.strip()
 
+        if request_body.middle_name is not None:
+            contact.middle_name = request_body.middle_name.strip() or None
+
         if request_body.last_name is not None:
             contact.last_name = request_body.last_name.strip() or None
 

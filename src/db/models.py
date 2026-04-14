@@ -425,6 +425,7 @@ class Contact(Base):
 
     # Required fields
     first_name = Column(String(255), nullable=False)
+    middle_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
 
@@ -435,10 +436,13 @@ class Contact(Base):
 
     @hybrid_property
     def name(self) -> str:
-        """Full display name combining first and last name."""
+        """Full display name combining first, middle, and last name."""
+        parts = [self.first_name]
+        if self.middle_name:
+            parts.append(self.middle_name)
         if self.last_name:
-            return f"{self.first_name} {self.last_name}"
-        return self.first_name
+            parts.append(self.last_name)
+        return " ".join(parts)
 
     # CRM metadata
     source = Column(String(100), nullable=True)   # e.g. "website", "referral", "chat_bot", "import"
