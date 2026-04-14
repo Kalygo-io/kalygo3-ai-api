@@ -431,8 +431,6 @@ class Contact(Base):
 
     # Optional contact details
     phone = Column(String(50), nullable=True)
-    company = Column(String(255), nullable=True, index=True)
-    title = Column(String(255), nullable=True)
 
     @hybrid_property
     def name(self) -> str:
@@ -446,8 +444,6 @@ class Contact(Base):
 
     # CRM metadata
     source = Column(String(100), nullable=True)   # e.g. "website", "referral", "chat_bot", "import"
-    status = Column(String(50), nullable=True, index=True)  # e.g. "lead", "prospect", "customer", "churned"
-    notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)

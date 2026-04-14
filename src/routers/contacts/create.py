@@ -42,11 +42,7 @@ async def create_contact(
             last_name=request_body.last_name.strip() if request_body.last_name else None,
             email=request_body.email.strip().lower(),
             phone=request_body.phone,
-            company=request_body.company,
-            title=request_body.title,
             source=request_body.source,
-            status=request_body.status,
-            notes=request_body.notes,
         )
 
         db.add(contact)

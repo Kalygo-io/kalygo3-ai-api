@@ -57,20 +57,8 @@ async def update_contact(
         if request_body.phone is not None:
             contact.phone = request_body.phone or None
 
-        if request_body.company is not None:
-            contact.company = request_body.company or None
-
-        if request_body.title is not None:
-            contact.title = request_body.title or None
-
         if request_body.source is not None:
             contact.source = request_body.source or None
-
-        if request_body.status is not None:
-            contact.status = request_body.status or None
-
-        if request_body.notes is not None:
-            contact.notes = request_body.notes or None
 
         db.commit()
         db.refresh(contact)

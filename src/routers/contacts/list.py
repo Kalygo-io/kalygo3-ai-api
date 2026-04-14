@@ -50,7 +50,6 @@ async def list_contacts(
                 | sqlfunc.lower(Contact.middle_name).like(term)
                 | sqlfunc.lower(Contact.last_name).like(term)
                 | sqlfunc.lower(Contact.email).like(term)
-                | sqlfunc.lower(Contact.company).like(term)
             )
 
         contacts = query.order_by(Contact.updated_at.desc()).all()

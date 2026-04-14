@@ -14,11 +14,7 @@ class CreateContactRequest(BaseModel):
     last_name: Optional[str] = None
     email: str
     phone: Optional[str] = None
-    company: Optional[str] = None
-    title: Optional[str] = None
     source: Optional[str] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
 
 
 class UpdateContactRequest(BaseModel):
@@ -27,11 +23,7 @@ class UpdateContactRequest(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    company: Optional[str] = None
-    title: Optional[str] = None
     source: Optional[str] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
 
 
 class ContactEventResponse(BaseModel):
@@ -57,11 +49,7 @@ class ContactResponse(BaseModel):
     name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
     phone: Optional[str] = None
-    company: Optional[str] = None
-    title: Optional[str] = None
     source: Optional[str] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     events: List[ContactEventResponse] = []
@@ -80,10 +68,7 @@ class ContactSummaryResponse(BaseModel):
     name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
     phone: Optional[str] = None
-    company: Optional[str] = None
-    title: Optional[str] = None
     source: Optional[str] = None
-    status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
