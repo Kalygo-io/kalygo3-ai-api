@@ -14,6 +14,8 @@ class CreateEmailEventRequest(BaseModel):
     tool_approval_id: Optional[int] = None
     campaign_id: Optional[int] = None
     contact_id: Optional[int] = None
+    credential_id: Optional[int] = None
+    sender_domain: Optional[str] = None
     provider: Optional[str] = None
     message_id: Optional[str] = None
     event_metadata: Optional[Dict[str, Any]] = None
@@ -34,6 +36,8 @@ class EmailEventResponse(BaseModel):
     tool_approval_id: Optional[int] = None
     campaign_id: Optional[int] = None
     contact_id: Optional[int] = None
+    credential_id: Optional[int] = None
+    sender_domain: Optional[str] = None
     primary_recipient: Optional[str] = None
     event_type: str
     provider: Optional[str] = None

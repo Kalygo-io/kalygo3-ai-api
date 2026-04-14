@@ -59,6 +59,8 @@ def _record_send_event(
     to_email: str,
     provider: str,
     message_id: str,
+    credential_id: int | None = None,
+    sender_domain: str | None = None,
     extra_metadata: dict | None = None,
 ) -> None:
     """Write an email_events row with event_type='send' after a successful send."""
@@ -70,6 +72,8 @@ def _record_send_event(
             event_type="send",
             provider=provider,
             message_id=message_id,
+            credential_id=credential_id,
+            sender_domain=sender_domain,
             event_metadata=extra_metadata or None,
         )
         db.add(event)
@@ -281,6 +285,8 @@ async def approve_tool_approval(
                 detail=f"Credential is missing required AWS SES fields: {missing}",
             )
 
+        from_email = cred_data["from_email"]
+
         try:
             message_id = _send_ses_email(cred_data, to_email, subject, body)
             print(f"[TOOL APPROVAL] ✅ Email sent — approval_id={approval_id} MessageId={message_id}")
@@ -298,6 +304,8 @@ async def approve_tool_approval(
             to_email=to_email,
             provider="ses",
             message_id=message_id,
+            credential_id=credential_id,
+            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
         )
 
         return ApproveToolApprovalResponse(
@@ -341,6 +349,8 @@ async def approve_tool_approval(
                 detail=f"Credential is missing required AWS SES fields: {missing}",
             )
 
+        from_email = cred_data["from_email"]
+
         try:
             message_id = _send_ses_html_email(cred_data, to_email, subject, html_body)
             print(f"[TOOL APPROVAL] ✅ HTML email sent — approval_id={approval_id} MessageId={message_id}")
@@ -358,6 +368,8 @@ async def approve_tool_approval(
             to_email=to_email,
             provider="ses",
             message_id=message_id,
+            credential_id=credential_id,
+            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
         )
 
         return ApproveToolApprovalResponse(
@@ -397,6 +409,8 @@ async def approve_tool_approval(
                 detail=f"Credential is missing required Google OAuth fields: {missing}",
             )
 
+        from_email = cred_data["from_email"]
+
         try:
             message_id = _send_gmail_oauth_email(cred_data, to_email, subject, body)
             print(f"[TOOL APPROVAL] ✅ Gmail OAuth sent — approval_id={approval_id} MessageId={message_id}")
@@ -406,6 +420,17 @@ async def approve_tool_approval(
 
         approval.status = "approved"
         db.commit()
+
+        _record_send_event(
+            db,
+            account_id=account_id,
+            tool_approval_id=approval_id,
+            to_email=to_email,
+            provider="google_oauth",
+            message_id=message_id,
+            credential_id=credential_id,
+            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
+        )
 
         return ApproveToolApprovalResponse(
             id=approval.id,
@@ -444,6 +469,8 @@ async def approve_tool_approval(
                 detail=f"Credential is missing required Gmail SMTP fields: {missing}",
             )
 
+        from_email = cred_data["from_email"]
+
         try:
             _send_gmail_smtp_email(cred_data, to_email, subject, body)
             print(f"[TOOL APPROVAL] ✅ Gmail SMTP sent — approval_id={approval_id}")
@@ -453,6 +480,17 @@ async def approve_tool_approval(
 
         approval.status = "approved"
         db.commit()
+
+        _record_send_event(
+            db,
+            account_id=account_id,
+            tool_approval_id=approval_id,
+            to_email=to_email,
+            provider="google_smtp",
+            message_id="smtp",
+            credential_id=credential_id,
+            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
+        )
 
         return ApproveToolApprovalResponse(
             id=approval.id,

@@ -608,6 +608,11 @@ class EmailEvent(Base):
     # Event classification
     event_type = Column(_email_event_type_pg, nullable=False, index=True)
 
+    # Which credential was used to send (enables per-credential analytics)
+    credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='SET NULL'), nullable=True, index=True)
+    # Domain portion of the sender address at send-time (e.g. "cmdlabs.io")
+    sender_domain = Column(String(255), nullable=True, index=True)
+
     # Sending provider (ses | google_oauth | google_smtp)
     provider = Column(String(50), nullable=True)
     # Provider-assigned message ID — used to match inbound webhook notifications
@@ -622,6 +627,7 @@ class EmailEvent(Base):
     account = relationship('Account', back_populates='email_events')
     tool_approval = relationship('PendingToolApproval', back_populates='email_events')
     contact = relationship('Contact', back_populates='email_events')
+    credential = relationship('Credential')
 
     def __repr__(self):
         return f'<EmailEvent {self.id}: {self.event_type} → {self.primary_recipient}>'

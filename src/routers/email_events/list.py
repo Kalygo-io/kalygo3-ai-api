@@ -26,6 +26,8 @@ async def list_email_events(
     contact_id: Optional[int] = Query(default=None),
     campaign_id: Optional[int] = Query(default=None),
     tool_approval_id: Optional[int] = Query(default=None),
+    credential_id: Optional[int] = Query(default=None, description="Filter by credential ID"),
+    sender_domain: Optional[str] = Query(default=None, description="Filter by sender domain (e.g. cmdlabs.io)"),
     primary_recipient: Optional[str] = Query(default=None, description="Filter by primary recipient email (case-insensitive)"),
     message_id: Optional[str] = Query(default=None, description="Filter by provider message ID"),
     provider: Optional[str] = Query(default=None, description="Filter by provider: ses|google_oauth|google_smtp"),
@@ -56,6 +58,12 @@ async def list_email_events(
 
         if tool_approval_id is not None:
             query = query.filter(EmailEvent.tool_approval_id == tool_approval_id)
+
+        if credential_id is not None:
+            query = query.filter(EmailEvent.credential_id == credential_id)
+
+        if sender_domain:
+            query = query.filter(EmailEvent.sender_domain == sender_domain.strip().lower())
 
         if primary_recipient:
             query = query.filter(EmailEvent.primary_recipient == primary_recipient.strip().lower())
@@ -96,12 +104,13 @@ async def get_email_event_stats(
     request: Request,
     campaign_id: Optional[int] = Query(default=None),
     tool_approval_id: Optional[int] = Query(default=None),
+    credential_id: Optional[int] = Query(default=None, description="Filter by credential ID"),
     from_date: Optional[datetime] = Query(default=None, description="Start of date range (ISO 8601)"),
     to_date: Optional[datetime] = Query(default=None, description="End of date range (ISO 8601)"),
 ):
     """
     Return aggregated event counts for the authenticated account.
-    Supports the same date/campaign/approval filters as the list endpoint.
+    Supports the same date/campaign/approval/credential filters as the list endpoint.
     Useful for summary cards on the email metrics dashboard.
     """
     try:
@@ -119,6 +128,9 @@ async def get_email_event_stats(
 
         if tool_approval_id is not None:
             query = query.filter(EmailEvent.tool_approval_id == tool_approval_id)
+
+        if credential_id is not None:
+            query = query.filter(EmailEvent.credential_id == credential_id)
 
         if from_date:
             query = query.filter(EmailEvent.created_at >= from_date)
