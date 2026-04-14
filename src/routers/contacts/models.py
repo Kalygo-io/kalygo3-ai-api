@@ -3,7 +3,7 @@ Pydantic models for the contacts router.
 """
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import date, datetime
 
 
 # ── Contact models ────────────────────────────────────────────────────────────
@@ -90,3 +90,34 @@ class UpdateContactEventRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     occurred_at: Optional[datetime] = None
+
+
+# ── Career Timeline models ────────────────────────────────────────────────────
+
+class CreateCareerTimelineRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+
+
+class UpdateCareerTimelineRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class CareerTimelineResponse(BaseModel):
+    id: int
+    contact_id: int
+    account_id: int
+    title: str
+    description: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

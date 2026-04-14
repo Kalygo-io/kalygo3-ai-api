@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double, Float, Enum, Text, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, Date, func, Double, Float, Enum, Text, Boolean, UniqueConstraint
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
@@ -450,6 +450,7 @@ class Contact(Base):
 
     account = relationship('Account', back_populates='contacts')
     events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
+    career_timeline = relationship('CareerTimeline', back_populates='contact', cascade='all, delete-orphan')
     list_memberships = relationship('ContactListMember', back_populates='contact', cascade='all, delete-orphan')
     email_events = relationship('EmailEvent', back_populates='contact')
 
@@ -531,6 +532,33 @@ class ContactEvent(Base):
 
     def __repr__(self):
         return f'<ContactEvent {self.id}: {self.event_type} for contact {self.contact_id}>'
+
+
+class CareerTimeline(Base):
+    """
+    Tracks career history entries for a Contact.
+
+    Each entry represents a role/position with a start date, optional end date,
+    title, and optional description.
+    """
+    __tablename__ = 'career_timeline'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    contact = relationship('Contact', back_populates='career_timeline')
+
+    def __repr__(self):
+        return f'<CareerTimeline {self.id}: {self.title} for contact {self.contact_id}>'
 
 
 class PendingToolApproval(Base):
