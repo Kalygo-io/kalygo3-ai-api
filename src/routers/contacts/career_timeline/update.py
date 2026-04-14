@@ -9,6 +9,7 @@ from slowapi.util import get_remote_address
 
 from ..models import UpdateCareerTimelineRequest, CareerTimelineResponse
 from src.utils.errors import handle_db_error
+from src.services.crm_vector_service import upsert_career_timeline_vector, extract_token
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -69,6 +70,23 @@ async def update_career_timeline_entry(
 
         db.commit()
         db.refresh(entry)
+
+        try:
+            token = extract_token(request)
+            await upsert_career_timeline_vector(
+                token=token,
+                entry_id=entry.id,
+                account_id=account_id,
+                contact_id=contact_id,
+                contact_name=contact.name,
+                contact_email=contact.email,
+                title=entry.title,
+                description=entry.description,
+                start_date=entry.start_date,
+                end_date=entry.end_date,
+            )
+        except Exception as vec_err:
+            print(f"[UPDATE CAREER TIMELINE] Warning: vector upsert failed: {vec_err}")
 
         return entry
 

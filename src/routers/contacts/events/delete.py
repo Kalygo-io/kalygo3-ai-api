@@ -7,6 +7,7 @@ from src.db.models import Contact, ContactEvent, Account
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
+from src.services.crm_vector_service import delete_vector
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -46,6 +47,11 @@ async def delete_contact_event(
 
         db.delete(event)
         db.commit()
+
+        try:
+            delete_vector(f"contact_event_{event_id}")
+        except Exception as vec_err:
+            print(f"[DELETE CONTACT EVENT] Warning: vector delete failed: {vec_err}")
 
         return None
 

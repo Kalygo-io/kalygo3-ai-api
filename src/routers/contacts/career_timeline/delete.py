@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.utils.errors import handle_db_error
+from src.services.crm_vector_service import delete_vector
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -48,6 +49,11 @@ async def delete_career_timeline_entry(
 
         db.delete(entry)
         db.commit()
+
+        try:
+            delete_vector(f"career_timeline_{entry_id}")
+        except Exception as vec_err:
+            print(f"[DELETE CAREER TIMELINE] Warning: vector delete failed: {vec_err}")
 
     except HTTPException:
         raise

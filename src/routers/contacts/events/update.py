@@ -9,6 +9,7 @@ from slowapi.util import get_remote_address
 
 from ..models import UpdateContactEventRequest, ContactEventResponse
 from src.utils.errors import handle_db_error
+from src.services.crm_vector_service import upsert_contact_event_vector, extract_token
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
@@ -65,6 +66,23 @@ async def update_contact_event(
 
         db.commit()
         db.refresh(event)
+
+        try:
+            token = extract_token(request)
+            await upsert_contact_event_vector(
+                token=token,
+                event_id=event.id,
+                account_id=account_id,
+                contact_id=contact_id,
+                contact_name=contact.name,
+                contact_email=contact.email,
+                event_type=event.event_type,
+                title=event.title,
+                description=event.description,
+                occurred_at=event.occurred_at,
+            )
+        except Exception as vec_err:
+            print(f"[UPDATE CONTACT EVENT] Warning: vector upsert failed: {vec_err}")
 
         return event
 
