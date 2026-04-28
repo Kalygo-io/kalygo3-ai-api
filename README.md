@@ -83,6 +83,11 @@ gcloud secrets add-iam-policy-binding <ENV_VAR_NAME_HERE> \
 
 - And then add a reference to this new env var in the service.yaml file
 
+## CICD
+
+SKIP_TESTS=1 git commit -m "..." — skips the test suite explicitly
+git commit --no-verify -m "..." — the standard git flag that skips all hooks
+
 ## For triggering CICD
 
 12
