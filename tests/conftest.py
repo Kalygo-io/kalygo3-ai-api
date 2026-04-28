@@ -2,8 +2,8 @@
 Shared test fixtures for the kalygo3-ai-api test suite.
 
 Key design choices:
-- Environment variables are set BEFORE any app imports (database.py creates
-  the engine at import time).
+- POSTGRES_URL is FORCE-SET to the test database URL before any app imports.
+  This guarantees tests can never accidentally touch production.
 - Each test runs inside a DB transaction that is rolled back, so tests are
   fast and isolated with zero cleanup.
 - Auth tokens are minted directly (no login round-trip needed per test).
@@ -13,11 +13,15 @@ Key design choices:
 
 import os
 
-# --- Set test environment BEFORE any application imports ---
-os.environ.setdefault("POSTGRES_URL", os.environ.get(
+# --- FORCE-SET test environment BEFORE any application imports ---
+# Uses POSTGRES_TEST_URL if provided, otherwise defaults to local test DB.
+# Critically: this OVERWRITES any existing POSTGRES_URL to prevent
+# accidental operations against production.
+_TEST_DB_URL = os.environ.get(
     "POSTGRES_TEST_URL",
     "postgresql://test:test@localhost:5432/kalygo_test"
-))
+)
+os.environ["POSTGRES_URL"] = _TEST_DB_URL
 os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-do-not-use-in-prod")
 os.environ.setdefault("AUTH_ALGORITHM", "HS256")
 os.environ.setdefault("COOKIE_DOMAIN", "localhost")
@@ -65,7 +69,19 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
-    """Create all tables (and required PG enum types) once per test session."""
+    """Create all tables (and required PG enum types) once per test session.
+
+    SAFETY: This fixture NEVER drops tables. Schema is additive only.
+    Data isolation is handled by per-test transaction rollback.
+    """
+    # Guard: refuse to run if the URL looks like a production database
+    if any(host in TEST_DATABASE_URL for host in ["supabase.co", "neon.tech", "rds.amazonaws.com"]):
+        raise RuntimeError(
+            f"REFUSING to run tests: POSTGRES_URL points to a production-like host.\n"
+            f"  URL: {TEST_DATABASE_URL[:50]}...\n"
+            f"  Set POSTGRES_TEST_URL to a local/disposable database."
+        )
+
     with test_engine.connect() as conn:
         conn.execute(text("""
             DO $$ BEGIN
@@ -109,8 +125,7 @@ def _setup_database():
     Base.metadata.create_all(bind=test_engine)
 
     yield
-
-    Base.metadata.drop_all(bind=test_engine)
+    # No teardown — tables are left in place for inspection and speed.
 
 
 @pytest.fixture()
