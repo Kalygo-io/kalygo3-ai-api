@@ -62,21 +62,6 @@ async def create_agent(
                 detail="Only config version 4 is supported."
             )
 
-        request_dict = request_body.model_dump(exclude_none=False)
-
-        try:
-            validate_against_schema(request_dict, "agent", 4)
-        except JsonSchemaValidationError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Agent configuration failed validation (schema 'agent' v4).",
-            )
-        except FileNotFoundError as e:
-            import logging as _log
-            _log.getLogger(__name__).warning("[CREATE AGENT] Schema file not found: %s", e)
-        except Exception as e:
-            raise handle_db_error(e, "[SCHEMA VALIDATION ERROR]")
-
         try:
             validate_against_schema(request_body.config, "agent_config", 4)
         except JsonSchemaValidationError:

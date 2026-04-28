@@ -87,19 +87,6 @@ async def update_agent(
 
             agent.config = request_body.config
 
-        if request_body.name is not None and request_body.config is not None:
-            agent_dict = {"name": agent.name, "config": agent.config}
-            try:
-                validate_against_schema(agent_dict, "agent", 4)
-            except JsonSchemaValidationError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Agent configuration failed validation (schema 'agent' v4).",
-                )
-            except FileNotFoundError as e:
-                import logging as _log
-                _log.getLogger(__name__).warning("[UPDATE AGENT] Schema file not found: %s", e)
-
         db.commit()
         db.refresh(agent)
 

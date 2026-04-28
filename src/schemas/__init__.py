@@ -165,16 +165,16 @@ def validate_against_schema(
     except FileNotFoundError:
         pass
     
-    # Load chat_message schema if it exists and register it
-    try:
-        chat_message_schema = load_schema("chat_message", 1)
-        if "$id" in chat_message_schema:
-            store[chat_message_schema["$id"]] = chat_message_schema
-        # Also register by filename pattern
-        store["./chat_message.v1.json"] = chat_message_schema
-        store["chat_message.v1.json"] = chat_message_schema
-    except FileNotFoundError:
-        pass  # Chat message schema might not exist, that's okay
+    # Pre-register chat_message schemas for $ref resolution
+    for chat_ver in (1, 2):
+        try:
+            cm_schema = load_schema("chat_message", chat_ver)
+            if "$id" in cm_schema:
+                store[cm_schema["$id"]] = cm_schema
+            store[f"./chat_message.v{chat_ver}.json"] = cm_schema
+            store[f"chat_message.v{chat_ver}.json"] = cm_schema
+        except FileNotFoundError:
+            pass
     
     # Create resolver with base URI pointing to the schemas directory
     resolver = RefResolver(base_uri, schema, store=store)
