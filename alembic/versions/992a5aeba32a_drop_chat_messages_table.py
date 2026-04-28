@@ -19,9 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Drop the chat_messages table
-    # First drop the foreign key constraint (if it exists)
-    op.drop_table('chat_messages')
+    pass
 
 
 def downgrade() -> None:
