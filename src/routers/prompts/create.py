@@ -5,24 +5,24 @@ After persisting the prompt to the DB, embeds its content and upserts the
 vector into the ``prompts`` namespace in Pinecone so it is searchable via
 similarity search.
 """
+import logging
 import os
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Prompt, Account
 from src.services import fetch_embedding
 from src.core.clients import pc
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from .models import CreatePromptRequest, PromptResponse
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 PINECONE_INDEX = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
 PROMPTS_NAMESPACE = "prompts"
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 def _extract_token(request: Request) -> str | None:
     token = request.cookies.get("jwt")
@@ -31,7 +31,6 @@ def _extract_token(request: Request) -> str | None:
         if auth_header.startswith("Bearer "):
             token = auth_header.removeprefix("Bearer ").strip()
     return token
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PromptResponse)
 @limiter.limit("30/minute")
@@ -102,10 +101,9 @@ async def create_prompt(
                     )],
                     namespace=PROMPTS_NAMESPACE,
                 )
-                print(f"[CREATE PROMPT] Embedded prompt {prompt.id} into Pinecone")
+                logger.info("[CREATE PROMPT] Embedded prompt %s into Pinecone", prompt.id)
         except Exception as embed_err:
-            # Don't fail the create if embedding fails
-            print(f"[CREATE PROMPT] Warning: embedding failed: {embed_err}")
+            logger.warning("[CREATE PROMPT] Embedding failed: %s", embed_err)
         
         return prompt
         

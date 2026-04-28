@@ -1,19 +1,18 @@
 """
 Update a career timeline entry.
 """
+import logging
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, CareerTimeline, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from ..models import UpdateCareerTimelineRequest, CareerTimelineResponse
 from src.utils.errors import handle_db_error
 from src.services.crm_vector_service import upsert_career_timeline_vector, extract_token
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 router = APIRouter()
-
 
 @router.put("/{entry_id}", response_model=CareerTimelineResponse)
 @limiter.limit("60/minute")
@@ -86,7 +85,7 @@ async def update_career_timeline_entry(
                 end_date=entry.end_date,
             )
         except Exception as vec_err:
-            print(f"[UPDATE CAREER TIMELINE] Warning: vector upsert failed: {vec_err}")
+            logger.warning("[UPDATE CAREER TIMELINE] vector upsert failed: %s", vec_err)
 
         return entry
 

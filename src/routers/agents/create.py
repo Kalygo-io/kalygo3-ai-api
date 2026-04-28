@@ -6,15 +6,11 @@ from src.deps import db_dependency, jwt_dependency
 from src.db.models import Agent, Account
 from src.schemas import validate_against_schema
 from jsonschema import ValidationError as JsonSchemaValidationError
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from .models import CreateAgentRequest, AgentResponse
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=AgentResponse)
 @limiter.limit("10/minute")

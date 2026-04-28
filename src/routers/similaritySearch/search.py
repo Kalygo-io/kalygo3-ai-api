@@ -1,17 +1,13 @@
 import logging
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 import os
-import json
 from src.core.clients import pc
 from src.deps import jwt_dependency
 from src.services import fetch_embedding
+from src.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
-
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 

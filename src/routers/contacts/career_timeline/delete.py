@@ -1,18 +1,17 @@
 """
 Delete a career timeline entry.
 """
+import logging
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, CareerTimeline, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.utils.errors import handle_db_error
 from src.services.crm_vector_service import delete_vector
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 router = APIRouter()
-
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("60/minute")
@@ -53,7 +52,7 @@ async def delete_career_timeline_entry(
         try:
             delete_vector(f"career_timeline_{entry_id}")
         except Exception as vec_err:
-            print(f"[DELETE CAREER TIMELINE] Warning: vector delete failed: {vec_err}")
+            logger.warning("[DELETE CAREER TIMELINE] vector delete failed: %s", vec_err)
 
     except HTTPException:
         raise

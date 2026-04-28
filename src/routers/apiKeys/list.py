@@ -5,15 +5,11 @@ from fastapi import APIRouter, Request
 from typing import List
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import ApiKey
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from .models import ApiKeyResponse
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
-
 
 @router.get("/", response_model=List[ApiKeyResponse])
 @limiter.limit("30/minute")

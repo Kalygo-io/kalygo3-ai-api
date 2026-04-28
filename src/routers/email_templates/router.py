@@ -3,8 +3,6 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request, Query
 from src.deps import db_dependency, auth_dependency
 from src.db.models import EmailTemplate
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
 
 from .models import (
@@ -12,10 +10,9 @@ from .models import (
     UpdateEmailTemplateRequest,
     EmailTemplateResponse,
 )
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/", response_model=List[EmailTemplateResponse])
 @limiter.limit("60/minute")
@@ -35,7 +32,6 @@ async def list_email_templates(
         raise
     except Exception as e:
         raise handle_db_error(e, "[LIST EMAIL TEMPLATES]")
-
 
 @router.get("/{template_id}", response_model=EmailTemplateResponse)
 @limiter.limit("60/minute")
@@ -58,7 +54,6 @@ async def get_email_template(
         raise
     except Exception as e:
         raise handle_db_error(e, "[GET EMAIL TEMPLATE]")
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=EmailTemplateResponse)
 @limiter.limit("60/minute")
@@ -87,7 +82,6 @@ async def create_email_template(
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[CREATE EMAIL TEMPLATE]")
-
 
 @router.patch("/{template_id}", response_model=EmailTemplateResponse)
 @limiter.limit("60/minute")
@@ -124,7 +118,6 @@ async def update_email_template(
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[UPDATE EMAIL TEMPLATE]")
-
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("60/minute")

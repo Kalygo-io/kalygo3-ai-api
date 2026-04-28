@@ -3,33 +3,34 @@ Email open-tracking endpoint.
 
 GET /t/o/{tracking_id}
 
-Called when a recipient's mail client loads the invisible 1×1 pixel that was
+Called when a recipient's mail client loads the invisible 1x1 pixel that was
 injected into the HTML email at send time.  Looks up the email_events row
 whose event_metadata->tracking_id matches, then inserts a new "open" event
 linked to the same tool_approval_id / primary_recipient.
 
-Returns a 1×1 transparent GIF so mail clients don't show a broken-image icon.
+Returns a 1x1 transparent GIF so mail clients don't show a broken-image icon.
 """
+import logging
 import base64
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from src.db.database import SessionLocal
+from src.deps import get_db
 from src.db.models import EmailEvent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Smallest valid 1×1 transparent GIF (43 bytes)
 _PIXEL_GIF = base64.b64decode(
     "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
 )
 
 
 @router.get("/o/{tracking_id}")
-async def track_open(tracking_id: str):
-    """Record an email open event and return a 1×1 transparent GIF."""
-    db: Session = SessionLocal()
+async def track_open(tracking_id: str, db: Session = Depends(get_db)):
+    """Record an email open event and return a 1x1 transparent GIF."""
     try:
         send_event = (
             db.query(EmailEvent)
@@ -62,10 +63,9 @@ async def track_open(tracking_id: str):
                 )
                 db.add(open_event)
                 db.commit()
-    except Exception as exc:
-        print(f"[TRACKING] ⚠️  open tracking error for {tracking_id}: {exc}")
-    finally:
-        db.close()
+    except Exception:
+        logger.exception("[TRACKING] Open tracking error for %s", tracking_id)
+        db.rollback()
 
     return Response(
         content=_PIXEL_GIF,

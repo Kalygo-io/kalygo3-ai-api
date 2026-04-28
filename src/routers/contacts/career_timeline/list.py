@@ -5,15 +5,12 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, CareerTimeline, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from ..models import CareerTimelineResponse
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/", response_model=List[CareerTimelineResponse])
 @limiter.limit("60/minute")

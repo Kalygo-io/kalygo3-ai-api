@@ -2,13 +2,13 @@
 Dynamic CORS middleware that allows all origins for API key requests
 and restricts to specific origins for JWT/cookie requests.
 """
+import logging
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 from typing import List
 
-# Debug flag - set to False to disable CORS debug logging
-debug = False
+logger = logging.getLogger(__name__)
 
 
 class DynamicCORSMiddleware(BaseHTTPMiddleware):
@@ -69,12 +69,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         
         if origin:
             is_allowed = self._is_allowed_origin(origin)
-            if debug:
-                print(f"[CORS] {request.method} from origin: {origin}, has_api_key: {has_api_key}, is_allowed: {is_allowed}")
-                print(f"[CORS] Request URL: {request_url}, X-Forwarded-Proto: {forwarded_proto}, X-Forwarded-Host: {forwarded_host}")
-            if not is_allowed and not has_api_key:
-                if debug:
-                    print(f"[CORS] Allowed origins: {self.allowed_origins}")
+            logger.debug("[CORS] %s from origin: %s, has_api_key: %s, is_allowed: %s", request.method, origin, has_api_key, is_allowed)
         
         # Handle preflight OPTIONS requests
         if request.method == "OPTIONS":
@@ -98,9 +93,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                     response.headers["Access-Control-Allow-Origin"] = origin
                     response.headers["Access-Control-Allow-Credentials"] = "true" if self.allow_credentials else "false"
                 else:
-                    # Origin not allowed and no API key - reject
-                    if debug:
-                        print(f"[CORS] Rejecting OPTIONS request from origin: {origin} (not in allowed list)")
+                    logger.debug("[CORS] Rejecting OPTIONS from origin: %s", origin)
                     response.status_code = 403
                     return response
             else:
@@ -138,8 +131,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                     # Replace http:// with https:// in redirect location
                     fixed_location = location.replace("http://", "https://", 1)
                     response.headers["Location"] = fixed_location
-                    if debug:
-                        print(f"[CORS] Fixed redirect URL: {location} -> {fixed_location}")
+                    logger.debug("[CORS] Fixed redirect: %s -> %s", location, fixed_location)
         
         # Add CORS headers to response (including redirect responses)
         if has_api_key:
@@ -154,10 +146,6 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                 # Allowed origin for JWT requests
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Credentials"] = "true" if self.allow_credentials else "false"
-            else:
-                # Origin not in allowed list - log for debugging
-                if debug:
-                    print(f"[CORS] Not adding CORS headers for origin: {origin} (not in allowed list)")
             # If origin not in allowed list, don't add CORS headers (browser will block)
         # If no origin header, it's a same-origin request - no CORS headers needed
         

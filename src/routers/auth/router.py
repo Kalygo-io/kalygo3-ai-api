@@ -5,7 +5,6 @@ import uuid
 from fastapi import APIRouter, HTTPException, status, Header, Response, BackgroundTasks, Request
 from pydantic import BaseModel
 from jose import jwt
-from dotenv import load_dotenv
 import os
 from src.db.models import Account, UsageCredits
 from src.routers.auth.background_tasks import record_login
@@ -15,13 +14,8 @@ from src.routers.auth.background_tasks.send_login_code_email_ses import send_log
 from src.deps import db_dependency, bcrypt_context, jwt_dependency
 from src.clients.stripe_client import create_stripe_customer
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
-
-load_dotenv()
+from src.rate_limit import limiter
 
 router = APIRouter()
 
@@ -46,12 +40,10 @@ class VerifyCodeBody(BaseModel):
     email: str
     code: str
 
-
 OTP_TTL_MINUTES = 10
 
 def _hash_otp(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
-
 
 def _issue_jwt_cookie(response: Response, account: Account) -> Response:
     token = create_access_token(account.email, account.id, timedelta(hours=12))
@@ -67,13 +59,11 @@ def _issue_jwt_cookie(response: Response, account: Account) -> Response:
     )
     return response
 
-
 def create_access_token(email: str, user_id: int, expires_delta: timedelta):
     encode = {'sub': email, 'id': user_id}
     expires = datetime.now(timezone.utc) + expires_delta
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
-
 
 @router.get('/validate-token')
 async def validate_token(request: Request, authorization: str = Header(...)):
@@ -86,11 +76,9 @@ async def validate_token(request: Request, authorization: str = Header(...)):
     except Exception as e:
         raise handle_db_error(e, "[OPERATION]")
 
-
 @router.get('/me', response_model=CurrentUserResponse)
 async def get_current_user_info(current_user: jwt_dependency, request: Request):
     return CurrentUserResponse(email=current_user['email'])
-
 
 @router.delete("/log-out")
 @limiter.limit("5/minute")
@@ -101,7 +89,6 @@ def logout(request: Request, response: Response):
         path="/"
     )
     return {"message": "Logged out successfully"}
-
 
 @router.post("/request-password-reset")
 def request_reset_password(request_body: RequestPasswordResetBody, db: db_dependency):
@@ -119,7 +106,6 @@ def request_reset_password(request_body: RequestPasswordResetBody, db: db_depend
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 @router.post("/reset-password")
 def reset_password(request_body: PasswordResetBody, db: db_dependency):
@@ -140,7 +126,6 @@ def reset_password(request_body: PasswordResetBody, db: db_dependency):
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 @router.post("/request-code", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
@@ -195,7 +180,6 @@ async def request_login_code(body: RequestCodeBody, db: db_dependency, request: 
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[REQUEST CODE]")
-
 
 @router.post("/verify-code")
 @limiter.limit("10/minute")

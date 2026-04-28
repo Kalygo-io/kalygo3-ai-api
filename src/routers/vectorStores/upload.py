@@ -4,20 +4,17 @@ Handles file uploads to cloud storage and triggers async processing via Pub/Sub.
 """
 import logging
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Form
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from typing import Optional
 from src.deps import jwt_dependency, db_dependency
 from src.services.vector_stores_upload_service import VectorStoresUploadService
 from src.db.models import VectorDbIngestionLog, Account
+from src.utils.errors import handle_db_error
 import uuid
+from src.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
-
 router = APIRouter()
-
 
 @router.post("/upload-csv")
 @limiter.limit("100/minute")
@@ -128,13 +125,8 @@ async def upload_csv_file(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        logger.error("[UPLOAD CSV] %s: %s\n%s", type(e).__name__, e, traceback.format_exc())
-        raise HTTPException(
-            status_code=500,
-            detail="An unexpected error occurred. Please try again.",
-        )
-
+        logger.exception("[UPLOAD CSV] Unexpected error")
+        raise handle_db_error(e, "[UPLOAD CSV]")
 
 @router.post("/upload-text")
 @limiter.limit("100/minute")
@@ -243,10 +235,6 @@ async def upload_text_file(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        logger.error("[UPLOAD TEXT] %s: %s\n%s", type(e).__name__, e, traceback.format_exc())
-        raise HTTPException(
-            status_code=500,
-            detail="An unexpected error occurred. Please try again.",
-        )
+        logger.exception("[UPLOAD TEXT] Unexpected error")
+        raise handle_db_error(e, "[UPLOAD TEXT]")
 

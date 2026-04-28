@@ -1,4 +1,7 @@
+import logging
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Agent():
@@ -23,4 +26,4 @@ class Agent():
             async for evt in self.llm.astream_events(task, version="v1"):
                 yield evt
         except Exception as e:
-            print(f"Error streaming events: {e}")
+            logger.exception("Error streaming events")

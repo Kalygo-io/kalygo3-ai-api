@@ -1,17 +1,16 @@
 """
 Delete a contact event endpoint.
 """
+import logging
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, ContactEvent, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
 from src.services.crm_vector_service import delete_vector
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 router = APIRouter()
-
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("30/minute")
@@ -51,7 +50,7 @@ async def delete_contact_event(
         try:
             delete_vector(f"contact_event_{event_id}")
         except Exception as vec_err:
-            print(f"[DELETE CONTACT EVENT] Warning: vector delete failed: {vec_err}")
+            logger.warning("[DELETE CONTACT EVENT] vector delete failed: %s", vec_err)
 
         return None
 

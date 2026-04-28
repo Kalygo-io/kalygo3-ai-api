@@ -1,10 +1,9 @@
+import logging
 import stripe
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-# Initialize Stripe with API key from environment
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
@@ -22,12 +21,10 @@ def create_stripe_customer(email: str) -> str:
         stripe.error.StripeError: If Stripe API call fails
     """
     try:
-        customer = stripe.Customer.create(
-            email=email,
-        )
+        customer = stripe.Customer.create(email=email)
         return customer.id
-    except stripe.error.StripeError as e:
-        print(f"Stripe error creating customer: {str(e)}")
+    except stripe.error.StripeError:
+        logger.exception("Stripe error creating customer for %s", email)
         raise
 
 
@@ -45,13 +42,11 @@ def get_payment_methods(customer_id: str) -> list:
         stripe.error.StripeError: If Stripe API call fails
     """
     try:
-        # List all payment methods for the customer
         payment_methods = stripe.PaymentMethod.list(
             customer=customer_id,
             type='card'
         )
         
-        # Format the payment methods to return only relevant information
         formatted_methods = []
         for pm in payment_methods.data:
             formatted_methods.append({
@@ -67,8 +62,8 @@ def get_payment_methods(customer_id: str) -> list:
             })
         
         return formatted_methods
-    except stripe.error.StripeError as e:
-        print(f"Stripe error retrieving payment methods: {str(e)}")
+    except stripe.error.StripeError:
+        logger.exception("Stripe error retrieving payment methods for %s", customer_id)
         raise
 
 
@@ -87,13 +82,11 @@ def attach_payment_method(customer_id: str, payment_method_id: str) -> dict:
         stripe.error.StripeError: If Stripe API call fails
     """
     try:
-        # Attach the payment method to the customer
         payment_method = stripe.PaymentMethod.attach(
             payment_method_id,
             customer=customer_id,
         )
         
-        # Format the payment method information
         return {
             "id": payment_method.id,
             "type": payment_method.type,
@@ -105,8 +98,8 @@ def attach_payment_method(customer_id: str, payment_method_id: str) -> dict:
             } if payment_method.card else None,
             "created": payment_method.created,
         }
-    except stripe.error.StripeError as e:
-        print(f"Stripe error attaching payment method: {str(e)}")
+    except stripe.error.StripeError:
+        logger.exception("Stripe error attaching payment method %s to %s", payment_method_id, customer_id)
         raise
 
 
@@ -136,7 +129,6 @@ def create_payment_method_from_card(
         stripe.error.StripeError: If Stripe API call fails
     """
     try:
-        # Create payment method with card details
         payment_method_data = {
             "type": "card",
             "card": {
@@ -147,7 +139,6 @@ def create_payment_method_from_card(
             }
         }
         
-        # Add billing details if provided
         billing_details = {}
         if cardholder_name:
             billing_details["name"] = cardholder_name
@@ -159,7 +150,6 @@ def create_payment_method_from_card(
         
         payment_method = stripe.PaymentMethod.create(**payment_method_data)
         
-        # Format the payment method information
         return {
             "id": payment_method.id,
             "type": payment_method.type,
@@ -171,15 +161,14 @@ def create_payment_method_from_card(
             } if payment_method.card else None,
             "created": payment_method.created,
         }
-    except stripe.error.StripeError as e:
-        print(f"Stripe error creating payment method: {str(e)}")
+    except stripe.error.StripeError:
+        logger.exception("Stripe error creating payment method")
         raise
 
 
 def detach_payment_method(payment_method_id: str) -> bool:
     """
     Detach a payment method from a customer.
-    This effectively removes the payment method from the customer's stored payment methods.
     
     Args:
         payment_method_id: The Stripe payment method ID (e.g., 'pm_xxxxx')
@@ -191,10 +180,8 @@ def detach_payment_method(payment_method_id: str) -> bool:
         stripe.error.StripeError: If Stripe API call fails
     """
     try:
-        # Detach the payment method from the customer
-        payment_method = stripe.PaymentMethod.detach(payment_method_id)
+        stripe.PaymentMethod.detach(payment_method_id)
         return True
-    except stripe.error.StripeError as e:
-        print(f"Stripe error detaching payment method: {str(e)}")
+    except stripe.error.StripeError:
+        logger.exception("Stripe error detaching payment method %s", payment_method_id)
         raise
-

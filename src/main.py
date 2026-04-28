@@ -2,61 +2,45 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 from src.middleware.dynamic_cors import DynamicCORSMiddleware
+from src.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 from .routers import (
-  healthcheck,
-  auth,
-  logins,
-  waitlist,
-  chatSessions,
-  payments,
-  credentials,
-  vectorStores,
-  agents,
-  apiKeys,
-  accounts,
-  prompts,
-  accessGroups,
-  similaritySearch,
-  contacts,
+    healthcheck,
+    auth,
+    logins,
+    waitlist,
+    chatSessions,
+    payments,
+    credentials,
+    vectorStores,
+    agents,
+    apiKeys,
+    accounts,
+    prompts,
+    accessGroups,
+    similaritySearch,
+    contacts,
 )
-from .routers.contact_lists.router import router as contact_lists_router
-from .routers.tool_approvals.router import router as tool_approvals_router
-from .routers.email_events.router import router as email_events_router
-from .routers.email_templates.router import router as email_templates_router
-from .routers.tracking.router import router as tracking_router
+from .routers import contact_lists
+from .routers import tool_approvals
+from .routers import email_events
+from .routers import email_templates
+from .routers import tracking
 
-from src.db.database import Base, engine
-
-import debugpy
-
-load_dotenv()
-
-# debugpy.listen(("0.0.0.0", 5678))
-# debugpy.wait_for_client()
-
-# Enable redirect_slashes - we handle HTTPS redirects in CORS middleware
 app = FastAPI(
-    docs_url="/api/docs", 
+    docs_url="/api/docs",
     redoc_url=None,
-    redirect_slashes=True  # Enable redirects - CORS middleware fixes HTTP->HTTPS redirects
+    redirect_slashes=True,
 )
 
-# Configure FastAPI to trust proxy headers (for HTTPS detection behind proxies)
-# This ensures request.url.scheme is correctly set to 'https' when behind a proxy
-app.root_path = ""
-
-# Add custom exception handler for validation errors (422)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
@@ -64,18 +48,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     This helps with debugging API calls from the frontend.
     """
     errors = exc.errors()
-    print(f"[VALIDATION ERROR] Path: {request.url.path}")
-    print(f"[VALIDATION ERROR] Method: {request.method}")
-    print(f"[VALIDATION ERROR] Errors: {errors}")
+    logger.warning("[VALIDATION ERROR] %s %s: %s", request.method, request.url.path, errors)
     
-    # Try to log the request body for debugging
-    try:
-        body = await request.body()
-        print(f"[VALIDATION ERROR] Request body: {body.decode('utf-8')[:500]}")
-    except:
-        pass
-    
-    # Format error message for frontend
     error_details = []
     for error in errors:
         location = " -> ".join(str(loc) for loc in error["loc"])
@@ -133,9 +107,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Let Alembic handle all database schema changes
-# Base.metadata.create_all(bind=engine)
-
 # Allowed origins for JWT/cookie authentication (internal UI)
 jwt_allowed_origins = [
     "https://kalygo.io",
@@ -146,10 +117,6 @@ jwt_allowed_origins = [
     "http://localhost:5000",  # Second FastAPI
 ]
 
-# Create a Limiter instance
-limiter = Limiter(key_func=get_remote_address)
-
-# Add SlowAPI middleware to FastAPI app (runs first)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -250,31 +217,31 @@ app.include_router(
 )
 
 app.include_router(
-    contact_lists_router,
+    contact_lists.router,
     prefix="/api/contact-lists",
     tags=['Contact Lists'],
 )
 
 app.include_router(
-    tool_approvals_router,
+    tool_approvals.router,
     prefix="/api/tool-approvals",
     tags=['Tool Approvals'],
 )
 
 app.include_router(
-    email_events_router,
+    email_events.router,
     prefix="/api/email-events",
     tags=['Email Events'],
 )
 
 app.include_router(
-    email_templates_router,
+    email_templates.router,
     prefix="/api/email-templates",
     tags=['Email Templates'],
 )
 
 app.include_router(
-    tracking_router,
+    tracking.router,
     prefix="/t",
     tags=['Tracking'],
 )

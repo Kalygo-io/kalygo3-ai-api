@@ -4,13 +4,10 @@ Revoke an access group's permission to use an agent (agent owner only).
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Agent, AgentAccessGrant
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.delete("/{agent_id}/access-grants/{access_group_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")

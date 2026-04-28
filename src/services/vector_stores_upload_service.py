@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 import json
@@ -6,6 +7,8 @@ from typing import Dict, Any, Optional
 from fastapi import UploadFile
 from src.clients.gcs_client import GCSClient
 from src.clients.pubsub_client import PubSubClient
+
+logger = logging.getLogger(__name__)
 
 class VectorStoresUploadService:
     """
@@ -32,48 +35,25 @@ class VectorStoresUploadService:
     ) -> Dict[str, Any]:
         """
         Upload file to GCS and publish a message to Pub/Sub for async processing.
-        
-        Args:
-            file: The uploaded file
-            user_id: The user ID from JWT
-            user_email: The user email from JWT
-            index_name: The Pinecone index name
-            namespace: The Pinecone namespace for the file
-            jwt: JWT token for authentication
-            batch_number: Optional batch UUID for grouping related operations
-            comment: Optional comment for the ingestion log
-            
-        Returns:
-            Dict containing upload status and file information
         """
         try:
-            print(f"*** VectorStoresUploadService.upload_file_and_publish ***")
-            print(f"Index: {index_name}, Namespace: {namespace}")
-
-            # Generate unique file ID if not provided
             file_id = str(uuid.uuid4())
             timestamp = datetime.now().isoformat()
             
-            # Generate batch number if not provided
             if batch_number is None:
                 batch_number = str(uuid.uuid4())
             
-            # Create GCS file path: vector_stores/{index_name}/{namespace}/{batch_number}/{file_id}/{filename}
             gcs_file_path = f"vector_stores/{index_name}/{namespace}/{batch_number}/{file_id}/{file.filename}"
             
-            # Upload file to GCS
             storage_client = GCSClient.get_storage_client()
             bucket = storage_client.get_bucket(self.gcs_bucket_name)
             blob = bucket.blob(gcs_file_path)
             
-            # Read file content and upload
             file_content = await file.read()
             blob.upload_from_string(file_content, content_type=file.content_type)
 
-            print(f"File uploaded to GCS: {gcs_file_path}")
-            print(f"User email: {user_email}")
+            logger.info("File uploaded to GCS: %s", gcs_file_path)
             
-            # Prepare message data for Pub/Sub
             message_data = {
                 "file_id": file_id,
                 "filename": file.filename,
@@ -89,23 +69,20 @@ class VectorStoresUploadService:
                 "upload_timestamp": timestamp,
                 "processing_status": "pending",
                 "jwt": jwt,
-                "module": "vector_stores",  # Identify this as a vector stores upload
+                "module": "vector_stores",
                 "comment": comment
             }
 
-            # Publish message to Pub/Sub
             publisher_client = PubSubClient.get_publisher_client()
             topic_path = publisher_client.topic_path(self.project_id, self.pubsub_topic_name)
             
-            # Convert message data to JSON string
             message_json = json.dumps(message_data)
             message_bytes = message_json.encode("utf-8")
             
-            # Publish the message
             future = publisher_client.publish(topic_path, data=message_bytes)
             message_id = future.result()
             
-            print(f"Published message {message_id} to topic {self.pubsub_topic_name} for file {file.filename}")
+            logger.info("Published message %s for file %s", message_id, file.filename)
             
             return {
                 "success": True,
@@ -122,14 +99,10 @@ class VectorStoresUploadService:
                 "module": "vector_stores"
             }
             
-        except Exception as e:
-            print(f"Error in VectorStoresUploadService: {str(e)}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            logger.exception("Error in VectorStoresUploadService")
             return {
                 "success": False,
-                "error": f"Failed to upload file and publish message: {str(e)}",
+                "error": "Failed to upload file. Please try again.",
                 "module": "vector_stores"
             }
-
-

@@ -1,15 +1,12 @@
 import logging
 from fastapi import APIRouter, Request
 from src.core.schemas.DeleteVectorsRequest import DeleteVectorsRequest
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 import os
 from src.core.clients import pc
 from src.deps import jwt_dependency
+from src.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
-
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 

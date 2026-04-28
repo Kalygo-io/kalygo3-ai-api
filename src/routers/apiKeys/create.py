@@ -5,15 +5,11 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import ApiKey, Account, ApiKeyStatus
 from src.utils.api_key_utils import generate_api_key
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from .models import CreateApiKeyRequest, CreateApiKeyResponse
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=CreateApiKeyResponse)
 @limiter.limit("10/minute")

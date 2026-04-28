@@ -1,5 +1,8 @@
+import logging
 import os
 import boto3
+
+logger = logging.getLogger(__name__)
 
 
 def send_login_code_email_ses(to_email: str, code: str) -> None:
@@ -35,5 +38,5 @@ def send_login_code_email_ses(to_email: str, code: str) -> None:
                 },
             },
         )
-    except Exception as e:
-        print(f"[send_login_code_email_ses] error: {e}")
+    except Exception:
+        logger.exception("[send_login_code_email_ses] Failed to send login code to %s", to_email)

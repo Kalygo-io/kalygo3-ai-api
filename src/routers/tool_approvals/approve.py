@@ -9,6 +9,7 @@ Handles:
 """
 import base64
 import email as email_lib
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -18,19 +19,16 @@ from src.deps import db_dependency, auth_dependency
 from src.db.models import PendingToolApproval, Credential, EmailEvent, EmailTemplate
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
-
 
 import os as _os
 import re as _re
 import uuid as _uuid
 
 _TRACKING_BASE_URL = _os.getenv("TRACKING_BASE_URL", "http://127.0.0.1:4000")
-
 
 def _inject_tracking_pixel(html: str, tracking_id: str) -> str:
     """Inject a 1×1 invisible open-tracking pixel just before </body>."""
@@ -42,14 +40,12 @@ def _inject_tracking_pixel(html: str, tracking_id: str) -> str:
         return _re.sub(r'</body>', f'{pixel}\n</body>', html, count=1, flags=_re.IGNORECASE)
     return html + pixel
 
-
 def _strip_html_tags(html: str) -> str:
     """Strip HTML tags and collapse whitespace for a plain-text fallback."""
     text = _re.sub(r"<(br\s*/?|/?(p|div|tr|li|h[1-6])[^>]*)>", "\n", html, flags=_re.IGNORECASE)
     text = _re.sub(r"<[^>]+>", "", text)
     text = _re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-
 
 def _record_send_event(
     db,
@@ -80,8 +76,7 @@ def _record_send_event(
         db.commit()
     except Exception as exc:
         db.rollback()
-        print(f"[TOOL APPROVAL] ⚠️  Failed to record send event: {exc}")
-
+        logger.warning("Failed to record send event: %s", exc)
 
 def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> str:
     """Send plain-text email via boto3/SES. Returns the SES MessageId."""
@@ -102,7 +97,6 @@ def _send_ses_email(ses_cfg: dict, to_email: str, subject: str, body: str) -> st
         },
     )
     return response.get("MessageId", "unknown")
-
 
 def _send_ses_html_email(ses_cfg: dict, to_email: str, subject: str, html_body: str) -> str:
     """Send an agent-authored HTML email via boto3/SES.
@@ -130,7 +124,6 @@ def _send_ses_html_email(ses_cfg: dict, to_email: str, subject: str, html_body: 
         },
     )
     return response.get("MessageId", "unknown")
-
 
 def _send_gmail_oauth_email(google_cfg: dict, to_email: str, subject: str, body: str) -> str:
     """
@@ -180,7 +173,6 @@ def _send_gmail_oauth_email(google_cfg: dict, to_email: str, subject: str, body:
         )
     return send_resp.json().get("id", "unknown")
 
-
 def _send_gmail_smtp_email(smtp_cfg: dict, to_email: str, subject: str, body: str) -> None:
     """
     Send plain-text email via Gmail SMTP using an App Password.
@@ -197,8 +189,8 @@ def _send_gmail_smtp_email(smtp_cfg: dict, to_email: str, subject: str, body: st
         server.login(smtp_cfg["from_email"], smtp_cfg["app_password"])
         server.sendmail(smtp_cfg["from_email"], to_email, msg.as_string())
 
-
 from pydantic import BaseModel
+from src.rate_limit import limiter
 
 class ApproveOverrides(BaseModel):
     """Optional user-edited values that override what the agent originally composed."""
@@ -206,7 +198,6 @@ class ApproveOverrides(BaseModel):
     subject: str | None = None
     body: str | None = None       # plain-text email body (sendTxtEmail* tools)
     html_body: str | None = None  # HTML email body (sendHtmlEmailWithSes)
-
 
 @router.post("/{approval_id}/approve", response_model=ApproveToolApprovalResponse)
 @limiter.limit("60/minute")
@@ -246,260 +237,112 @@ async def approve_tool_approval(
         raise HTTPException(status_code=410, detail="This approval request has expired")
 
     # ── Execute the tool ────────────────────────────────────────────────────
-    # Helper: prefer user-edited override over original agent-composed value
     def _resolve(field: str, fallback: str) -> str:
+        """Prefer user-edited override over original agent-composed value."""
         if overrides:
             v = getattr(overrides, field, None)
             if v is not None and v.strip():
                 return v.strip()
         return fallback
 
-    if approval.tool_type == "sendTxtEmailWithSes":
-        payload = approval.payload
-        credential_id = payload.get("credential_id")
-        to_email = _resolve("to_email", payload.get("to_email", ""))
-        subject = _resolve("subject", payload.get("subject", ""))
-        body = _resolve("body", payload.get("body", ""))
+    # Provider configs: required credential fields, send function, and provider tag
+    _PROVIDER_MAP = {
+        "sendTxtEmailWithSes": {
+            "required": ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"],
+            "provider": "ses",
+            "send": lambda cred, to, subj, body: _send_ses_email(cred, to, subj, body),
+            "label": "AWS SES",
+        },
+        "sendHtmlEmailWithSes": {
+            "required": ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"],
+            "provider": "ses",
+            "send": lambda cred, to, subj, body: _send_ses_html_email(cred, to, subj, body),
+            "label": "AWS SES",
+        },
+        "sendTxtEmailWithGoogleOAuth": {
+            "required": ["client_id", "client_secret", "refresh_token", "from_email"],
+            "provider": "google_oauth",
+            "send": lambda cred, to, subj, body: _send_gmail_oauth_email(cred, to, subj, body),
+            "label": "Google OAuth",
+        },
+        "sendTxtEmailWithGoogleSmtp": {
+            "required": ["from_email", "app_password"],
+            "provider": "google_smtp",
+            "send": lambda cred, to, subj, body: (_send_gmail_smtp_email(cred, to, subj, body), "smtp")[1],
+            "label": "Gmail SMTP",
+        },
+    }
 
-        if not credential_id:
-            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
-
-        credential = db.query(Credential).filter(
-            Credential.id == credential_id,
-            Credential.account_id == account_id,
-        ).first()
-
-        if not credential:
-            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
-
-        try:
-            cred_data = decrypt_credential_data(credential.encrypted_data)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
-
-        required = ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"]
-        missing = [k for k in required if not cred_data.get(k)]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Credential is missing required AWS SES fields: {missing}",
-            )
-
-        from_email = cred_data["from_email"]
-
-        try:
-            message_id = _send_ses_email(cred_data, to_email, subject, body)
-            print(f"[TOOL APPROVAL] ✅ Email sent — approval_id={approval_id} MessageId={message_id}")
-        except Exception as e:
-            print(f"[TOOL APPROVAL] ❌ SES send failed — approval_id={approval_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
-
-        approval.status = "approved"
-        db.commit()
-
-        _record_send_event(
-            db,
-            account_id=account_id,
-            tool_approval_id=approval_id,
-            to_email=to_email,
-            provider="ses",
-            message_id=message_id,
-            credential_id=credential_id,
-            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
-        )
-
-        return ApproveToolApprovalResponse(
-            id=approval.id,
-            status="approved",
-            message=f"Email sent to {to_email}",
-        )
-
-    elif approval.tool_type == "sendHtmlEmailWithSes":
-        payload = approval.payload
-        credential_id = payload.get("credential_id")
-        to_email = _resolve("to_email", payload.get("to_email", ""))
-        subject = _resolve("subject", payload.get("subject", ""))
-        # html_body override takes priority; fall back to payload key
-        html_body = (
-            (overrides.html_body.strip() if overrides and overrides.html_body and overrides.html_body.strip() else None)
-            or payload.get("html_body", "")
-        )
-
-        if not credential_id:
-            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
-
-        credential = db.query(Credential).filter(
-            Credential.id == credential_id,
-            Credential.account_id == account_id,
-        ).first()
-
-        if not credential:
-            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
-
-        try:
-            cred_data = decrypt_credential_data(credential.encrypted_data)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
-
-        required = ["aws_access_key_id", "aws_secret_access_key", "aws_region", "from_email"]
-        missing = [k for k in required if not cred_data.get(k)]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Credential is missing required AWS SES fields: {missing}",
-            )
-
-        from_email = cred_data["from_email"]
-
-        try:
-            message_id = _send_ses_html_email(cred_data, to_email, subject, html_body)
-            print(f"[TOOL APPROVAL] ✅ HTML email sent — approval_id={approval_id} MessageId={message_id}")
-        except Exception as e:
-            print(f"[TOOL APPROVAL] ❌ SES HTML send failed — approval_id={approval_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
-
-        approval.status = "approved"
-        db.commit()
-
-        _record_send_event(
-            db,
-            account_id=account_id,
-            tool_approval_id=approval_id,
-            to_email=to_email,
-            provider="ses",
-            message_id=message_id,
-            credential_id=credential_id,
-            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
-        )
-
-        return ApproveToolApprovalResponse(
-            id=approval.id,
-            status="approved",
-            message=f"HTML email sent to {to_email}",
-        )
-
-    elif approval.tool_type == "sendTxtEmailWithGoogleOAuth":
-        payload = approval.payload
-        credential_id = payload.get("credential_id")
-        to_email = _resolve("to_email", payload.get("to_email", ""))
-        subject = _resolve("subject", payload.get("subject", ""))
-        body = _resolve("body", payload.get("body", ""))
-
-        if not credential_id:
-            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
-
-        credential = db.query(Credential).filter(
-            Credential.id == credential_id,
-            Credential.account_id == account_id,
-        ).first()
-
-        if not credential:
-            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
-
-        try:
-            cred_data = decrypt_credential_data(credential.encrypted_data)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
-
-        required = ["client_id", "client_secret", "refresh_token", "from_email"]
-        missing = [k for k in required if not cred_data.get(k)]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Credential is missing required Google OAuth fields: {missing}",
-            )
-
-        from_email = cred_data["from_email"]
-
-        try:
-            message_id = _send_gmail_oauth_email(cred_data, to_email, subject, body)
-            print(f"[TOOL APPROVAL] ✅ Gmail OAuth sent — approval_id={approval_id} MessageId={message_id}")
-        except Exception as e:
-            print(f"[TOOL APPROVAL] ❌ Gmail OAuth send failed — approval_id={approval_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to send email via Gmail OAuth: {e}")
-
-        approval.status = "approved"
-        db.commit()
-
-        _record_send_event(
-            db,
-            account_id=account_id,
-            tool_approval_id=approval_id,
-            to_email=to_email,
-            provider="google_oauth",
-            message_id=message_id,
-            credential_id=credential_id,
-            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
-        )
-
-        return ApproveToolApprovalResponse(
-            id=approval.id,
-            status="approved",
-            message=f"Email sent to {to_email}",
-        )
-
-    elif approval.tool_type == "sendTxtEmailWithGoogleSmtp":
-        payload = approval.payload
-        credential_id = payload.get("credential_id")
-        to_email = _resolve("to_email", payload.get("to_email", ""))
-        subject = _resolve("subject", payload.get("subject", ""))
-        body = _resolve("body", payload.get("body", ""))
-
-        if not credential_id:
-            raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
-
-        credential = db.query(Credential).filter(
-            Credential.id == credential_id,
-            Credential.account_id == account_id,
-        ).first()
-
-        if not credential:
-            raise HTTPException(status_code=404, detail=f"Credential {credential_id} not found")
-
-        try:
-            cred_data = decrypt_credential_data(credential.encrypted_data)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to decrypt credential: {e}")
-
-        required = ["from_email", "app_password"]
-        missing = [k for k in required if not cred_data.get(k)]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Credential is missing required Gmail SMTP fields: {missing}",
-            )
-
-        from_email = cred_data["from_email"]
-
-        try:
-            _send_gmail_smtp_email(cred_data, to_email, subject, body)
-            print(f"[TOOL APPROVAL] ✅ Gmail SMTP sent — approval_id={approval_id}")
-        except Exception as e:
-            print(f"[TOOL APPROVAL] ❌ Gmail SMTP send failed — approval_id={approval_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to send email via Gmail SMTP: {e}")
-
-        approval.status = "approved"
-        db.commit()
-
-        _record_send_event(
-            db,
-            account_id=account_id,
-            tool_approval_id=approval_id,
-            to_email=to_email,
-            provider="google_smtp",
-            message_id="smtp",
-            credential_id=credential_id,
-            sender_domain=from_email.split("@")[1] if "@" in from_email else None,
-        )
-
-        return ApproveToolApprovalResponse(
-            id=approval.id,
-            status="approved",
-            message=f"Email sent to {to_email}",
-        )
-
-    else:
+    provider_cfg = _PROVIDER_MAP.get(approval.tool_type)
+    if not provider_cfg:
         raise HTTPException(
             status_code=422,
             detail=f"Unsupported tool type for approval execution: '{approval.tool_type}'",
         )
+
+    payload = approval.payload
+    credential_id = payload.get("credential_id")
+    to_email = _resolve("to_email", payload.get("to_email", ""))
+    subject = _resolve("subject", payload.get("subject", ""))
+
+    # Resolve body: HTML emails use html_body, others use plain body
+    if approval.tool_type == "sendHtmlEmailWithSes":
+        body = (
+            (overrides.html_body.strip() if overrides and overrides.html_body and overrides.html_body.strip() else None)
+            or payload.get("html_body", "")
+        )
+    else:
+        body = _resolve("body", payload.get("body", ""))
+
+    if not credential_id:
+        raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
+
+    credential = db.query(Credential).filter(
+        Credential.id == credential_id,
+        Credential.account_id == account_id,
+    ).first()
+
+    if not credential:
+        raise HTTPException(status_code=404, detail="Credential not found")
+
+    try:
+        cred_data = decrypt_credential_data(credential.encrypted_data)
+    except Exception as e:
+        logger.error("Failed to decrypt credential for approval %s: %s", approval_id, e)
+        raise HTTPException(status_code=500, detail="Failed to decrypt credential")
+
+    missing = [k for k in provider_cfg["required"] if not cred_data.get(k)]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Credential is missing required {provider_cfg['label']} fields.",
+        )
+
+    from_email = cred_data["from_email"]
+
+    try:
+        message_id = provider_cfg["send"](cred_data, to_email, subject, body)
+        logger.info("%s email sent — approval_id=%s MessageId=%s", provider_cfg["label"], approval_id, message_id)
+    except Exception as e:
+        logger.error("%s send failed — approval_id=%s: %s", provider_cfg["label"], approval_id, e)
+        raise HTTPException(status_code=500, detail="Failed to send email. Please try again.")
+
+    approval.status = "approved"
+    db.commit()
+
+    _record_send_event(
+        db,
+        account_id=account_id,
+        tool_approval_id=approval_id,
+        to_email=to_email,
+        provider=provider_cfg["provider"],
+        message_id=message_id,
+        credential_id=credential_id,
+        sender_domain=from_email.split("@")[1] if "@" in from_email else None,
+    )
+
+    return ApproveToolApprovalResponse(
+        id=approval.id,
+        status="approved",
+        message=f"Email sent to {to_email}",
+    )

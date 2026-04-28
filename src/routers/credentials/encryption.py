@@ -10,13 +10,13 @@ Supports multiple credential types:
 - SSH keys (private key, passphrase)
 - Certificates (cert data, private key)
 """
+import logging
 from cryptography.fernet import Fernet, MultiFernet
-from dotenv import load_dotenv
 import os
 import json
 from typing import List, Optional, Dict, Any
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 # Get encryption keys from environment variables
 # CREDENTIALS_ENCRYPTION_KEY: Current/primary key (required)
@@ -38,14 +38,11 @@ def get_encryption_keys() -> List[bytes]:
             keys.append(ENCRYPTION_KEY_ENV.encode())
         except Exception:
             key = Fernet.generate_key()
-            print(f"WARNING: Invalid encryption key format. Generated new key: {key.decode()}")
+            logger.warning("Invalid encryption key format — generated a temporary key")
             keys.append(key)
     else:
-        # Generate a new key (for development only)
-        print("WARNING: CREDENTIALS_ENCRYPTION_KEY not set. Generating a new key.")
-        print("This key should be saved and set as an environment variable.")
         key = Fernet.generate_key()
-        print(f"Generated key (save this): {key.decode()}")
+        logger.warning("CREDENTIALS_ENCRYPTION_KEY not set — generated a temporary key (dev only)")
         keys.append(key)
     
     # Get old keys for decryption (for key rotation support)
@@ -55,7 +52,7 @@ def get_encryption_keys() -> List[bytes]:
             try:
                 keys.append(old_key.encode())
             except Exception:
-                print(f"WARNING: Invalid old encryption key format, skipping: {old_key[:20]}...")
+                logger.warning("Invalid old encryption key format, skipping")
     
     return keys
 
@@ -102,7 +99,7 @@ def _ensure_ciphers_initialized():
             key = Fernet.generate_key()
             _fernet = Fernet(key)
             _multi_fernet = MultiFernet([_fernet])
-            print(f"WARNING: Using generated encryption key: {key.decode()}")
+            logger.warning("Using generated fallback encryption key")
 
 def encrypt_api_key(api_key: str) -> str:
     """

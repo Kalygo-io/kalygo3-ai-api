@@ -4,12 +4,9 @@ from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import PendingToolApproval
 from .models import PendingToolApprovalResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/", response_model=List[PendingToolApprovalResponse])
 @limiter.limit("60/minute")

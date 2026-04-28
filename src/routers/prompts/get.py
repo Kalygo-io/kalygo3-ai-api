@@ -4,15 +4,12 @@ Get prompt endpoint.
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Prompt, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from .models import PromptResponse
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/{prompt_id}", response_model=PromptResponse)
 @limiter.limit("60/minute")

@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 import json
@@ -6,6 +7,8 @@ from typing import Dict, Any
 from fastapi import UploadFile
 from src.clients.gcs_client import GCSClient
 from src.clients.pubsub_client import PubSubClient
+
+logger = logging.getLogger(__name__)
 
 class FileUploadService:
     def __init__(self):
@@ -16,37 +19,20 @@ class FileUploadService:
     async def upload_file_and_publish(self, file: UploadFile, user_id: str, user_email: str, namespace: str, jwt: str) -> Dict[str, Any]:
         """
         Upload file to GCS and publish a message to Pub/Sub for async processing.
-        
-        Args:
-            file: The uploaded file
-            user_id: The user ID from JWT
-            namespace: The Pinecone namespace for the file
-            
-        Returns:
-            Dict containing upload status and file information
         """
         try:
-            print("*** upload_file_and_publish ***")
-
-            # Generate unique file ID
             file_id = str(uuid.uuid4())
             timestamp = datetime.now().isoformat()
             
-            # Create GCS file path
             gcs_file_path = f"similarity_search/{namespace}/{file_id}/{file.filename}"
             
-            # Upload file to GCS
             storage_client = GCSClient.get_storage_client()
             bucket = storage_client.get_bucket(self.gcs_bucket_name)
             blob = bucket.blob(gcs_file_path)
             
-            # Read file content and upload
             file_content = await file.read()
             blob.upload_from_string(file_content, content_type=file.content_type)
 
-            print("AAAAAAA")
-            print(user_email)            
-            # Prepare message data for Pub/Sub
             message_data = {
                 "file_id": file_id,
                 "filename": file.filename,
@@ -62,19 +48,16 @@ class FileUploadService:
                 "jwt": jwt
             }
 
-            # Publish message to Pub/Sub
             publisher_client = PubSubClient.get_publisher_client()
             topic_path = publisher_client.topic_path(self.project_id, self.pubsub_topic_name)
             
-            # Convert message data to JSON string
             message_json = json.dumps(message_data)
             message_bytes = message_json.encode("utf-8")
             
-            # Publish the message
             future = publisher_client.publish(topic_path, data=message_bytes)
             message_id = future.result()
             
-            print(f"Published message {message_id} for file {file.filename}")
+            logger.info("Published message %s for file %s", message_id, file.filename)
             
             return {
                 "success": True,
@@ -87,8 +70,8 @@ class FileUploadService:
             }
             
         except Exception as e:
-            print(f"Error uploading file and publishing message: {str(e)}")
+            logger.exception("Error uploading file and publishing message")
             return {
                 "success": False,
-                "error": f"Failed to upload file and publish message: {str(e)}"
+                "error": "Failed to upload file. Please try again."
             }

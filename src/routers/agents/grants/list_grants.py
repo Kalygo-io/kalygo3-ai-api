@@ -5,14 +5,11 @@ from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Agent, AccessGroup, AgentAccessGrant
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from .models import AgentAccessGrantResponse
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/{agent_id}/access-grants", response_model=List[AgentAccessGrantResponse])
 @limiter.limit("30/minute")

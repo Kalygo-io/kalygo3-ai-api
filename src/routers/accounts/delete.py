@@ -4,15 +4,11 @@ Delete account endpoint.
 from fastapi import APIRouter, HTTPException, status, Request, Response
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 import os
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
-
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("5/minute")

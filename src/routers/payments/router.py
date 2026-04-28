@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from typing import Optional
@@ -6,18 +7,15 @@ from src.db.models import Account
 from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, create_payment_method_from_card, detach_payment_method
 import stripe
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
 class AddPaymentMethodRequest(BaseModel):
     payment_method_id: str
-
 
 class CreatePaymentMethodRequest(BaseModel):
     card_number: str
@@ -26,7 +24,6 @@ class CreatePaymentMethodRequest(BaseModel):
     cvv: str
     cardholder_name: Optional[str] = None
     billing_zip: Optional[str] = None
-
 
 @router.get("/payment-methods")
 @limiter.limit("30/minute")
@@ -72,7 +69,6 @@ async def get_user_payment_methods(
     except Exception as e:
         raise handle_db_error(e, "[ERROR RETRIEVING PAYMENT METHODS]")
 
-
 @router.post("/payment-methods")
 @limiter.limit("10/minute")
 async def add_payment_method(
@@ -103,9 +99,9 @@ async def add_payment_method(
                 account.stripe_customer_id = stripe_customer_id
                 db.commit()
                 db.refresh(account)
-                print(f"Created Stripe customer: {stripe_customer_id} for account: {account.id}")
+                logger.info("Created Stripe customer %s for account %s", stripe_customer_id, account.id)
             except stripe.error.StripeError as e:
-                print(f"Failed to create Stripe customer: {str(e)}")
+                logger.error("Failed to create Stripe customer: %s", e)
                 db.rollback()
                 raise handle_db_error(e, "[CREATE STRIPE CUSTOMER]")
         
@@ -115,7 +111,6 @@ async def add_payment_method(
                 account.stripe_customer_id,
                 request_body.payment_method_id
             )
-            print(f"Attached payment method {request_body.payment_method_id} to customer {account.stripe_customer_id}")
             
             return {
                 "success": True,
@@ -129,10 +124,8 @@ async def add_payment_method(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error adding payment method: {str(e)}")
         db.rollback()
         raise handle_db_error(e, "[AN ERROR OCCURRED WHILE ADDING PAYMENT METHOD]")
-
 
 @router.delete("/payment-methods/{payment_method_id}")
 @limiter.limit("10/minute")
@@ -178,8 +171,6 @@ async def delete_payment_method(
             
             # Detach the payment method from the customer
             detach_payment_method(payment_method_id)
-            
-            print(f"Detached payment method {payment_method_id} from customer {account.stripe_customer_id}")
             
             return {
                 "success": True,

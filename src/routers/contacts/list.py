@@ -5,15 +5,12 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Request, Query
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from .models import ContactSummaryResponse
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/", response_model=List[ContactSummaryResponse])
 @limiter.limit("60/minute")

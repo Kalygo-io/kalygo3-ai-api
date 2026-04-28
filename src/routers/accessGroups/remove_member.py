@@ -4,13 +4,10 @@ Remove member from access group endpoint (owner only).
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import AccessGroup, AccessGroupMember
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.delete("/{group_id}/members/{member_account_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")

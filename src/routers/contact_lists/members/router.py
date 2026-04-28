@@ -6,8 +6,6 @@ from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
 from src.deps import db_dependency, auth_dependency
 from src.db.models import ContactList, ContactListMember, Contact, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.routers.contact_lists.models import (
     ContactListMemberResponse,
@@ -15,10 +13,9 @@ from src.routers.contact_lists.models import (
     BulkAddContactsToListRequest,
 )
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
-
 
 @router.get("/", response_model=List[ContactListMemberResponse])
 @limiter.limit("60/minute")
@@ -51,7 +48,6 @@ async def list_members(
         raise
     except Exception as e:
         raise handle_db_error(e, "[LIST MEMBERS]")
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=ContactListMemberResponse)
 @limiter.limit("60/minute")
@@ -105,7 +101,6 @@ async def add_member(
         db.rollback()
         raise handle_db_error(e, "[ADD MEMBER]")
 
-
 @router.post("/bulk", status_code=status.HTTP_200_OK)
 @limiter.limit("30/minute")
 async def bulk_add_members(
@@ -158,7 +153,6 @@ async def bulk_add_members(
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[BULK ADD MEMBERS]")
-
 
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("60/minute")

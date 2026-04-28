@@ -1,18 +1,17 @@
+import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, status, Request
+from pydantic import BaseModel
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import ChatSession, ChatMessage, Account
+from src.db.models import ChatSession, ChatMessage
 from src.services.agent_access import can_access_agent
 import uuid
 from datetime import datetime
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from src.utils.errors import handle_db_error
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -80,8 +79,6 @@ async def create_session(
 ):
     """Create a new chat session"""
     try:
-        print('Create a new chat session')
-
         account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
 
         # Verify the caller can access the requested agent
@@ -161,9 +158,6 @@ async def get_session(
 ):
     """Get a specific session by session_id with its messages"""
     try:
-
-        print('Get a specific session by session_id with its messages')
-
         # Convert string to UUID for database query
         session_uuid = uuid.UUID(session_id)
         
@@ -230,38 +224,6 @@ async def get_session(
     except Exception as e:
         raise handle_db_error(e, "[OPERATION]")
 
-# @router.put("/sessions/{session_id}", response_model=ChatAppSessionResponse)
-# @limiter.limit("10/minute")
-# async def update_session(
-#     session_id: str,
-#     session_data: ChatAppSessionUpdate,
-#     db: db_dependency,
-#     jwt: jwt_dependency,
-#     request: Request
-# ):
-#     """Update a session's title"""
-#     try:
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
-        
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-        
-#         if session_data.title is not None:
-#             session.title = session_data.title
-        
-#         db.commit()
-#         db.refresh(session)
-        
-#         return session
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         db.rollback()
-#         raise handle_db_error(e, "[OPERATION]")
-
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
 async def delete_session(
@@ -305,9 +267,6 @@ async def clear_session_messages(
 ):
     """Clear all messages from a session without deleting the session itself"""
     try:
-        print(f"[CLEAR MESSAGES] Attempting to clear messages for session: {session_id}")
-        
-        # Convert string to UUID for database query
         try:
             session_uuid = uuid.UUID(session_id)
         except ValueError:
@@ -316,29 +275,24 @@ async def clear_session_messages(
                 detail="Invalid session ID format"
             )
         
-        # Verify the session exists and belongs to the user
         session = db.query(ChatSession).filter(
             ChatSession.session_id == session_uuid,
             ChatSession.account_id == jwt['id']
         ).first()
         
         if not session:
-            print(f"[CLEAR MESSAGES] Session not found: {session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
                 detail="Session not found"
             )
         
-        print(f"[CLEAR MESSAGES] Found session with ID: {session.id}, deleting messages...")
-        
-        # Delete all messages for this session
         deleted_count = db.query(ChatMessage).filter(
             ChatMessage.chat_session_id == session.id
         ).delete()
         
         db.commit()
         
-        print(f"[CLEAR MESSAGES] Successfully deleted {deleted_count} messages from session {session_id}")
+        logger.info("[CLEAR MESSAGES] Deleted %d messages from session %s", deleted_count, session_id)
         
         return None
     except HTTPException:
@@ -346,145 +300,3 @@ async def clear_session_messages(
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[CLEAR MESSAGES]")
-
-# CRUD Operations for ChatMessage
-
-# @router.post("/sessions/{session_id}/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
-# @limiter.limit("30/minute")
-# async def create_message(
-#     session_id: str, 
-#     message_data: ChatMessageCreate, 
-#     db: db_dependency, 
-#     jwt: jwt_dependency, 
-#     request: Request
-# ):
-#     """Add a message to a session"""
-#     try:
-#         # Verify the session exists and belongs to the user
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
-        
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-        
-#         # Create the message
-#         new_message = ChatMessage(
-#             message=message_data.message,
-#             session_id=session.id
-#         )
-        
-#         db.add(new_message)
-#         db.commit()
-#         db.refresh(new_message)
-        
-#         return new_message
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         db.rollback()
-#         raise handle_db_error(e, "[OPERATION]")
-
-# @router.get("/sessions/{session_id}/messages", response_model=List[ChatMessageResponse])
-# @limiter.limit("30/minute")
-# async def get_messages(
-#     session_id: str, 
-#     db: db_dependency, 
-#     jwt: jwt_dependency, 
-#     request: Request,
-#     limit: int = 100,
-#     offset: int = 0
-# ):
-#     """Get all messages for a session"""
-#     try:
-#         # Verify the session exists and belongs to the user
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
-        
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-        
-#         messages = db.query(ChatMessage).filter(
-#             ChatMessage.session_id == session.id
-#         ).order_by(ChatMessage.created_at.asc()).offset(offset).limit(limit).all()
-        
-#         return messages
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise handle_db_error(e, "[OPERATION]")
-
-# @router.get("/sessions/{session_id}/messages/{message_id}", response_model=ChatMessageResponse)
-# @limiter.limit("30/minute")
-# async def get_message(
-#     session_id: str, 
-#     message_id: int, 
-#     db: db_dependency, 
-#     jwt: jwt_dependency, 
-#     request: Request
-# ):
-#     """Get a specific message from a session"""
-#     try:
-#         # Verify the session exists and belongs to the user
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
-        
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-        
-#         message = db.query(ChatMessage).filter(
-#             ChatMessage.id == message_id,
-#             ChatMessage.session_id == session.id
-#         ).first()
-        
-#         if not message:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
-        
-#         return message
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise handle_db_error(e, "[OPERATION]")
-
-# @router.delete("/sessions/{session_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
-# @limiter.limit("10/minute")
-# async def delete_message(
-#     session_id: str, 
-#     message_id: int, 
-#     db: db_dependency, 
-#     jwt: jwt_dependency, 
-#     request: Request
-# ):
-#     """Delete a specific message from a session"""
-#     try:
-#         # Verify the session exists and belongs to the user
-#         session = db.query(ChatAppSession).filter(
-#             ChatAppSession.session_id == session_id,
-#             ChatAppSession.account_id == jwt['id']
-#         ).first()
-        
-#         if not session:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-        
-#         message = db.query(ChatMessage).filter(
-#             ChatMessage.id == message_id,
-#             ChatMessage.session_id == session.id
-#         ).first()
-        
-#         if not message:
-#             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
-        
-#         db.delete(message)
-#         db.commit()
-        
-#         return None
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         db.rollback()
-#         raise handle_db_error(e, "[OPERATION]")

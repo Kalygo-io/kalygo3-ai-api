@@ -1,20 +1,19 @@
 """
 Create a contact event endpoint.
 """
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, ContactEvent, Account
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from ..models import CreateContactEventRequest, ContactEventResponse
 from src.utils.errors import handle_db_error
 from src.services.crm_vector_service import upsert_contact_event_vector, extract_token
+from src.rate_limit import limiter
 
-limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 router = APIRouter()
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=ContactEventResponse)
 @limiter.limit("60/minute")
@@ -76,7 +75,7 @@ async def create_contact_event(
                 occurred_at=event.occurred_at,
             )
         except Exception as vec_err:
-            print(f"[CREATE CONTACT EVENT] Warning: vector upsert failed: {vec_err}")
+            logger.warning("[CREATE CONTACT EVENT] vector upsert failed: %s", vec_err)
 
         return event
 

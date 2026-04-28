@@ -8,15 +8,11 @@ from typing import Optional, List
 from datetime import datetime
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import VectorDbIngestionLog, Account, OperationType, OperationStatus
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import and_, or_
 from src.utils.errors import handle_db_error
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
-
 
 class IngestionLogResponse(BaseModel):
     """Response model for ingestion log entries."""
@@ -40,7 +36,6 @@ class IngestionLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class IngestionLogsListResponse(BaseModel):
     """Response model for paginated ingestion logs list."""
     logs: List[IngestionLogResponse]
@@ -48,7 +43,6 @@ class IngestionLogsListResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
-
 
 @router.get("/ingestion-logs", response_model=IngestionLogsListResponse)
 @limiter.limit("30/minute")
@@ -187,7 +181,6 @@ async def list_ingestion_logs(
     except Exception as e:
         raise handle_db_error(e, "[ERROR LISTING INGESTION LOGS]")
 
-
 @router.get("/indexes/{index_name}/ingestion-logs", response_model=IngestionLogsListResponse)
 @limiter.limit("30/minute")
 async def list_ingestion_logs_by_index(
@@ -229,7 +222,6 @@ async def list_ingestion_logs_by_index(
         limit=limit,
         offset=offset
     )
-
 
 @router.get("/ingestion-logs/{log_id}", response_model=IngestionLogResponse)
 @limiter.limit("30/minute")
@@ -292,7 +284,6 @@ async def get_ingestion_log(
         raise
     except Exception as e:
         raise handle_db_error(e, "[ERROR RETRIEVING INGESTION LOG]")
-
 
 @router.get("/ingestion-logs/stats/summary", response_model=dict)
 @limiter.limit("30/minute")

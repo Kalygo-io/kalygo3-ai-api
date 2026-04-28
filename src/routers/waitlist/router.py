@@ -3,11 +3,7 @@ from pydantic import BaseModel
 from src.db.waitlist import Waitlist
 from src.deps import db_dependency
 from src.utils.errors import handle_db_error
-
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
+from src.rate_limit import limiter
 
 router = APIRouter()
 
