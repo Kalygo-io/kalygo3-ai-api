@@ -22,7 +22,7 @@ async def list_email_events(
     db: db_dependency,
     auth: auth_dependency,
     request: Request,
-    event_type: Optional[str] = Query(default=None, description="Filter by event type: send|delivery|open|bounce|complaint|other"),
+    event_type: Optional[str] = Query(default=None, description="Filter by event type: send|send_to_ses|delivery|open|bounce|complaint|click|other"),
     contact_id: Optional[int] = Query(default=None),
     campaign_id: Optional[int] = Query(default=None),
     tool_approval_id: Optional[int] = Query(default=None),
@@ -145,6 +145,7 @@ async def get_email_event_stats(
 
         return EmailEventStatsResponse(
             send=counts.get("send", 0),
+            send_to_ses=counts.get("send_to_ses", 0),
             delivery=counts.get("delivery", 0),
             open=counts.get("open", 0),
             bounce=counts.get("bounce", 0),

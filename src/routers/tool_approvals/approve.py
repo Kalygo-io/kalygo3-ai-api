@@ -63,13 +63,13 @@ def _record_send_event(
     sender_domain: str | None = None,
     extra_metadata: dict | None = None,
 ) -> None:
-    """Write an email_events row with event_type='send' after a successful send."""
+    """Write an email_events row with event_type='send_to_ses' after handing off to the provider."""
     try:
         event = EmailEvent(
             account_id=account_id,
             tool_approval_id=tool_approval_id,
             primary_recipient=to_email.strip().lower(),
-            event_type="send",
+            event_type="send_to_ses",
             provider=provider,
             message_id=message_id,
             credential_id=credential_id,

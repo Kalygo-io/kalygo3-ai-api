@@ -31,11 +31,10 @@ async def track_open(tracking_id: str):
     """Record an email open event and return a 1×1 transparent GIF."""
     db: Session = SessionLocal()
     try:
-        # Find the "send" event that was tagged with this tracking_id
         send_event = (
             db.query(EmailEvent)
             .filter(
-                EmailEvent.event_type == "send",
+                EmailEvent.event_type == "send_to_ses",
                 EmailEvent.event_metadata["tracking_id"].as_string() == tracking_id,
             )
             .first()
