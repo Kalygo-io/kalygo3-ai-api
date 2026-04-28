@@ -37,7 +37,12 @@ async def get_current_user(request: Request):
         token = request.cookies.get("jwt")
         
         if not token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated - no JWT token found in cookies")
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.replace("Bearer ", "").strip()
+
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated - no JWT token found in cookies or Authorization header")
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
@@ -70,6 +75,14 @@ async def get_current_user_or_api_key(
     """
     try:
         token = request.cookies.get("jwt")
+        
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                bearer_value = auth_header.replace("Bearer ", "").strip()
+                if not bearer_value.startswith("kalygo_"):
+                    token = bearer_value
+
         if token:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             email = payload.get('sub')
