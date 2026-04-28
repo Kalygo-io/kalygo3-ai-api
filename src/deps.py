@@ -35,13 +35,19 @@ bcrypt_context = CryptContext(schemes=["sha256_crypt"])
 async def get_current_user(request: Request):
     try:
         token = request.cookies.get("jwt")
-        
+        auth_header = request.headers.get("Authorization", "")
+
+        logger.info("[AUTH] %s %s | cookie_jwt: %s | auth_header: %s",
+                    request.method, request.url.path,
+                    token[:20] + "..." if token else "None",
+                    auth_header[:30] + "..." if auth_header else "None")
+
         if not token:
-            auth_header = request.headers.get("Authorization", "")
             if auth_header.startswith("Bearer "):
                 token = auth_header.replace("Bearer ", "").strip()
 
         if not token:
+            logger.warning("[AUTH] No token found — rejecting %s %s", request.method, request.url.path)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated - no JWT token found in cookies or Authorization header")
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -75,9 +81,14 @@ async def get_current_user_or_api_key(
     """
     try:
         token = request.cookies.get("jwt")
-        
+        auth_header = request.headers.get("Authorization", "")
+
+        logger.info("[AUTH-UNIFIED] %s %s | cookie_jwt: %s | auth_header: %s",
+                    request.method, request.url.path,
+                    token[:20] + "..." if token else "None",
+                    auth_header[:30] + "..." if auth_header else "None")
+
         if not token:
-            auth_header = request.headers.get("Authorization", "")
             if auth_header.startswith("Bearer "):
                 bearer_value = auth_header.replace("Bearer ", "").strip()
                 if not bearer_value.startswith("kalygo_"):
@@ -88,12 +99,14 @@ async def get_current_user_or_api_key(
             email = payload.get('sub')
             account_id = payload.get('id')
             if email:
+                logger.info("[AUTH-UNIFIED] JWT valid for %s", email)
                 return {
                     'email': email,
                     'id': int(account_id) if isinstance(account_id, str) else account_id,
                     'auth_type': 'jwt'
                 }
-    except (JWTError, KeyError, ValueError):
+    except (JWTError, KeyError, ValueError) as e:
+        logger.warning("[AUTH-UNIFIED] JWT decode failed: %s", e)
         pass
     
     api_key = None
