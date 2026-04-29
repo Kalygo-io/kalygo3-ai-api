@@ -22,6 +22,12 @@
       "label": "Main body copy",
       "default": "",
       "required": true
+    },
+    {
+      "name": "RATING_BASE_URL",
+      "label": "Base URL for star rating links (e.g. https://api.example.com/t/r/<tracking_id>)",
+      "default": "",
+      "required": true
     }
   ],
   "id": 6,
