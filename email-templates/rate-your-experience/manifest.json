@@ -26,7 +26,7 @@
     {
       "name": "RATING_BASE_URL",
       "label": "Base URL for star rating links (e.g. https://api.example.com/t/r/<tracking_id>)",
-      "default": "",
+      "default": "https://api.kalygo.io/t/r/",
       "required": true
     }
   ],
