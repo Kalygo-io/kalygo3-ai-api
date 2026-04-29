@@ -1,4 +1,5 @@
 """Pydantic models for the email_campaigns router."""
+from uuid import UUID
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
@@ -27,7 +28,7 @@ class UpdateEmailCampaignRequest(BaseModel):
 
 class EmailCampaignResponse(BaseModel):
     id: int
-    uuid: str
+    uuid: UUID
     account_id: int
     name: str
     description: Optional[str] = None
