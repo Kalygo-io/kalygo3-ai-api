@@ -19,7 +19,7 @@ import os
 # accidental operations against production.
 _TEST_DB_URL = os.environ.get(
     "POSTGRES_TEST_URL",
-    "postgresql://test:test@localhost:5432/kalygo_test"
+    "postgresql://test:test@kalygo-test-pg:5432/kalygo_test"
 )
 os.environ["POSTGRES_URL"] = _TEST_DB_URL
 os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-do-not-use-in-prod")
