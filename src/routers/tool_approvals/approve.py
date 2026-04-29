@@ -320,6 +320,11 @@ async def approve_tool_approval(
 
     from_email = cred_data["from_email"]
 
+    tracking_id = None
+    if approval.tool_type == "sendHtmlEmailWithSes":
+        tracking_id = str(_uuid.uuid4())
+        body = _inject_tracking_pixel(body, tracking_id)
+
     try:
         message_id = provider_cfg["send"](cred_data, to_email, subject, body)
         logger.info("%s email sent — approval_id=%s MessageId=%s", provider_cfg["label"], approval_id, message_id)
@@ -330,6 +335,8 @@ async def approve_tool_approval(
     approval.status = "approved"
     db.commit()
 
+    extra_metadata = {"tracking_id": tracking_id} if tracking_id else None
+
     _record_send_event(
         db,
         account_id=account_id,
@@ -339,6 +346,7 @@ async def approve_tool_approval(
         message_id=message_id,
         credential_id=credential_id,
         sender_domain=from_email.split("@")[1] if "@" in from_email else None,
+        extra_metadata=extra_metadata,
     )
 
     return ApproveToolApprovalResponse(
