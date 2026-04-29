@@ -322,7 +322,11 @@ async def approve_tool_approval(
 
     tracking_id = None
     if approval.tool_type == "sendHtmlEmailWithSes":
-        tracking_id = str(_uuid.uuid4())
+        # Reuse a tracking_id already embedded in the HTML (e.g. from star-rating
+        # links at /t/r/{uuid}/), so the open pixel and rating clicks share the
+        # same identifier stored in event_metadata.
+        existing = _re.search(r"/t/r/([0-9a-f\-]{36})/", body)
+        tracking_id = existing.group(1) if existing else str(_uuid.uuid4())
         body = _inject_tracking_pixel(body, tracking_id)
 
     try:
