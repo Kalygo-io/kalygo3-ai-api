@@ -33,6 +33,7 @@ class Account(Base):
     tool_approvals = relationship('PendingToolApproval', back_populates='account', cascade='all, delete-orphan')
     email_events = relationship('EmailEvent', back_populates='account', cascade='all, delete-orphan')
     email_templates = relationship('EmailTemplate', back_populates='account', cascade='all, delete-orphan')
+    email_campaigns = relationship('EmailCampaign', back_populates='account', cascade='all, delete-orphan')
     email_campaign_ratings = relationship('EmailCampaignRating', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
@@ -592,8 +593,8 @@ class EmailEvent(Base):
     # The HITL approval record that triggered the original send
     tool_approval_id = Column(Integer, ForeignKey('pending_tool_approvals.id', ondelete='SET NULL'), nullable=True, index=True)
 
-    # Campaign grouping — nullable until a campaigns table is introduced
-    campaign_id = Column(Integer, nullable=True, index=True)
+    campaign_id = Column(Integer, ForeignKey('email_campaigns.id', ondelete='SET NULL'),
+                         nullable=True, index=True)
 
     # Recipient — nullable to support group/campaign sends where there is no single primary recipient
     contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'), nullable=True, index=True)
@@ -620,6 +621,7 @@ class EmailEvent(Base):
 
     account = relationship('Account', back_populates='email_events')
     tool_approval = relationship('PendingToolApproval', back_populates='email_events')
+    campaign = relationship('EmailCampaign')
     contact = relationship('Contact', back_populates='email_events')
     credential = relationship('Credential')
 
@@ -664,6 +666,47 @@ class EmailTemplate(Base):
         return f'<EmailTemplate {self.id}: {self.name}>'
 
 
+_email_campaign_status_pg = PG_ENUM(
+    'draft', 'active', 'paused', 'completed',
+    name='emailcampaignstatus',
+    create_type=False,
+)
+
+
+class EmailCampaign(Base):
+    """
+    A targeted email campaign that ties a template to a contact list.
+
+    Each campaign gets a public-facing UUID for use in tracking links and
+    external integrations.  The status column tracks the campaign lifecycle.
+    """
+    __tablename__ = 'email_campaigns'
+
+    id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    email_template_id = Column(Integer, ForeignKey('email_templates.id', ondelete='SET NULL'),
+                               nullable=True, index=True)
+    contact_list_id = Column(Integer, ForeignKey('contact_lists.id', ondelete='SET NULL'),
+                             nullable=True, index=True)
+    status = Column(_email_campaign_status_pg, nullable=False, default='draft', index=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(),
+                        onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='email_campaigns')
+    email_template = relationship('EmailTemplate')
+    contact_list = relationship('ContactList')
+    ratings = relationship('EmailCampaignRating', back_populates='campaign')
+
+    def __repr__(self):
+        return f'<EmailCampaign {self.id}: {self.name}>'
+
+
 class EmailCampaignRating(Base):
     """
     Stores a single star rating (1-5) submitted by an email recipient.
@@ -677,7 +720,8 @@ class EmailCampaignRating(Base):
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'),
                         nullable=False, index=True)
-    campaign_id = Column(Integer, nullable=True, index=True)
+    campaign_id = Column(Integer, ForeignKey('email_campaigns.id', ondelete='SET NULL'),
+                         nullable=True, index=True)
     email_template_id = Column(Integer, ForeignKey('email_templates.id', ondelete='SET NULL'),
                                nullable=True, index=True)
     contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'),
@@ -689,5 +733,6 @@ class EmailCampaignRating(Base):
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     account = relationship('Account', back_populates='email_campaign_ratings')
+    campaign = relationship('EmailCampaign', back_populates='ratings')
     email_template = relationship('EmailTemplate')
     contact = relationship('Contact')
