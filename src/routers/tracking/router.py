@@ -120,6 +120,7 @@ async def track_rating(
     db: Session = Depends(get_db),
 ):
     """Record a star-rating click from an email and show a thank-you page."""
+    logger.info("[RATING] Received rating=%d for tracking_id=%s", rating, tracking_id)
     try:
         already_rated = (
             db.query(EmailCampaignRating)
@@ -127,7 +128,12 @@ async def track_rating(
             .first()
         )
 
-        if not already_rated:
+        if already_rated:
+            logger.info(
+                "[RATING] Duplicate — tracking_id=%s already has rating=%d (id=%d), skipping",
+                tracking_id, already_rated.rating, already_rated.id,
+            )
+        else:
             send_event = (
                 db.query(EmailEvent)
                 .filter(
@@ -137,8 +143,20 @@ async def track_rating(
                 .first()
             )
 
-            if send_event:
+            if not send_event:
+                logger.warning(
+                    "[RATING] No send_to_ses event found for tracking_id=%s — rating will not be stored",
+                    tracking_id,
+                )
+            else:
                 metadata = send_event.event_metadata or {}
+                logger.info(
+                    "[RATING] Matched send_event id=%d account_id=%d campaign_id=%s "
+                    "email_template_id=%s contact_id=%s recipient=%s",
+                    send_event.id, send_event.account_id, send_event.campaign_id,
+                    metadata.get("email_template_id"), send_event.contact_id,
+                    send_event.primary_recipient,
+                )
                 rating_row = EmailCampaignRating(
                     account_id=send_event.account_id,
                     campaign_id=send_event.campaign_id,
@@ -150,8 +168,13 @@ async def track_rating(
                 )
                 db.add(rating_row)
                 db.commit()
+                db.refresh(rating_row)
+                logger.info(
+                    "[RATING] Stored rating id=%d rating=%d for tracking_id=%s",
+                    rating_row.id, rating_row.rating, tracking_id,
+                )
     except Exception:
-        logger.exception("[TRACKING] Rating click error for %s", tracking_id)
+        logger.exception("[RATING] Failed to store rating for tracking_id=%s", tracking_id)
         db.rollback()
 
     return HTMLResponse(
