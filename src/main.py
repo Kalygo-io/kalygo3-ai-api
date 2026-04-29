@@ -33,6 +33,7 @@ from .routers import contact_lists
 from .routers import tool_approvals
 from .routers import email_events
 from .routers import email_templates
+from .routers import email_campaigns
 from .routers import tracking
 
 app = FastAPI(
@@ -238,6 +239,12 @@ app.include_router(
     email_templates.router,
     prefix="/api/email-templates",
     tags=['Email Templates'],
+)
+
+app.include_router(
+    email_campaigns.router,
+    prefix="/api/email-campaigns",
+    tags=['Email Campaigns'],
 )
 
 app.include_router(
