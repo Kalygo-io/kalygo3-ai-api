@@ -33,6 +33,7 @@ class Account(Base):
     tool_approvals = relationship('PendingToolApproval', back_populates='account', cascade='all, delete-orphan')
     email_events = relationship('EmailEvent', back_populates='account', cascade='all, delete-orphan')
     email_templates = relationship('EmailTemplate', back_populates='account', cascade='all, delete-orphan')
+    email_campaign_ratings = relationship('EmailCampaignRating', back_populates='account', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Account {self.email}>'
@@ -661,3 +662,32 @@ class EmailTemplate(Base):
 
     def __repr__(self):
         return f'<EmailTemplate {self.id}: {self.name}>'
+
+
+class EmailCampaignRating(Base):
+    """
+    Stores a single star rating (1-5) submitted by an email recipient.
+
+    Each row ties a rating to the campaign, template, and contact that
+    produced it.  Uniqueness is enforced on tracking_id so that a
+    recipient can only rate a given email once (first click wins).
+    """
+    __tablename__ = 'email_campaign_ratings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    campaign_id = Column(Integer, nullable=True, index=True)
+    email_template_id = Column(Integer, ForeignKey('email_templates.id', ondelete='SET NULL'),
+                               nullable=True, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'),
+                        nullable=True, index=True)
+    primary_recipient = Column(String(320), nullable=True)
+    tracking_id = Column(String(255), nullable=False, unique=True, index=True)
+    rating = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='email_campaign_ratings')
+    email_template = relationship('EmailTemplate')
+    contact = relationship('Contact')

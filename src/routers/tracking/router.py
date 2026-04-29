@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from src.deps import get_db
-from src.db.models import EmailEvent
+from src.db.models import EmailCampaignRating, EmailEvent
 
 logger = logging.getLogger(__name__)
 
@@ -121,40 +121,34 @@ async def track_rating(
 ):
     """Record a star-rating click from an email and show a thank-you page."""
     try:
-        send_event = (
-            db.query(EmailEvent)
-            .filter(
-                EmailEvent.event_type == "send_to_ses",
-                EmailEvent.event_metadata["tracking_id"].as_string() == tracking_id,
-            )
+        already_rated = (
+            db.query(EmailCampaignRating)
+            .filter(EmailCampaignRating.tracking_id == tracking_id)
             .first()
         )
 
-        if send_event:
-            already_rated = (
+        if not already_rated:
+            send_event = (
                 db.query(EmailEvent)
                 .filter(
-                    EmailEvent.tool_approval_id == send_event.tool_approval_id,
-                    EmailEvent.event_type == "click",
+                    EmailEvent.event_type == "send_to_ses",
                     EmailEvent.event_metadata["tracking_id"].as_string() == tracking_id,
-                    EmailEvent.event_metadata["rating"].as_string() != None,
                 )
                 .first()
             )
-            if not already_rated:
-                click_event = EmailEvent(
+
+            if send_event:
+                metadata = send_event.event_metadata or {}
+                rating_row = EmailCampaignRating(
                     account_id=send_event.account_id,
-                    tool_approval_id=send_event.tool_approval_id,
+                    campaign_id=send_event.campaign_id,
+                    email_template_id=metadata.get("email_template_id"),
+                    contact_id=send_event.contact_id,
                     primary_recipient=send_event.primary_recipient,
-                    event_type="click",
-                    provider=send_event.provider,
-                    message_id=send_event.message_id,
-                    event_metadata={
-                        "tracking_id": tracking_id,
-                        "rating": rating,
-                    },
+                    tracking_id=tracking_id,
+                    rating=rating,
                 )
-                db.add(click_event)
+                db.add(rating_row)
                 db.commit()
     except Exception:
         logger.exception("[TRACKING] Rating click error for %s", tracking_id)
