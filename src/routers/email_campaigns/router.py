@@ -11,10 +11,12 @@ from .models import (
     EmailCampaignResponse,
 )
 from .send import router as send_router
+from .ratings import router as ratings_router
 from src.rate_limit import limiter
 
 router = APIRouter()
 router.include_router(send_router)
+router.include_router(ratings_router)
 
 
 @router.get("/", response_model=List[EmailCampaignResponse])
