@@ -12,5 +12,6 @@ Ultimately, The email templates will be stored in the DB in the `email_templates
 ```sh
 python -m scripts.download_email_templates
 python -m scripts.download_email_templates --account-id 1
-python -m scripts.upload_email_template branded-header-and-main-and-footer
+python -m scripts.upload_email_template <slug>
+python -m scripts.upload_email_template rate-your-experience
 ```

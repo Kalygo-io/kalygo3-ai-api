@@ -1,0 +1,30 @@
+{
+  "account_id": 1,
+  "name": "RATE_YOUR_EXPERIENCE",
+  "slug": "rate-your-experience",
+  "description": "Rate your experience email with interactive star rating",
+  "subject_template": "{{ SUBJECT }}",
+  "variables": [
+    {
+      "name": "SUBJECT",
+      "label": "Email subject",
+      "default": "",
+      "required": true
+    },
+    {
+      "name": "TITLE",
+      "label": "Headline text",
+      "default": "",
+      "required": true
+    },
+    {
+      "name": "MAIN_CONTENT",
+      "label": "Main body copy",
+      "default": "",
+      "required": true
+    }
+  ],
+  "id": 6,
+  "created_at": "2026-04-29T03:33:11.175110+00:00",
+  "updated_at": "2026-04-29T03:33:11.175110+00:00"
+}
