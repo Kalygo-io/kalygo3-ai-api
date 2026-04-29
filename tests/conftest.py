@@ -120,6 +120,14 @@ def _setup_database():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$;
         """))
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE emailcampaignstatus AS ENUM (
+                    'draft', 'active', 'paused', 'completed'
+                );
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+        """))
         conn.commit()
 
     Base.metadata.create_all(bind=test_engine)
