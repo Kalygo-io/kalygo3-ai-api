@@ -1,18 +1,17 @@
 """
 List contacts endpoint.
 """
-from typing import List
 from fastapi import APIRouter, HTTPException, status, Request, Query
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Contact, Account
 
-from .models import ContactSummaryResponse
+from .models import ContactListResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
 router = APIRouter()
 
-@router.get("/", response_model=List[ContactSummaryResponse])
+@router.get("/", response_model=ContactListResponse)
 @limiter.limit("60/minute")
 async def list_contacts(
     db: db_dependency,
@@ -20,12 +19,15 @@ async def list_contacts(
     request: Request,
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
+    limit: int = Query(50, ge=1, le=500, description="Number of contacts to return"),
+    offset: int = Query(0, ge=0, description="Number of contacts to skip"),
 ):
     """
-    List all contacts for the authenticated user.
+    List contacts for the authenticated user (server-side paginated).
 
     Supports optional filtering by ?status= and full-text ?search= over
-    name, email, and company.
+    first/middle/last name and email. Returns a paginated envelope
+    ({contacts, total, limit, offset, has_more}).
     """
     try:
         account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
@@ -49,9 +51,22 @@ async def list_contacts(
                 | sqlfunc.lower(Contact.email).like(term)
             )
 
-        contacts = query.order_by(Contact.updated_at.desc()).all()
+        # Total before pagination, then the requested slice.
+        total = query.count()
+        contacts = (
+            query.order_by(Contact.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
-        return contacts
+        return ContactListResponse(
+            contacts=contacts,
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=(offset + limit) < total,
+        )
 
     except HTTPException:
         raise

@@ -76,6 +76,20 @@ class ContactSummaryResponse(BaseModel):
         from_attributes = True
 
 
+class ContactListResponse(BaseModel):
+    """Paginated envelope for the contacts list.
+
+    Mirrors the established pagination contract used by the ingestion-logs
+    endpoint ({items, total, limit, offset, has_more}) so the frontend
+    pattern is consistent across the app.
+    """
+    contacts: List[ContactSummaryResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 # ── Event models ──────────────────────────────────────────────────────────────
 
 class CreateContactEventRequest(BaseModel):
