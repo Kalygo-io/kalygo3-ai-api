@@ -591,6 +591,15 @@ class Deal(Base):
     account = relationship('Account', back_populates='deals')
     contact = relationship('Contact', back_populates='deals')
 
+    @property
+    def contact_name(self) -> str | None:
+        """Display name of the linked contact, or None for account-level deals.
+
+        List endpoints eager-load `contact` (joinedload) so reading this in a
+        loop does not trigger N+1 queries.
+        """
+        return self.contact.name if self.contact else None
+
     def __repr__(self):
         return f'<Deal {self.id}: {self.title} ({self.stage})>'
 

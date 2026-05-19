@@ -34,6 +34,7 @@ class DealResponse(BaseModel):
     id: int
     account_id: int
     contact_id: Optional[int] = None
+    contact_name: Optional[str] = None  # from Deal.contact (eager-loaded)
     title: str
     description: Optional[str] = None
     amount: Optional[float] = None

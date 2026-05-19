@@ -2,6 +2,7 @@
 List deals endpoint (account-scoped, server-side paginated).
 """
 from fastapi import APIRouter, HTTPException, status, Request, Query
+from sqlalchemy.orm import joinedload
 from src.deps import db_dependency, auth_dependency
 from src.db.models import Deal, Account
 
@@ -38,7 +39,12 @@ async def list_deals(
         if not account:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
-        query = db.query(Deal).filter(Deal.account_id == account_id)
+        # Eager-load the contact so DealResponse.contact_name doesn't N+1.
+        query = (
+            db.query(Deal)
+            .options(joinedload(Deal.contact))
+            .filter(Deal.account_id == account_id)
+        )
 
         if contact_id is not None:
             query = query.filter(Deal.contact_id == contact_id)

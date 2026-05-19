@@ -67,16 +67,22 @@ async def update_deal(
         if request_body.closed_at is not None:
             deal.closed_at = request_body.closed_at
 
-        # Re-link to a different contact. Per the codebase convention a null
-        # here means "unchanged" (not "unlink") — re-link is the supported op.
-        if request_body.contact_id is not None:
-            contact = db.query(Contact).filter(
-                Contact.id == request_body.contact_id,
-                Contact.account_id == account_id,
-            ).first()
-            if not contact:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
-            deal.contact_id = request_body.contact_id
+        # Contact (re)link / unlink. We use model_fields_set so the three
+        # cases are distinguishable:
+        #   - field omitted        -> leave the link unchanged
+        #   - contact_id: null     -> unlink (account-level deal)
+        #   - contact_id: <int>    -> link to that contact (validated)
+        if 'contact_id' in request_body.model_fields_set:
+            if request_body.contact_id is None:
+                deal.contact_id = None
+            else:
+                contact = db.query(Contact).filter(
+                    Contact.id == request_body.contact_id,
+                    Contact.account_id == account_id,
+                ).first()
+                if not contact:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+                deal.contact_id = request_body.contact_id
 
         db.commit()
         db.refresh(deal)
