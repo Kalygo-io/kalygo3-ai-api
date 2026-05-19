@@ -65,11 +65,22 @@ class ChatSession(Base):
     session_id = Column(UUID, unique=True, index=True)
     agent_id = Column(Integer, ForeignKey('agents.id', ondelete='CASCADE'), nullable=True, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    # Optional binding to a single CRM contact. When set, this session is the
+    # server-trusted scope for the contact-scoped agent: scoped tools run
+    # against this contact only. SET NULL on contact delete clears the scope
+    # (the contact agent then fails closed rather than running unscoped).
+    #
+    # Assumption: a contact never changes account. The contact<->account match
+    # is validated at session creation; the per-tool account_id filter is the
+    # runtime backstop. Revisit this binding if a "transfer contact" feature
+    # is ever added.
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     title = Column(String)
-    
+
     account = relationship('Account', back_populates='chat_sessions')
     agent = relationship('Agent', back_populates='chat_sessions')
+    contact = relationship('Contact')
     messages = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
     
     def __repr__(self):

@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 from src.deps import db_dependency, jwt_dependency
-from src.db.models import ChatSession, ChatMessage
+from src.db.models import ChatSession, ChatMessage, Contact
 from src.services.agent_access import can_access_agent
 import uuid
 from datetime import datetime
@@ -17,8 +17,11 @@ router = APIRouter()
 
 # Pydantic models for request/response
 class ChatSessionCreate(BaseModel):
-    agentId: int
+    # agentId is optional: contact-scoped sessions have no DB agent (the
+    # contact-chat endpoint injects a code-defined config instead).
+    agentId: Optional[int] = None
     title: Optional[str] = None
+    contactId: Optional[int] = None
 
 class ChatSessionUpdate(BaseModel):
     title: Optional[str] = None
@@ -41,6 +44,7 @@ class ChatSessionResponse(BaseModel):
     accountId: int
     createdAt: datetime
     title: Optional[str] = None
+    contactId: Optional[int] = None
 
 class ChatSessionWithMessagesResponse(BaseModel):
     id: int
@@ -49,6 +53,7 @@ class ChatSessionWithMessagesResponse(BaseModel):
     accountId: int
     createdAt: datetime
     title: Optional[str] = None
+    contactId: Optional[int] = None
     messages: List[ChatMessageResponse] = []
 
     class Config:
@@ -88,29 +93,50 @@ async def create_session(
                 detail="You don't have access to this agent"
             )
 
+        # Contact ownership gate: a session may only be bound to a contact the
+        # caller's account owns. This is the layer-2 control that makes the
+        # contact binding a trustworthy scope (404, not 403, to avoid leaking
+        # the existence of other accounts' contact ids).
+        if sessionData.contactId is not None:
+            owned_contact = db.query(Contact).filter(
+                Contact.id == sessionData.contactId,
+                Contact.account_id == account_id,
+            ).first()
+            if not owned_contact:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Contact not found"
+                )
+
         # Generate a new UUID for the session
         session_uuid = str(uuid.uuid4())
-        
+
         # Create the session
         new_session = ChatSession(
             session_id=session_uuid,
             agent_id=sessionData.agentId,
             account_id=jwt['id'],
-            title=sessionData.title
+            title=sessionData.title,
+            contact_id=sessionData.contactId
         )
-        
+
         db.add(new_session)
         db.commit()
         db.refresh(new_session)
-        
+
         return {
             "id": new_session.id,
             "sessionId": new_session.session_id,
             "agentId": new_session.agent_id,
             "accountId": new_session.account_id,
             "createdAt": new_session.created_at,
-            "title": new_session.title
+            "title": new_session.title,
+            "contactId": new_session.contact_id
         }
+    except HTTPException:
+        # Intentional 4xx (agent-access 403, contact-ownership 404) must not be
+        # remapped to 500 by the generic DB error handler.
+        raise
     except Exception as e:
         db.rollback()
         raise handle_db_error(e, "[OPERATION]")
@@ -122,17 +148,30 @@ async def get_sessions(
     jwt: jwt_dependency,
     request: Request,
     agent_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
     limit: int = 50,
     offset: int = 0
 ):
-    """Get all sessions for the authenticated user, optionally filtered by agent_id"""
+    """Get sessions for the authenticated user.
+
+    Contact-bound sessions are scoped artifacts of the contact drawer, not
+    general chat history: they are excluded by default and returned only when
+    an explicit ``contact_id`` is requested. This keeps them out of the global
+    agent-chat history (where they would render with no agent).
+    """
     try:
         query = db.query(ChatSession).filter(ChatSession.account_id == jwt['id'])
-        
+
         # Optionally filter by agent_id
         if agent_id is not None:
             query = query.filter(ChatSession.agent_id == agent_id)
-        
+
+        # Contact-bound sessions are hidden unless explicitly requested.
+        if contact_id is not None:
+            query = query.filter(ChatSession.contact_id == contact_id)
+        else:
+            query = query.filter(ChatSession.contact_id.is_(None))
+
         sessions = query.order_by(ChatSession.created_at.desc()).offset(offset).limit(limit).all()
 
         sessions = [{
@@ -141,7 +180,8 @@ async def get_sessions(
             "agentId": s.agent_id,
             "accountId": s.account_id,
             "createdAt": s.created_at,
-            "title": s.title
+            "title": s.title,
+            "contactId": s.contact_id
         } for s in sessions]
 
         return sessions
@@ -213,6 +253,7 @@ async def get_session(
             "accountId": session.account_id,
             "createdAt": session.created_at,
             "title": session.title,
+            "contactId": session.contact_id,
             "messages": messages
         }
         

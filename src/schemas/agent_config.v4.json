@@ -99,6 +99,15 @@
           "$ref": "#/$defs/dbTableWriteTool"
         },
         {
+          "$ref": "#/$defs/contactReadTool"
+        },
+        {
+          "$ref": "#/$defs/contactEventsReadTool"
+        },
+        {
+          "$ref": "#/$defs/contactEventWriteTool"
+        },
+        {
           "$ref": "#/$defs/sendTxtEmailWithSesTool"
         },
         {
@@ -200,6 +209,42 @@
         },
         "injectAccountId": { "type": "boolean", "default": false },
         "injectChatSessionId": { "type": "boolean", "default": false }
+      }
+    },
+    "contactReadTool": {
+      "type": "object",
+      "description": "Read the single contact this chat session is bound to. Server-scoped; takes no contact id.",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "contactRead" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contactEventsReadTool": {
+      "type": "object",
+      "description": "List logged activity events for the bound contact. Server-scoped; takes no contact id.",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "contactEventsRead" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contactEventWriteTool": {
+      "type": "object",
+      "description": "Log a new activity event for the bound contact. Server-scoped; contact_id and account_id are forced, not model-supplied.",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": { "type": "string", "const": "contactEventWrite" },
+        "description": { "type": "string", "minLength": 1 }
       }
     },
     "sendTxtEmailWithSesTool": {
