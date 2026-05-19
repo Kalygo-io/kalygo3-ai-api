@@ -26,7 +26,8 @@ async def list_contacts(
     List contacts for the authenticated user (server-side paginated).
 
     Supports optional filtering by ?status= and full-text ?search= over
-    first/middle/last name and email. Returns a paginated envelope
+    first/middle/last name and all emails (default + alternates). Returns
+    a paginated envelope
     ({contacts, total, limit, offset, has_more}).
     """
     try:
@@ -49,6 +50,8 @@ async def list_contacts(
                 | sqlfunc.lower(Contact.middle_name).like(term)
                 | sqlfunc.lower(Contact.last_name).like(term)
                 | sqlfunc.lower(Contact.email).like(term)
+                | sqlfunc.lower(Contact.alt_email_1).like(term)
+                | sqlfunc.lower(Contact.alt_email_2).like(term)
             )
 
         # Total before pagination, then the requested slice.

@@ -32,12 +32,21 @@ async def create_contact(
         if not request_body.email or not request_body.email.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contact email cannot be empty")
 
+        def _norm_email(value: str | None) -> str | None:
+            """Normalize an optional email the same way the primary is: trimmed
+            + lowercased, with blank coerced to NULL."""
+            if not value or not value.strip():
+                return None
+            return value.strip().lower()
+
         contact = Contact(
             account_id=account_id,
             first_name=request_body.first_name.strip(),
             middle_name=request_body.middle_name.strip() if request_body.middle_name else None,
             last_name=request_body.last_name.strip() if request_body.last_name else None,
             email=request_body.email.strip().lower(),
+            alt_email_1=_norm_email(request_body.alt_email_1),
+            alt_email_2=_norm_email(request_body.alt_email_2),
             phone=request_body.phone,
             source=request_body.source,
         )

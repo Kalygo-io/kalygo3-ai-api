@@ -12,7 +12,9 @@ class CreateContactRequest(BaseModel):
     first_name: str
     middle_name: Optional[str] = None
     last_name: Optional[str] = None
-    email: str
+    email: str  # the default (primary) email — "Default email" in the UI
+    alt_email_1: Optional[str] = None
+    alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
 
@@ -22,6 +24,8 @@ class UpdateContactRequest(BaseModel):
     middle_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
+    alt_email_1: Optional[str] = None
+    alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
 
@@ -48,6 +52,8 @@ class ContactResponse(BaseModel):
     last_name: Optional[str] = None
     name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
+    alt_email_1: Optional[str] = None
+    alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
     created_at: datetime
@@ -67,6 +73,8 @@ class ContactSummaryResponse(BaseModel):
     last_name: Optional[str] = None
     name: str  # hybrid property: "{first_name} {middle_name} {last_name}".strip()
     email: str
+    alt_email_1: Optional[str] = None
+    alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
     created_at: datetime

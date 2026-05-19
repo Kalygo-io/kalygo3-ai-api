@@ -30,6 +30,7 @@ from .routers import (
     contacts,
 )
 from .routers import contact_lists
+from .routers import deals
 from .routers import tool_approvals
 from .routers import email_events
 from .routers import email_templates
@@ -221,6 +222,12 @@ app.include_router(
     contact_lists.router,
     prefix="/api/contact-lists",
     tags=['Contact Lists'],
+)
+
+app.include_router(
+    deals.router,
+    prefix="/api/deals",
+    tags=['Deals'],
 )
 
 app.include_router(

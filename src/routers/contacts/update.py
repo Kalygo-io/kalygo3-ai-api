@@ -51,6 +51,14 @@ async def update_contact(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contact email cannot be empty")
             contact.email = request_body.email.strip().lower()
 
+        # Alternate emails are optional: a sent value is trimmed + lowercased
+        # (matching the primary), and a blank clears the field.
+        if request_body.alt_email_1 is not None:
+            contact.alt_email_1 = request_body.alt_email_1.strip().lower() or None
+
+        if request_body.alt_email_2 is not None:
+            contact.alt_email_2 = request_body.alt_email_2.strip().lower() or None
+
         if request_body.phone is not None:
             contact.phone = request_body.phone or None
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, Date, func, Double, Float, Enum, Text, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, Date, func, Double, Float, Numeric, Enum, Text, Boolean, UniqueConstraint
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
@@ -27,6 +27,7 @@ class Account(Base):
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
     contacts = relationship('Contact', back_populates='account', cascade='all, delete-orphan')
     contact_lists = relationship('ContactList', back_populates='account', cascade='all, delete-orphan')
+    deals = relationship('Deal', back_populates='account', cascade='all, delete-orphan')
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
     access_groups = relationship('AccessGroup', back_populates='owner', cascade='all, delete-orphan')
     group_memberships = relationship('AccessGroupMember', back_populates='account', cascade='all, delete-orphan')
@@ -405,7 +406,15 @@ class Contact(Base):
     first_name = Column(String(255), nullable=False)
     middle_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
+    # The default (primary) email. Kept named `email` for backward
+    # compatibility — surfaced as "Default email" in the UI. Unique per
+    # the existing constraint; alternates are not uniqueness-constrained.
     email = Column(String(255), nullable=False, unique=True, index=True)
+    # Optional secondary emails. A contact often has two or three addresses
+    # (work, personal, etc.). These are informational + searchable; outbound
+    # campaigns still send only to `email`.
+    alt_email_1 = Column(String(255), nullable=True)
+    alt_email_2 = Column(String(255), nullable=True)
 
     # Optional contact details
     phone = Column(String(50), nullable=True)
@@ -429,6 +438,9 @@ class Contact(Base):
     account = relationship('Account', back_populates='contacts')
     events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
     career_timeline = relationship('CareerTimeline', back_populates='contact', cascade='all, delete-orphan')
+    # No cascade: a deal outlives its contact (FK is ON DELETE SET NULL), so
+    # deleting a contact preserves the deal with contact_id cleared.
+    deals = relationship('Deal', back_populates='contact')
     list_memberships = relationship('ContactListMember', back_populates='contact', cascade='all, delete-orphan')
     email_events = relationship('EmailEvent', back_populates='contact')
 
@@ -537,6 +549,50 @@ class CareerTimeline(Base):
 
     def __repr__(self):
         return f'<CareerTimeline {self.id}: {self.title} for contact {self.contact_id}>'
+
+
+# Allowed pipeline stages for a Deal. Kept in code (not a DB enum) so the set
+# can evolve without a migration; validated at the API boundary.
+DEAL_STAGES = ('lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost')
+
+
+class Deal(Base):
+    """
+    A sales/CRM deal (opportunity).
+
+    A Deal always belongs to an Account. The Contact link is OPTIONAL: a deal
+    can exist before it's tied to a specific person, and if that contact is
+    later deleted the deal is preserved with contact_id cleared (ON DELETE
+    SET NULL) rather than cascade-deleted.
+    """
+    __tablename__ = 'deals'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Monetary value of the deal. Numeric (not float) to avoid rounding drift.
+    amount = Column(Numeric(14, 2), nullable=True)
+    currency = Column(String(3), nullable=False, default='USD')
+
+    # One of DEAL_STAGES; validated at the API layer.
+    stage = Column(String(50), nullable=False, default='lead', index=True)
+
+    expected_close_date = Column(Date, nullable=True)
+    # Set when the deal is marked won/lost; left NULL while open.
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='deals')
+    contact = relationship('Contact', back_populates='deals')
+
+    def __repr__(self):
+        return f'<Deal {self.id}: {self.title} ({self.stage})>'
 
 
 class PendingToolApproval(Base):
