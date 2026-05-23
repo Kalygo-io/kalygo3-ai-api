@@ -51,7 +51,7 @@ def _issue_jwt_cookie(response: Response, account: Account) -> Response:
         key="jwt",
         value=token,
         httponly=True,
-        expires=60 * 30 * 24,
+        expires=60 * 60 * 24 * 7,
         secure=True,
         samesite="None",
         domain=os.getenv("COOKIE_DOMAIN"),
