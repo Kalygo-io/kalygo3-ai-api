@@ -46,7 +46,7 @@ def _hash_otp(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 def _issue_jwt_cookie(response: Response, account: Account) -> Response:
-    token = create_access_token(account.email, account.id, timedelta(hours=12))
+    token = create_access_token(account.email, account.id, timedelta(days=7))
     response.set_cookie(
         key="jwt",
         value=token,
