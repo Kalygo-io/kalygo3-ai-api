@@ -419,6 +419,15 @@ class Contact(Base):
     # Optional contact details
     phone = Column(String(50), nullable=True)
 
+    # Social media profiles. Stored as full profile URLs, one column per
+    # platform — mirrors the flat one-per-contact pattern used by phone and
+    # the alternate emails. All nullable; adding a platform later is a small
+    # additive migration.
+    linkedin_url = Column(String(512), nullable=True)
+    instagram_url = Column(String(512), nullable=True)
+    youtube_url = Column(String(512), nullable=True)
+    x_url = Column(String(512), nullable=True)   # X (formerly Twitter)
+
     @hybrid_property
     def name(self) -> str:
         """Full display name combining first, middle, and last name."""

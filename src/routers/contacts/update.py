@@ -65,6 +65,20 @@ async def update_contact(
         if request_body.source is not None:
             contact.source = request_body.source or None
 
+        # Social profiles: a sent value is trimmed, and a blank clears the
+        # field (mirroring how phone is handled).
+        if request_body.linkedin_url is not None:
+            contact.linkedin_url = request_body.linkedin_url.strip() or None
+
+        if request_body.instagram_url is not None:
+            contact.instagram_url = request_body.instagram_url.strip() or None
+
+        if request_body.youtube_url is not None:
+            contact.youtube_url = request_body.youtube_url.strip() or None
+
+        if request_body.x_url is not None:
+            contact.x_url = request_body.x_url.strip() or None
+
         db.commit()
         db.refresh(contact)
 

@@ -17,6 +17,11 @@ class CreateContactRequest(BaseModel):
     alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
+    # Social media profile URLs
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    x_url: Optional[str] = None
 
 
 class UpdateContactRequest(BaseModel):
@@ -28,6 +33,11 @@ class UpdateContactRequest(BaseModel):
     alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
+    # Social media profile URLs
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    x_url: Optional[str] = None
 
 
 class ContactEventResponse(BaseModel):
@@ -56,6 +66,10 @@ class ContactResponse(BaseModel):
     alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    x_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     events: List[ContactEventResponse] = []
@@ -77,6 +91,10 @@ class ContactSummaryResponse(BaseModel):
     alt_email_2: Optional[str] = None
     phone: Optional[str] = None
     source: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    x_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -39,6 +39,13 @@ async def create_contact(
                 return None
             return value.strip().lower()
 
+        def _norm_url(value: str | None) -> str | None:
+            """Trim an optional URL; coerce blank to NULL. Case is preserved
+            since URL paths can be case-sensitive."""
+            if not value or not value.strip():
+                return None
+            return value.strip()
+
         contact = Contact(
             account_id=account_id,
             first_name=request_body.first_name.strip(),
@@ -49,6 +56,10 @@ async def create_contact(
             alt_email_2=_norm_email(request_body.alt_email_2),
             phone=request_body.phone,
             source=request_body.source,
+            linkedin_url=_norm_url(request_body.linkedin_url),
+            instagram_url=_norm_url(request_body.instagram_url),
+            youtube_url=_norm_url(request_body.youtube_url),
+            x_url=_norm_url(request_body.x_url),
         )
 
         db.add(contact)
