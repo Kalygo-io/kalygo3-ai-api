@@ -35,6 +35,11 @@ router = APIRouter()
 
 _TRACKING_BASE_URL = os.getenv("TRACKING_BASE_URL", "http://127.0.0.1:4000")
 
+# Surface the resolved tracking base URL at import time so we can confirm what
+# value got baked in without waiting for a send. If this logs 127.0.0.1, the
+# TRACKING_BASE_URL env var is unset in this environment (see .env.production).
+logger.info("[SEND] Resolved TRACKING_BASE_URL=%s", _TRACKING_BASE_URL)
+
 
 # ── Request / Response Models ────────────────────────────────────────────────
 
@@ -91,6 +96,10 @@ def _strip_html_tags(html: str) -> str:
 def _build_contact_variables(contact: Contact, tracking_id: str) -> dict[str, str]:
     """Build the variable substitution map for a given contact."""
     rating_base = f"{_TRACKING_BASE_URL}/t/r/{tracking_id}"
+    logger.info(
+        "[SEND] Built rating_base_url=%s for contact_id=%s tracking_id=%s",
+        rating_base, contact.id, tracking_id,
+    )
     return {
         "first_name": contact.first_name or "",
         "last_name": contact.last_name or "",
@@ -150,6 +159,10 @@ async def send_campaign(
     can be correlated back to the specific contact-campaign pair.
     """
     account_id = int(auth["id"]) if isinstance(auth["id"], str) else auth["id"]
+    logger.info(
+        "[SEND] send_campaign start campaign_id=%s account_id=%s dry_run=%s TRACKING_BASE_URL=%s",
+        campaign_id, account_id, body.dry_run, _TRACKING_BASE_URL,
+    )
 
     # ── Load and validate campaign ───────────────────────────────────────
     campaign = db.query(EmailCampaign).filter(
