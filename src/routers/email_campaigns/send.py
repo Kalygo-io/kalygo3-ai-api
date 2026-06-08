@@ -158,9 +158,17 @@ async def send_campaign(
     Generates a unique tracking_id per contact so rating and open events
     can be correlated back to the specific contact-campaign pair.
     """
+    # Fire on every hit to the Send Email endpoint, before any other work,
+    # and always surface the active TRACKING_BASE_URL alongside it.
+    logger.info(
+        "[SEND] >>> Send Email endpoint triggered: POST /email-campaigns/%s/send "
+        "(dry_run=%s) | TRACKING_BASE_URL=%s",
+        campaign_id, body.dry_run, _TRACKING_BASE_URL,
+    )
+
     account_id = int(auth["id"]) if isinstance(auth["id"], str) else auth["id"]
     logger.info(
-        "[SEND] send_campaign start campaign_id=%s account_id=%s dry_run=%s TRACKING_BASE_URL=%s",
+        "[SEND] send_campaign authenticated campaign_id=%s account_id=%s dry_run=%s TRACKING_BASE_URL=%s",
         campaign_id, account_id, body.dry_run, _TRACKING_BASE_URL,
     )
 
