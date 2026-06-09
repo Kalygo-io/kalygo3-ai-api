@@ -1,4 +1,15 @@
 import logging
+import os
+
+# Configure the root logger so application `logger.info(...)` calls actually
+# emit. Without this, no root handler exists and Python's last-resort handler
+# only shows WARNING+, so all INFO/DEBUG app logs were being silently dropped
+# (uvicorn configures only its own loggers, not the root logger).
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
