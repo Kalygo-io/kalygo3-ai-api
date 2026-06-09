@@ -167,6 +167,14 @@ spec:
                   name: PINECONE_IMAGEBIND_1024_DIMS_INDEX
                   key: latest
 
+            # Autoresearch & email tracking
+
+            - name: TRACKING_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: TRACKING_BASE_URL
+                  key: latest
+
             # Google Cloud Storage and PubSub
             - name: GCS_BUCKET_NAME
               value: "kalygo-kb-ingest-storage"
