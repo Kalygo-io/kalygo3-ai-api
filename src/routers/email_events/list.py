@@ -147,6 +147,8 @@ async def get_email_event_stats(
             bounce=counts.get("bounce", 0),
             complaint=counts.get("complaint", 0),
             click=counts.get("click", 0),
+            attempting=counts.get("attempting", 0),
+            failed=counts.get("failed", 0),
             other=counts.get("other", 0),
             total=total,
         )
