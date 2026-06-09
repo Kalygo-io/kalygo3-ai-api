@@ -40,7 +40,7 @@ async def bulk_create_email_events(
                 original = db.query(EmailEvent).filter(
                     EmailEvent.account_id == account_id,
                     EmailEvent.message_id == e.message_id,
-                    EmailEvent.event_type == "send",
+                    EmailEvent.event_type == "send_to_ses",
                 ).first()
                 if original:
                     if not credential_id:

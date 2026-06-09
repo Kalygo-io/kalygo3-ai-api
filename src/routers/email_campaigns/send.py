@@ -235,7 +235,7 @@ async def campaign_unsent(
         .filter(
             EmailEvent.account_id == account_id,
             EmailEvent.campaign_id == campaign_id,
-            EmailEvent.event_type == "send",
+            EmailEvent.event_type == "send_to_ses",
             EmailEvent.contact_id.isnot(None),
         )
         .all()

@@ -137,11 +137,13 @@ async def test_send_renders_and_logs(authed_client, db, campaign, template, cont
     assert "Hi Alex" in _stub_ses[0]["html"]
     assert "A Haiku for You" in _stub_ses[0]["html"]
 
-    # ledger: an attempting marker and a confirmed send
+    # ledger: an attempting marker and a confirmed hand-off (send_to_ses)
     types = [e.event_type for e in db.query(EmailEvent).filter(
         EmailEvent.campaign_id == campaign.id).all()]
     assert "attempting" in types
-    assert types.count("send") == 1
+    assert types.count("send_to_ses") == 1
+    # the bare "send" type is reserved for SES SNS notifications — never written here
+    assert "send" not in types
 
 
 async def test_duplicate_send_skips(authed_client, db, campaign, template, contact, credential, _stub_ses):
@@ -153,11 +155,11 @@ async def test_duplicate_send_skips(authed_client, db, campaign, template, conta
     assert second.status_code == 200
     assert second.json()["status"] == "skipped_duplicate"
 
-    # exactly one confirmed send, and SES was only invoked once
+    # exactly one confirmed hand-off, and SES was only invoked once
     sends = db.query(EmailEvent).filter(
         EmailEvent.campaign_id == campaign.id,
         EmailEvent.contact_id == contact.id,
-        EmailEvent.event_type == "send",
+        EmailEvent.event_type == "send_to_ses",
     ).count()
     assert sends == 1
     assert len(_stub_ses) == 1

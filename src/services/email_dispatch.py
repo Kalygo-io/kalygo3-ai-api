@@ -8,13 +8,19 @@ call :func:`dispatch_one`, so there is exactly one send code path and templates
 are never mutated or cloned to carry content.
 
 Ledger write order (at-least-once + idempotent), per recipient:
-  1. ``attempting`` — written and committed *before* the SES call, so a crashed
+  1. ``attempting``   — written and committed *before* the SES call, so a crashed
      loop can see in-flight work on resume.
-  2. ``send``       — written *after* SES acknowledges. A partial unique index on
-     ``(campaign_id, contact_id) WHERE event_type='send'`` makes this the
+  2. ``send_to_ses``  — written *after* the SES SendEmail API acknowledges our
+     hand-off. A partial unique index on
+     ``(campaign_id, contact_id) WHERE event_type='send_to_ses'`` makes this the
      idempotency anchor: a duplicate insert (e.g. a re-run or a race) is caught
      and reported as ``skipped_duplicate`` instead of double-mailing.
-  3. ``failed``     — written if SES raises, with the reason, for diagnostics.
+  3. ``failed``       — written if SES raises, with the reason, for diagnostics.
+
+``send_to_ses`` denotes *our request to SES* (the synchronous hand-off). The bare
+``send`` event_type is reserved for the asynchronous "Send" notification emitted
+by the SES configuration set (via SNS) — a future webhook would populate it, plus
+``delivery`` / ``bounce`` / ``complaint``. Do not conflate the two.
 
 Idempotency is enforced two ways: a cheap pre-check before sending, and the DB
 unique index as the race-safe backstop. A rare duplicate email under a true race
@@ -202,7 +208,7 @@ def find_missing_required(
 def existing_send_event(
     db: Session, account_id: int, campaign_id: int, contact_id: Optional[int]
 ) -> Optional[EmailEvent]:
-    """The confirmed ``send`` event for this (campaign, contact), if any.
+    """The confirmed ``send_to_ses`` hand-off event for this (campaign, contact), if any.
 
     Ad-hoc sends (no contact_id) are never deduped — there is no stable identity
     to key on — so this returns ``None`` for them.
@@ -215,7 +221,7 @@ def existing_send_event(
             EmailEvent.account_id == account_id,
             EmailEvent.campaign_id == campaign_id,
             EmailEvent.contact_id == contact_id,
-            EmailEvent.event_type == "send",
+            EmailEvent.event_type == "send_to_ses",
         )
         .first()
     )
@@ -332,14 +338,15 @@ def dispatch_one(
             logger.exception("Failed to record 'failed' event for %s", recipient_lower)
         raise SesSendError(str(exc)) from exc
 
-    # (3) send — confirmed. The partial unique index turns a lost race into a
-    #     clean skipped_duplicate rather than a second mailing in the ledger.
+    # (3) send_to_ses — hand-off confirmed (SES accepted the SendEmail call). The
+    #     partial unique index turns a lost race into a clean skipped_duplicate
+    #     rather than a second mailing in the ledger.
     send_ev = EmailEvent(
         account_id=account_id,
         campaign_id=campaign_id,
         contact_id=contact_id,
         primary_recipient=recipient_lower,
-        event_type="send",
+        event_type="send_to_ses",
         provider="ses",
         message_id=message_id,
         credential_id=credential_id,

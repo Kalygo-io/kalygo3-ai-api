@@ -29,6 +29,11 @@ async def track_open(tracking_id: str, db: Session = Depends(get_db)):
         send_event = (
             db.query(EmailEvent)
             .filter(
+                # "send_to_ses" is the hand-off event (Model A dispatch and the
+                # legacy tool-approval path both write it) and carries the
+                # tracking_id in event_metadata. The bare "send" type is reserved
+                # for SES SNS notifications, which key off the SES message_id, not
+                # our tracking_id — so they are deliberately not matched here.
                 EmailEvent.event_type == "send_to_ses",
                 EmailEvent.event_metadata["tracking_id"].as_string() == tracking_id,
             )
@@ -49,6 +54,8 @@ async def track_open(tracking_id: str, db: Session = Depends(get_db)):
                 open_event = EmailEvent(
                     account_id=send_event.account_id,
                     tool_approval_id=send_event.tool_approval_id,
+                    campaign_id=send_event.campaign_id,
+                    contact_id=send_event.contact_id,
                     primary_recipient=send_event.primary_recipient,
                     event_type="open",
                     provider=send_event.provider,
@@ -103,6 +110,34 @@ _THANK_YOU_HTML = """\
 """
 
 
+_UNKNOWN_LINK_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Link not recognized</title>
+<style>
+  body { margin:0; font-family:'Trebuchet MS',Arial,sans-serif;
+         display:flex; align-items:center; justify-content:center;
+         min-height:100vh; background:#f7f7f7; color:#0a080b; }
+  .card { text-align:center; padding:60px 40px; background:#fff;
+          border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08);
+          max-width:420px; }
+  h1 { font-size:28px; font-weight:normal; margin:0 0 8px; }
+  p  { font-size:16px; line-height:24px; color:#555; margin:0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>This rating link isn't valid</h1>
+  <p>The link may have expired or been mistyped. You can close this tab.</p>
+</div>
+</body>
+</html>
+"""
+
+
 def _render_thank_you(rating: int) -> str:
     filled = "\u2605" * rating
     empty = '<span class="dim">\u2605</span>' * (5 - rating)
@@ -121,6 +156,7 @@ async def track_rating(
 ):
     """Record a star-rating click from an email and show a thank-you page."""
     logger.info("[RATING] Received rating=%d for tracking_id=%s", rating, tracking_id)
+    resolved = False  # did this tracking_id map to a real send (or prior rating)?
     try:
         already_rated = (
             db.query(EmailCampaignRating)
@@ -129,6 +165,7 @@ async def track_rating(
         )
 
         if already_rated:
+            resolved = True
             logger.info(
                 "[RATING] Duplicate — tracking_id=%s already has rating=%d (id=%d), skipping",
                 tracking_id, already_rated.rating, already_rated.id,
@@ -137,6 +174,7 @@ async def track_rating(
             send_event = (
                 db.query(EmailEvent)
                 .filter(
+                    # The hand-off event carrying our tracking_id (see track_open).
                     EmailEvent.event_type == "send_to_ses",
                     EmailEvent.event_metadata["tracking_id"].as_string() == tracking_id,
                 )
@@ -145,10 +183,11 @@ async def track_rating(
 
             if not send_event:
                 logger.warning(
-                    "[RATING] No send_to_ses event found for tracking_id=%s — rating will not be stored",
+                    "[RATING] No send event found for tracking_id=%s — rating will not be stored",
                     tracking_id,
                 )
             else:
+                resolved = True
                 metadata = send_event.event_metadata or {}
                 logger.info(
                     "[RATING] Matched send_event id=%d account_id=%d campaign_id=%s "
@@ -176,6 +215,17 @@ async def track_rating(
     except Exception:
         logger.exception("[RATING] Failed to store rating for tracking_id=%s", tracking_id)
         db.rollback()
+
+    if not resolved:
+        # Unknown/unresolvable tracking_id → 404 rather than a silent 200. The
+        # old silent 200 is exactly what masked the attribution gap: a bogus id
+        # was indistinguishable from a recorded rating.
+        logger.warning("[RATING] Unresolved tracking_id=%s → returning 404", tracking_id)
+        return HTMLResponse(
+            content=_UNKNOWN_LINK_HTML,
+            status_code=404,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+        )
 
     return HTMLResponse(
         content=_render_thank_you(rating),

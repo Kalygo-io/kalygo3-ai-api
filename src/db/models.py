@@ -661,13 +661,19 @@ class EmailEvent(Base):
     Records a single event in the lifecycle of an email sent through Kalygo.
 
     One email send typically produces multiple events:
-      send → delivery → open (if tracking enabled)
+      attempting → send_to_ses → [send → delivery] → open (if tracking enabled)
 
     Or for failures:
-      send → bounce / complaint
+      attempting → failed                    (our SendEmail call raised)
+      send_to_ses → bounce / complaint        (SES accepted, then SNS reported)
 
-    provider_message_id is the key for correlating inbound webhook payloads
-    (e.g. AWS SNS notifications from SES) back to a specific email record.
+    ``send_to_ses`` is *our* synchronous hand-off to SES (the SendEmail request).
+    The bare ``send`` event — and ``delivery`` / ``bounce`` / ``complaint`` / ``click`` —
+    are the asynchronous notifications emitted by the SES configuration set (via
+    SNS); they are reserved for a future webhook and not written yet.
+
+    message_id is the key for correlating those inbound SNS payloads back to a
+    specific email record (it holds the SES MessageId from the hand-off).
     """
     __tablename__ = 'email_events'
 
