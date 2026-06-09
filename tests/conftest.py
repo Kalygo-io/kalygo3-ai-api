@@ -105,7 +105,8 @@ def _setup_database():
             DO $$ BEGIN
                 CREATE TYPE emaileventtype AS ENUM (
                     'send', 'send_to_ses', 'delivery', 'open',
-                    'bounce', 'complaint', 'click', 'other'
+                    'bounce', 'complaint', 'click',
+                    'attempting', 'failed', 'other'
                 );
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$;
@@ -129,6 +130,17 @@ def _setup_database():
             END $$;
         """))
         conn.commit()
+
+    # The test database is a long-lived container, so the CREATE TYPE blocks
+    # above are skipped (duplicate_object) once it exists — leaving any enum
+    # created before new values were added permanently stale. Reconcile the
+    # values the models require with idempotent ADD VALUE statements. These must
+    # run outside a transaction block (Postgres restriction), hence AUTOCOMMIT.
+    with test_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        for value in ("attempting", "failed"):
+            conn.execute(text(
+                f"ALTER TYPE emaileventtype ADD VALUE IF NOT EXISTS '{value}'"
+            ))
 
     Base.metadata.create_all(bind=test_engine)
 

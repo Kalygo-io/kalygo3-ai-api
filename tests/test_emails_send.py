@@ -93,6 +93,23 @@ def campaign(db: Session, test_account: Account) -> EmailCampaign:
     return camp
 
 
+@pytest.fixture()
+def credential(db: Session, test_account: Account):
+    # A real row so the email_events.credential_id FK is satisfied; the SES
+    # loader is stubbed (see _stub_ses), so encrypted_data is never decrypted.
+    from src.db.models import Credential, ServiceName
+    cred = Credential(
+        account_id=test_account.id,
+        credential_type=ServiceName.AWS_SES,
+        credential_name="SES (test)",
+        encrypted_data="stub",
+    )
+    db.add(cred)
+    db.commit()
+    db.refresh(cred)
+    return cred
+
+
 def _body(campaign, template, contact, **over):
     payload = {
         "campaign_id": campaign.id,
@@ -106,8 +123,9 @@ def _body(campaign, template, contact, **over):
     return payload
 
 
-async def test_send_renders_and_logs(authed_client, db, campaign, template, contact, _stub_ses):
-    resp = await authed_client.post(SEND_URL, json=_body(campaign, template, contact))
+async def test_send_renders_and_logs(authed_client, db, campaign, template, contact, credential, _stub_ses):
+    resp = await authed_client.post(
+        SEND_URL, json=_body(campaign, template, contact, credential_id=credential.id))
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["status"] == "sent"
@@ -126,11 +144,12 @@ async def test_send_renders_and_logs(authed_client, db, campaign, template, cont
     assert types.count("send") == 1
 
 
-async def test_duplicate_send_skips(authed_client, db, campaign, template, contact, _stub_ses):
-    first = await authed_client.post(SEND_URL, json=_body(campaign, template, contact))
+async def test_duplicate_send_skips(authed_client, db, campaign, template, contact, credential, _stub_ses):
+    body = _body(campaign, template, contact, credential_id=credential.id)
+    first = await authed_client.post(SEND_URL, json=body)
     assert first.json()["status"] == "sent"
 
-    second = await authed_client.post(SEND_URL, json=_body(campaign, template, contact))
+    second = await authed_client.post(SEND_URL, json=body)
     assert second.status_code == 200
     assert second.json()["status"] == "skipped_duplicate"
 
@@ -161,16 +180,17 @@ async def test_dry_run_validates_without_sending(authed_client, db, campaign, te
     assert db.query(EmailEvent).filter(EmailEvent.campaign_id == campaign.id).count() == 0
 
 
-async def test_template_not_mutated(authed_client, db, campaign, template, contact, _stub_ses):
+async def test_template_not_mutated(authed_client, db, campaign, template, contact, credential, _stub_ses):
     original_subject = template.subject_template
     original_html = template.html_template
-    await authed_client.post(SEND_URL, json=_body(campaign, template, contact))
+    await authed_client.post(
+        SEND_URL, json=_body(campaign, template, contact, credential_id=credential.id))
     db.refresh(template)
     assert template.subject_template == original_subject
     assert template.html_template == original_html
 
 
-async def test_unsent_resume_helper(authed_client, db, test_account, campaign, template, contact, _stub_ses):
+async def test_unsent_resume_helper(authed_client, db, test_account, campaign, template, contact, credential, _stub_ses):
     # second contact, both in a list linked to the campaign
     other = Contact(account_id=test_account.id, first_name="Sam", email="sam@example.com")
     db.add(other)
@@ -185,7 +205,8 @@ async def test_unsent_resume_helper(authed_client, db, test_account, campaign, t
     db.commit()
 
     # send to only the first contact
-    await authed_client.post(SEND_URL, json=_body(campaign, template, contact))
+    await authed_client.post(
+        SEND_URL, json=_body(campaign, template, contact, credential_id=credential.id))
 
     resp = await authed_client.get(f"/api/email-campaigns/{campaign.id}/unsent")
     assert resp.status_code == 200
