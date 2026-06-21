@@ -41,6 +41,7 @@ from .routers import (
     contacts,
 )
 from .routers import contact_lists
+from .routers import companies
 from .routers import deals
 from .routers import tool_approvals
 from .routers import email_events
@@ -234,6 +235,12 @@ app.include_router(
     contact_lists.router,
     prefix="/api/contact-lists",
     tags=['Contact Lists'],
+)
+
+app.include_router(
+    companies.router,
+    prefix="/api/companies",
+    tags=['Companies'],
 )
 
 app.include_router(

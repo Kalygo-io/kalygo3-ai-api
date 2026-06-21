@@ -26,6 +26,7 @@ class Account(Base):
     api_keys = relationship('ApiKey', back_populates='account', cascade='all, delete-orphan')
     leads = relationship('Lead', back_populates='account', cascade='all, delete-orphan')
     contacts = relationship('Contact', back_populates='account', cascade='all, delete-orphan')
+    companies = relationship('Company', back_populates='account', cascade='all, delete-orphan')
     contact_lists = relationship('ContactList', back_populates='account', cascade='all, delete-orphan')
     deals = relationship('Deal', back_populates='account', cascade='all, delete-orphan')
     prompts = relationship('Prompt', back_populates='account', cascade='all, delete-orphan')
@@ -390,6 +391,71 @@ class AgentAccessGrant(Base):
         return f'<AgentAccessGrant agent={self.agent_id} group={self.access_group_id}>'
 
 
+class Company(Base):
+    """
+    Stores CRM company (organization) records.
+
+    A Company belongs to an Account and groups together the Contacts that work
+    there. The relationship is many-to-many via the CompanyContact join table:
+    a Company has many Contacts, and a Contact can be associated with many
+    Companies.
+    """
+    __tablename__ = 'companies'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    name = Column(String(255), nullable=False)
+    # Optional company details.
+    domain = Column(String(255), nullable=True, index=True)   # e.g. "acme.com"
+    website = Column(String(512), nullable=True)
+    industry = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    linkedin_url = Column(String(512), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    account = relationship('Account', back_populates='companies')
+    # Join rows linking this company to its member contacts. Deleting the
+    # company removes the associations (cascade) but never the contacts.
+    contact_memberships = relationship('CompanyContact', back_populates='company', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Company {self.id}: {self.name}>'
+
+
+class CompanyContact(Base):
+    """
+    Join table associating a Company with a Contact (many-to-many).
+
+    Mirrors the ContactListMember pattern: an explicit join row scoped to the
+    owning Account, with a uniqueness constraint preventing duplicate links.
+    """
+    __tablename__ = 'company_contacts'
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=False, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    # Optional role/title the contact holds at this company, e.g. "CTO".
+    # Per-association rather than per-contact since it varies by company.
+    title = Column(String(255), nullable=True)
+
+    added_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    company = relationship('Company', back_populates='contact_memberships')
+    contact = relationship('Contact', back_populates='company_memberships')
+
+    __table_args__ = (
+        UniqueConstraint('company_id', 'contact_id', name='uq_company_contact'),
+    )
+
+    def __repr__(self):
+        return f'<CompanyContact company={self.company_id} contact={self.contact_id}>'
+
+
 class Contact(Base):
     """
     Stores CRM contact records.
@@ -445,6 +511,9 @@ class Contact(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     account = relationship('Account', back_populates='contacts')
+    # Many-to-many with Company via the company_contacts join table. A contact
+    # can be associated with multiple companies.
+    company_memberships = relationship('CompanyContact', back_populates='contact', cascade='all, delete-orphan')
     events = relationship('ContactEvent', back_populates='contact', cascade='all, delete-orphan')
     career_timeline = relationship('CareerTimeline', back_populates='contact', cascade='all, delete-orphan')
     # No cascade: a deal outlives its contact (FK is ON DELETE SET NULL), so
