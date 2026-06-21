@@ -140,7 +140,7 @@ async def request_login_code(body: RequestCodeBody, db: db_dependency, request: 
 
         if not account:
             account_count = db.query(Account).count()
-            if account_count >= 50:
+            if account_count >= 400:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Account creation is currently limited.",
