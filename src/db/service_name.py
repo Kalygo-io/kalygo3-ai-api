@@ -32,3 +32,6 @@ class ServiceName(str, Enum):
     AWS_SES = "AWS_SES"
     GOOGLE_OAUTH = "GOOGLE_OAUTH"
     GOOGLE_GMAIL_SMTP = "GOOGLE_GMAIL_SMTP"
+
+    # Object Storage
+    GOOGLE_CLOUD_STORAGE = "GOOGLE_CLOUD_STORAGE"

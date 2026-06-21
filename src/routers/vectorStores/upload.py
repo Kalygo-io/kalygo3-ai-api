@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Form
 from typing import Optional
 from src.deps import jwt_dependency, db_dependency
 from src.services.vector_stores_upload_service import VectorStoresUploadService
+from src.services.account_gcs_service import AccountGcsCredentialMissing
 from src.db.models import VectorDbIngestionLog, Account
 from src.utils.errors import handle_db_error
 import uuid
@@ -72,17 +73,22 @@ async def upload_csv_file(
         # Initialize upload service
         upload_service = VectorStoresUploadService()
         
-        # Upload file to GCS and publish to Pub/Sub
-        result = await upload_service.upload_file_and_publish(
-            file=file,
-            user_id=str(account_id),
-            user_email=str(decoded_jwt.get('email', '')),
-            index_name=index_name.strip(),
-            namespace=namespace.strip(),
-            jwt=request.cookies.get("jwt") if request else None,
-            batch_number=batch_number,
-            comment=comment
-        )
+        # Upload file to the account's GCS bucket and publish to Pub/Sub
+        try:
+            result = await upload_service.upload_file_and_publish(
+                file=file,
+                user_id=str(account_id),
+                user_email=str(decoded_jwt.get('email', '')),
+                index_name=index_name.strip(),
+                namespace=namespace.strip(),
+                jwt=request.cookies.get("jwt") if request else None,
+                db=db,
+                account_id=account_id,
+                batch_number=batch_number,
+                comment=comment
+            )
+        except AccountGcsCredentialMissing as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
         if not result.get("success"):
             raise HTTPException(
@@ -99,12 +105,14 @@ async def upload_csv_file(
                 namespace=namespace.strip(),
                 filenames=[file.filename],
                 comment=comment,
+                gcs_bucket=result.get("gcs_bucket"),
+                gcs_file_path=result.get("gcs_file_path"),
                 vectors_added=0,
                 vectors_deleted=0,
                 vectors_failed=0,
                 batch_number=batch_number
             )
-            
+
             # Set enum values directly as strings (PostgreSQL enums accept string values)
             ingestion_log.operation_type = 'INGEST'
             ingestion_log.status = 'PENDING'
@@ -184,17 +192,22 @@ async def upload_text_file(
         # Initialize upload service
         upload_service = VectorStoresUploadService()
         
-        # Upload file to GCS and publish to Pub/Sub
-        result = await upload_service.upload_file_and_publish(
-            file=file,
-            user_id=str(account_id),
-            user_email=str(decoded_jwt.get('email', '')),
-            index_name=index_name.strip(),
-            namespace=namespace.strip(),
-            jwt=request.cookies.get("jwt") if request else None,
-            batch_number=batch_number,
-            comment=comment
-        )
+        # Upload file to the account's GCS bucket and publish to Pub/Sub
+        try:
+            result = await upload_service.upload_file_and_publish(
+                file=file,
+                user_id=str(account_id),
+                user_email=str(decoded_jwt.get('email', '')),
+                index_name=index_name.strip(),
+                namespace=namespace.strip(),
+                jwt=request.cookies.get("jwt") if request else None,
+                db=db,
+                account_id=account_id,
+                batch_number=batch_number,
+                comment=comment
+            )
+        except AccountGcsCredentialMissing as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
         if not result.get("success"):
             raise HTTPException(
@@ -211,6 +224,8 @@ async def upload_text_file(
                 namespace=namespace.strip(),
                 filenames=[file.filename],
                 comment=comment,
+                gcs_bucket=result.get("gcs_bucket"),
+                gcs_file_path=result.get("gcs_file_path"),
                 operation_type='INGEST',  # Direct string assignment for PostgreSQL enum
                 status='PENDING',  # Direct string assignment for PostgreSQL enum
                 vectors_added=0,
