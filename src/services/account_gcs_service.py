@@ -14,6 +14,7 @@ The bucket name is stored as non-secret metadata on the credential
 the encrypted credential data under "service_account_json".
 """
 import logging
+from datetime import timedelta
 from typing import Dict, Any, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -116,3 +117,30 @@ def upload_bytes(
     logger.info("[ACCOUNT GCS] Uploaded gs://%s/%s for account %s", bucket_name, gcs_file_path, account_id)
 
     return {"gcs_bucket": bucket_name, "gcs_file_path": gcs_file_path}
+
+
+def generate_signed_url(
+    db: Session,
+    account_id: int,
+    *,
+    gcs_file_path: str,
+    expiration_seconds: int = 900,
+) -> str:
+    """
+    Generate a short-lived V4 signed GET URL for an object in the account's
+    bucket. Signing is done locally with the account's service-account private
+    key (no extra IAM permission needed beyond holding the key).
+
+    The bucket is always resolved from the account's own credential — the caller
+    cannot point this at an arbitrary bucket. Raises AccountGcsCredentialMissing
+    if the account has no GCS credential.
+    """
+    service_account_json, bucket_name = _resolve_account_gcs_config(db, account_id)
+
+    client = _build_storage_client(service_account_json)
+    blob = client.bucket(bucket_name).blob(gcs_file_path)
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(seconds=expiration_seconds),
+        method="GET",
+    )
