@@ -9,11 +9,11 @@ import hashlib
 logger = logging.getLogger(__name__)
 
 
-async def record_login(account_id: int, account_email: str, ip_address: str, db):
+async def record_login(account_id: int, account_email: str, ip_address: str, db, token: str | None = None):
     created_at = datetime.now()
     log = f"{ip_address} {created_at}"
-    
-    embedding = await fetch_embedding(log)
+
+    embedding = await fetch_embedding(token, log)
 
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))

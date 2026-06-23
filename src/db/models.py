@@ -52,7 +52,7 @@ class Logins(Base):
     account = relationship('Account', back_populates='logins')
     
     def __repr__(self):
-        return f'<Login {self.login_time}>'
+        return f'<Login {self.created_at}>'
     
 class ChatHistory(Base):
     __tablename__ = 'chat_history'

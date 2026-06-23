@@ -45,8 +45,7 @@ OTP_TTL_MINUTES = 10
 def _hash_otp(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
-def _issue_jwt_cookie(response: Response, account: Account) -> Response:
-    token = create_access_token(account.email, account.id, timedelta(days=7))
+def _issue_jwt_cookie(response: Response, token: str) -> Response:
     response.set_cookie(
         key="jwt",
         value=token,
@@ -205,8 +204,9 @@ async def verify_login_code(body: VerifyCodeBody, db: db_dependency, request: Re
     db.commit()
 
     ip_address = request.client.host
-    background_tasks.add_task(record_login, account.id, account.email, ip_address, db)
+    token = create_access_token(account.email, account.id, timedelta(days=7))
+    background_tasks.add_task(record_login, account.id, account.email, ip_address, db, token)
 
     response = Response()
-    return _issue_jwt_cookie(response, account)
+    return _issue_jwt_cookie(response, token)
 
