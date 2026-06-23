@@ -146,148 +146,36 @@ app.add_middleware(
     allow_credentials=True
 )
 
-app.include_router(healthcheck.router, prefix="")
+# Router registration: (router, prefix, tags). Order is preserved from the
+# original explicit calls. healthcheck mounts at the root with no tags;
+# tracking is mounted under /t. Everything else lives under /api/...
+_ROUTERS = [
+    (healthcheck.router, "", None),
+    (auth.router, "/api/auth", ["auth"]),
+    (waitlist.router, "/api/waitlist", ["waitlist"]),
+    (logins.router, "/api/logins", ["logins"]),
+    (similaritySearch.router, "/api/similarity-search", ["Similarity Search"]),
+    (chatSessions.router, "/api/chat-sessions", ["Chat Sessions"]),
+    (payments.router, "/api/payments", ["Payments"]),
+    (credentials.router, "/api/credentials", ["Credentials"]),
+    (vectorStores.router, "/api/vector-stores", ["Vector Stores"]),
+    (agents.router, "/api/agents", ["Agents"]),
+    (apiKeys.router, "/api/api-keys", ["API Keys"]),
+    (accounts.router, "/api/accounts", ["Accounts"]),
+    (prompts.router, "/api/prompts", ["Prompts"]),
+    (accessGroups.router, "/api/access-groups", ["Access Groups"]),
+    (contacts.router, "/api/contacts", ["Contacts"]),
+    (contact_lists.router, "/api/contact-lists", ["Contact Lists"]),
+    (companies.router, "/api/companies", ["Companies"]),
+    (files.router, "/api/files", ["Files"]),
+    (deals.router, "/api/deals", ["Deals"]),
+    (tool_approvals.router, "/api/tool-approvals", ["Tool Approvals"]),
+    (email_events.router, "/api/email-events", ["Email Events"]),
+    (email_templates.router, "/api/email-templates", ["Email Templates"]),
+    (email_campaigns.router, "/api/email-campaigns", ["Email Campaigns"]),
+    (emails.router, "/api/emails", ["Emails"]),
+    (tracking.router, "/t", ["Tracking"]),
+]
 
-app.include_router(
-    auth.router,
-    prefix='/api/auth',
-    tags=['auth'],
-)
-
-app.include_router(
-    waitlist.router,
-    prefix='/api/waitlist',
-    tags=['waitlist'],
-)
-
-app.include_router(
-    logins.router,
-    prefix="/api/logins",
-    tags=['logins'],
-)
-
-app.include_router(
-    similaritySearch.router,
-    prefix="/api/similarity-search",
-    tags=['Similarity Search'],
-)
-
-app.include_router(
-    chatSessions.router,
-    prefix="/api/chat-sessions",
-    tags=['Chat Sessions'],
-)
-
-app.include_router(
-    payments.router,
-    prefix="/api/payments",
-    tags=['Payments'],
-)
-
-app.include_router(
-    credentials.router,
-    prefix="/api/credentials",
-    tags=['Credentials'],
-)
-
-app.include_router(
-    vectorStores.router,
-    prefix="/api/vector-stores",
-    tags=['Vector Stores'],
-)
-
-app.include_router(
-    agents.router,
-    prefix="/api/agents",
-    tags=['Agents'],
-)
-
-app.include_router(
-    apiKeys.router,
-    prefix="/api/api-keys",
-    tags=['API Keys'],
-)
-
-app.include_router(
-    accounts.router,
-    prefix="/api/accounts",
-    tags=['Accounts'],
-)
-
-app.include_router(
-    prompts.router,
-    prefix="/api/prompts",
-    tags=['Prompts'],
-)
-
-app.include_router(
-    accessGroups.router,
-    prefix="/api/access-groups",
-    tags=['Access Groups'],
-)
-
-app.include_router(
-    contacts.router,
-    prefix="/api/contacts",
-    tags=['Contacts'],
-)
-
-app.include_router(
-    contact_lists.router,
-    prefix="/api/contact-lists",
-    tags=['Contact Lists'],
-)
-
-app.include_router(
-    companies.router,
-    prefix="/api/companies",
-    tags=['Companies'],
-)
-
-app.include_router(
-    files.router,
-    prefix="/api/files",
-    tags=['Files'],
-)
-
-app.include_router(
-    deals.router,
-    prefix="/api/deals",
-    tags=['Deals'],
-)
-
-app.include_router(
-    tool_approvals.router,
-    prefix="/api/tool-approvals",
-    tags=['Tool Approvals'],
-)
-
-app.include_router(
-    email_events.router,
-    prefix="/api/email-events",
-    tags=['Email Events'],
-)
-
-app.include_router(
-    email_templates.router,
-    prefix="/api/email-templates",
-    tags=['Email Templates'],
-)
-
-app.include_router(
-    email_campaigns.router,
-    prefix="/api/email-campaigns",
-    tags=['Email Campaigns'],
-)
-
-app.include_router(
-    emails.router,
-    prefix="/api/emails",
-    tags=['Emails'],
-)
-
-app.include_router(
-    tracking.router,
-    prefix="/t",
-    tags=['Tracking'],
-)
+for _router, _prefix, _tags in _ROUTERS:
+    app.include_router(_router, prefix=_prefix, tags=_tags)
