@@ -8,9 +8,10 @@ similarity search.
 import logging
 import os
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Prompt, Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import Prompt
 from src.services import fetch_embedding
+from src.services.crm_vector_service import extract_token
 from src.core.clients import pc
 
 from .models import CreatePromptRequest, PromptResponse
@@ -23,14 +24,6 @@ PINECONE_INDEX = os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX")
 PROMPTS_NAMESPACE = "prompts"
 
 router = APIRouter()
-
-def _extract_token(request: Request) -> str | None:
-    token = request.cookies.get("jwt")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header.removeprefix("Bearer ").strip()
-    return token
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PromptResponse)
 @limiter.limit("30/minute")
@@ -47,14 +40,8 @@ async def create_prompt(
     Pinecone (``prompts`` namespace) for similarity search.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         if not request_body.name or not request_body.name.strip():
             raise HTTPException(
@@ -81,7 +68,7 @@ async def create_prompt(
 
         # ── Embed + upsert to Pinecone ───────────────────────────────
         try:
-            token = _extract_token(request)
+            token = extract_token(request)
             embedding = await fetch_embedding(token, prompt.content)
 
             if embedding and PINECONE_INDEX:

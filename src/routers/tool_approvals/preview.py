@@ -6,7 +6,6 @@ it looks correct before approving (which sends it to the real recipient).
 The approval status is left unchanged — it remains pending.
 """
 import logging
-import os as _os
 import re as _re
 
 from datetime import datetime, timezone
@@ -17,19 +16,12 @@ from src.deps import db_dependency, auth_dependency
 from src.db.models import PendingToolApproval, Credential
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
+from .email_html import strip_html_tags
 from src.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_TRACKING_BASE_URL = _os.getenv("TRACKING_BASE_URL", "http://127.0.0.1:4000")
-
-def _strip_html_tags(html: str) -> str:
-    text = _re.sub(r"<(br\s*/?|/?(p|div|tr|li|h[1-6])[^>]*)>", "\n", html, flags=_re.IGNORECASE)
-    text = _re.sub(r"<[^>]+>", "", text)
-    text = _re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
 
 _PREVIEW_BANNER = """
 <div style="background:#f59e0b;color:#000;font-family:sans-serif;font-size:13px;
@@ -131,7 +123,7 @@ async def preview_tool_approval(
 
     preview_subject = f"[PREVIEW] {subject}"
     preview_html = _inject_preview_banner(html_body)
-    plain_fallback = _strip_html_tags(html_body)
+    plain_fallback = strip_html_tags(html_body)
 
     try:
         import boto3

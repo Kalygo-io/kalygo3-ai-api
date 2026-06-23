@@ -5,10 +5,10 @@ Handles file uploads to cloud storage and triggers async processing via Pub/Sub.
 import logging
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException, Form
 from typing import Optional
-from src.deps import jwt_dependency, db_dependency
+from src.deps import jwt_dependency, db_dependency, ensure_account
 from src.services.vector_stores_upload_service import VectorStoresUploadService
 from src.services.account_gcs_service import AccountGcsCredentialMissing
-from src.db.models import VectorDbIngestionLog, Account
+from src.db.models import VectorDbIngestionLog
 from src.utils.errors import handle_db_error
 import uuid
 from src.rate_limit import limiter
@@ -42,9 +42,7 @@ async def upload_csv_file(
         account_id = int(decoded_jwt['id']) if isinstance(decoded_jwt['id'], str) else decoded_jwt['id']
         
         # Validate account exists
-        account = db.query(Account).filter(Account.id == account_id).first()
-        if not account:
-            raise HTTPException(status_code=404, detail="Account not found")
+        account = ensure_account(db, account_id)
         
         # Validate file type
         if not file.filename or not file.filename.endswith('.csv'):
@@ -161,9 +159,7 @@ async def upload_text_file(
         account_id = int(decoded_jwt['id']) if isinstance(decoded_jwt['id'], str) else decoded_jwt['id']
         
         # Validate account exists
-        account = db.query(Account).filter(Account.id == account_id).first()
-        if not account:
-            raise HTTPException(status_code=404, detail="Account not found")
+        account = ensure_account(db, account_id)
         
         # Validate file type
         if not file.filename or not file.filename.endswith(('.txt', '.md')):

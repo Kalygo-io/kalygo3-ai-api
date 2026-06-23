@@ -3,7 +3,7 @@ List API keys endpoint.
 """
 from fastapi import APIRouter, Request
 from typing import List
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import ApiKey
 from .models import ApiKeyResponse
 from src.utils.errors import handle_db_error
@@ -23,7 +23,7 @@ async def list_api_keys(
     Only shows key prefix, never the full key.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
         
         api_keys = db.query(ApiKey).filter(
             ApiKey.account_id == account_id

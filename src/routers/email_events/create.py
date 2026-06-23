@@ -2,7 +2,7 @@
 Create email event endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import EmailEvent
 
 from .models import CreateEmailEventRequest, EmailEventResponse
@@ -21,7 +21,7 @@ async def create_email_event(
 ):
     """Record a single email event."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         credential_id = request_body.credential_id
         sender_domain = request_body.sender_domain

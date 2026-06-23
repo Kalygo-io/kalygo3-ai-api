@@ -2,7 +2,7 @@
 Revoke an access group's permission to use an agent (agent owner only).
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Agent, AgentAccessGrant
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -20,7 +20,7 @@ async def revoke_grant(
 ):
     """Revoke an access group's permission to use this agent. Agent owner only."""
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         # Verify agent ownership
         agent = db.query(Agent).filter(

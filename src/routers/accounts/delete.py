@@ -2,8 +2,7 @@
 Delete account endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request, Response
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 import os
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -27,14 +26,8 @@ async def delete_account(
     After deletion, the JWT cookie is cleared.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Delete the account (cascades to related records)
         db.delete(account)

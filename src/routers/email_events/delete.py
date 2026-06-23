@@ -2,7 +2,7 @@
 Delete email event endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import EmailEvent
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -18,7 +18,7 @@ async def delete_email_event(
     request: Request,
 ):
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         event = db.query(EmailEvent).filter(
             EmailEvent.id == event_id,

@@ -11,8 +11,7 @@ import logging
 
 from fastapi import APIRouter, Request, Query, HTTPException, status
 
-from src.deps import jwt_dependency, db_dependency
-from src.db.models import Account
+from src.deps import jwt_dependency, db_dependency, ensure_account
 from src.services import account_gcs_service
 from src.services.account_gcs_service import AccountGcsCredentialMissing
 from src.utils.errors import handle_db_error
@@ -39,9 +38,7 @@ async def get_signed_url(
 
         account_id = int(decoded_jwt['id']) if isinstance(decoded_jwt['id'], str) else decoded_jwt['id']
 
-        account = db.query(Account).filter(Account.id == account_id).first()
-        if not account:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        account = ensure_account(db, account_id)
 
         if not path or not path.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A path is required")

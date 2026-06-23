@@ -2,7 +2,7 @@
 Remove member from access group endpoint (owner only).
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -20,7 +20,7 @@ async def remove_member(
 ):
     """Remove a member from the access group. Owner only."""
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         group = db.query(AccessGroup).filter(
             AccessGroup.id == group_id,

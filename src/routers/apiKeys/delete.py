@@ -2,7 +2,7 @@
 Revoke API key endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import ApiKey, ApiKeyStatus
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -21,7 +21,7 @@ async def revoke_api_key(
     Revoke an API key. Only the owner can revoke.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
         
         api_key = db.query(ApiKey).filter(
             ApiKey.id == key_id,

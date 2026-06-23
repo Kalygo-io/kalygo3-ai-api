@@ -8,8 +8,8 @@ companies and vice versa.
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
-from src.deps import db_dependency, auth_dependency
-from src.db.models import Company, CompanyContact, Contact, Account
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
+from src.db.models import Company, CompanyContact, Contact
 
 from src.routers.companies.models import (
     CompanyContactResponse,
@@ -31,7 +31,7 @@ async def list_company_contacts(
 ):
     """List all contacts associated with a given company."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         company = db.query(Company).filter(
             Company.id == company_id,
@@ -64,7 +64,7 @@ async def add_company_contact(
 ):
     """Associate a single contact with a company."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         company = db.query(Company).filter(
             Company.id == company_id,
@@ -117,7 +117,7 @@ async def bulk_add_company_contacts(
 ):
     """Associate multiple contacts with a company in one call, skipping duplicates."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         company = db.query(Company).filter(
             Company.id == company_id,
@@ -170,7 +170,7 @@ async def remove_company_contact(
 ):
     """Disassociate a contact from a company."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         company = db.query(Company).filter(
             Company.id == company_id,

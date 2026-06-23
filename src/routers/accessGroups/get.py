@@ -3,7 +3,7 @@ Get access group endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy import func as sa_func
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
 from .models import AccessGroupResponse
 from src.utils.errors import handle_db_error
@@ -25,7 +25,7 @@ async def get_access_group(
     Accessible by the group owner or any member.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         group = db.query(AccessGroup).filter(AccessGroup.id == group_id).first()
         if not group:

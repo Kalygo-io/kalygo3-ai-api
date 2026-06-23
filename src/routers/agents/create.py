@@ -2,8 +2,8 @@
 Create agent endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Agent, Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import Agent
 from src.schemas import validate_against_schema
 from jsonschema import ValidationError as JsonSchemaValidationError
 from .models import CreateAgentRequest, AgentResponse
@@ -35,14 +35,8 @@ async def create_agent(
     Supported model providers: openai, anthropic, google, ollama
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
 
         agent_name = request_body.name.strip()
         if not agent_name:

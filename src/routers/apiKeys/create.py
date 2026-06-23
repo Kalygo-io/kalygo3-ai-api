@@ -2,8 +2,8 @@
 Create API key endpoint.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import ApiKey, Account, ApiKeyStatus
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import ApiKey, ApiKeyStatus
 from src.utils.api_key_utils import generate_api_key
 from .models import CreateApiKeyRequest, CreateApiKeyResponse
 from src.utils.errors import handle_db_error
@@ -24,14 +24,8 @@ async def create_api_key(
     You must be authenticated via JWT to create API keys.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Generate key
         full_key, key_hash, key_prefix = generate_api_key()

@@ -4,7 +4,7 @@ Contact list members sub-router — add/remove/list contacts within a list.
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import ContactList, ContactListMember, Contact
 
 from src.routers.contact_lists.models import (
@@ -27,7 +27,7 @@ async def list_members(
 ):
     """List all contacts in a given contact list."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact_list = db.query(ContactList).filter(
             ContactList.id == list_id,
@@ -60,7 +60,7 @@ async def add_member(
 ):
     """Add a single contact to a contact list."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact_list = db.query(ContactList).filter(
             ContactList.id == list_id,
@@ -112,7 +112,7 @@ async def bulk_add_members(
 ):
     """Add multiple contacts to a list in one call, skipping duplicates."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact_list = db.query(ContactList).filter(
             ContactList.id == list_id,
@@ -165,7 +165,7 @@ async def remove_member(
 ):
     """Remove a contact from a contact list."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact_list = db.query(ContactList).filter(
             ContactList.id == list_id,

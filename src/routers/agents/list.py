@@ -7,8 +7,8 @@ with them via access groups.
 from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
 from sqlalchemy import or_
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Agent, Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import Agent
 from src.services.agent_access import get_accessible_agent_ids
 from .models import AgentResponse
 from src.utils.errors import handle_db_error
@@ -31,14 +31,8 @@ async def list_agents(
     so the UI can distinguish owned vs. shared agents.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # IDs the user can access via group grants (excludes owned)
         granted_ids = get_accessible_agent_ids(db, account_id)

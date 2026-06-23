@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, status, Request, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import VectorDbIngestionLog, Account, OperationType, OperationStatus
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import VectorDbIngestionLog, OperationType, OperationStatus
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -78,14 +78,8 @@ async def list_ingestion_logs(
     Results are paginated and ordered by created_at descending (newest first).
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Start with base query filtered by account_id
         query = db.query(VectorDbIngestionLog).filter(
@@ -235,14 +229,8 @@ async def get_ingestion_log(
     Only returns logs belonging to the authenticated user.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Query log by ID and account_id
         log = db.query(VectorDbIngestionLog).filter(
@@ -298,14 +286,8 @@ async def get_ingestion_logs_summary(
     Returns aggregated counts and totals for the authenticated user's logs.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Base query
         query = db.query(VectorDbIngestionLog).filter(

@@ -8,7 +8,7 @@ section on the contact detail page.
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import Company, CompanyContact, Contact
 
 from .models import AddCompanyToContactRequest, ContactCompanyResponse
@@ -60,7 +60,7 @@ async def list_contact_companies(
 ):
     """List all companies a given contact is associated with."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact = db.query(Contact).filter(
             Contact.id == contact_id,
@@ -94,7 +94,7 @@ async def add_contact_company(
 ):
     """Associate a contact with a company."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact = db.query(Contact).filter(
             Contact.id == contact_id,
@@ -148,7 +148,7 @@ async def remove_contact_company(
 ):
     """Disassociate a contact from a company."""
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         contact = db.query(Contact).filter(
             Contact.id == contact_id,

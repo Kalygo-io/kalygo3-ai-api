@@ -4,7 +4,8 @@ List email events endpoint — with filters suited for a metrics dashboard.
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Request, Query
-from src.deps import db_dependency, auth_dependency
+from sqlalchemy import func as sqlfunc
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import EmailEvent
 
 from .models import EmailEventResponse, EmailEventStatsResponse
@@ -40,7 +41,7 @@ async def list_email_events(
     provider, date range, or recipient address.
     """
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         query = db.query(EmailEvent).filter(EmailEvent.account_id == account_id)
 
@@ -110,9 +111,7 @@ async def get_email_event_stats(
     Useful for summary cards on the email metrics dashboard.
     """
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
-
-        from sqlalchemy import func as sqlfunc
+        account_id = account_id_from_claims(auth)
 
         query = db.query(
             EmailEvent.event_type,

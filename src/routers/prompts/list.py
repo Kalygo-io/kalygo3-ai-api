@@ -3,8 +3,8 @@ List prompts endpoint.
 """
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Prompt, Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import Prompt
 
 from .models import PromptResponse
 from src.utils.errors import handle_db_error
@@ -25,14 +25,8 @@ async def list_prompts(
     Returns prompts ordered by most recently updated first.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         prompts = db.query(Prompt).filter(
             Prompt.account_id == account_id

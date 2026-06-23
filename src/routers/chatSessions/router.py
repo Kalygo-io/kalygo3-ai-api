@@ -2,7 +2,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import ChatSession, ChatMessage, Contact
 from src.services.agent_access import can_access_agent
 import uuid
@@ -72,7 +72,7 @@ async def create_session(
 ):
     """Create a new chat session"""
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         # Verify the caller can access the requested agent
         if sessionData.agentId and not can_access_agent(db, account_id, sessionData.agentId):

@@ -3,8 +3,8 @@ Get credential by service name endpoint (legacy).
 """
 import logging
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Credential, Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
+from src.db.models import Credential
 from src.db.service_name import ServiceName
 from .encryption import get_credential_value
 from .models import CredentialDetailResponse
@@ -31,14 +31,8 @@ async def get_credential_by_service(
     For full credential data, use GET /service/{service_name}/full
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
 
         credential = db.query(Credential).filter(
             Credential.account_id == account_id,

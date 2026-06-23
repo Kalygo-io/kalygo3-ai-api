@@ -3,7 +3,7 @@ Bulk-create email events endpoint — for ingesting webhook payloads.
 """
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import EmailEvent
 
 from .models import BulkCreateEmailEventsRequest, EmailEventResponse
@@ -26,7 +26,7 @@ async def bulk_create_email_events(
     All events are written atomically — if any fail the whole batch is rolled back.
     """
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         if not request_body.events:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="events list cannot be empty")

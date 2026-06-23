@@ -1,8 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
-from src.deps import db_dependency, jwt_dependency
-from src.db.models import Account
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, detach_payment_method
 import stripe
 
@@ -29,14 +28,8 @@ async def get_user_payment_methods(
     """
     try:
         # Get the account from the database using the JWT account_id
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Check if the account has a Stripe customer ID
         if not account.stripe_customer_id:
@@ -74,14 +67,8 @@ async def add_payment_method(
     """
     try:
         # Get the account from the database using the JWT account_id
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Check if the account has a Stripe customer ID, create one if not
         if not account.stripe_customer_id:
@@ -132,14 +119,8 @@ async def delete_payment_method(
     """
     try:
         # Get the account from the database using the JWT account_id
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-        
-        if not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Account not found"
-            )
+        account_id = account_id_from_claims(jwt)
+        account = ensure_account(db, account_id)
         
         # Check if the account has a Stripe customer ID
         if not account.stripe_customer_id:

@@ -19,33 +19,14 @@ from src.deps import db_dependency, auth_dependency
 from src.db.models import PendingToolApproval, Credential, EmailEvent, EmailTemplate
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
+from .email_html import inject_tracking_pixel, strip_html_tags
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-import os as _os
 import re as _re
 import uuid as _uuid
-
-_TRACKING_BASE_URL = _os.getenv("TRACKING_BASE_URL", "http://127.0.0.1:4000")
-
-def _inject_tracking_pixel(html: str, tracking_id: str) -> str:
-    """Inject a 1×1 invisible open-tracking pixel just before </body>."""
-    pixel = (
-        f'<img src="{_TRACKING_BASE_URL}/t/o/{tracking_id}" '
-        f'width="1" height="1" style="display:none;border:0;" alt="" />'
-    )
-    if "</body>" in html.lower():
-        return _re.sub(r'</body>', f'{pixel}\n</body>', html, count=1, flags=_re.IGNORECASE)
-    return html + pixel
-
-def _strip_html_tags(html: str) -> str:
-    """Strip HTML tags and collapse whitespace for a plain-text fallback."""
-    text = _re.sub(r"<(br\s*/?|/?(p|div|tr|li|h[1-6])[^>]*)>", "\n", html, flags=_re.IGNORECASE)
-    text = _re.sub(r"<[^>]+>", "", text)
-    text = _re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
 
 def _record_send_event(
     db,
@@ -105,7 +86,7 @@ def _send_ses_html_email(ses_cfg: dict, to_email: str, subject: str, html_body: 
     Returns the SES MessageId."""
     import boto3
 
-    plain_fallback = _strip_html_tags(html_body)
+    plain_fallback = strip_html_tags(html_body)
     client = boto3.client(
         "ses",
         region_name=ses_cfg["aws_region"],
@@ -327,7 +308,7 @@ async def approve_tool_approval(
         # same identifier stored in event_metadata.
         existing = _re.search(r"/t/r/([0-9a-f\-]{36})/", body)
         tracking_id = existing.group(1) if existing else str(_uuid.uuid4())
-        body = _inject_tracking_pixel(body, tracking_id)
+        body = inject_tracking_pixel(body, tracking_id)
 
     try:
         message_id = provider_cfg["send"](cred_data, to_email, subject, body)

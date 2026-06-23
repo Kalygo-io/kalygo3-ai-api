@@ -3,7 +3,7 @@ List members of an access group endpoint (owner or member).
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember, Account
 from .models import AccessGroupMemberResponse
 from src.utils.errors import handle_db_error
@@ -25,7 +25,7 @@ async def list_members(
     Accessible by the group owner or any member of the group.
     """
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         group = db.query(AccessGroup).filter(AccessGroup.id == group_id).first()
         if not group:

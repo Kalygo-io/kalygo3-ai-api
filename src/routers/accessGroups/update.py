@@ -2,7 +2,7 @@
 Update access group endpoint (owner only).
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup
 from .models import UpdateAccessGroupRequest, AccessGroupResponse
 from src.utils.errors import handle_db_error
@@ -21,7 +21,7 @@ async def update_access_group(
 ):
     """Update an access group's name. Owner only."""
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         group = db.query(AccessGroup).filter(
             AccessGroup.id == group_id,

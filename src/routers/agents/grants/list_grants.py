@@ -3,7 +3,7 @@ List access grants for an agent (agent owner only).
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
-from src.deps import db_dependency, jwt_dependency
+from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Agent, AccessGroup, AgentAccessGrant
 from .models import AgentAccessGrantResponse
 from src.utils.errors import handle_db_error
@@ -21,7 +21,7 @@ async def list_grants(
 ):
     """List all access groups that have been granted access to this agent. Agent owner only."""
     try:
-        account_id = int(jwt['id']) if isinstance(jwt['id'], str) else jwt['id']
+        account_id = account_id_from_claims(jwt)
 
         # Verify agent ownership
         agent = db.query(Agent).filter(

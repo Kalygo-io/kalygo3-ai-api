@@ -146,3 +146,24 @@ async def get_current_user_or_api_key(
 
 
 auth_dependency = Annotated[dict, Depends(get_current_user_or_api_key)]
+
+
+def account_id_from_claims(claims: dict) -> int:
+    """Return the integer account id from a JWT / API-key claims dict.
+
+    The ``id`` field may arrive as a string (raw JWT payload) or an int
+    (already-coerced unified auth / API-key path); normalize to int.
+    """
+    account_id = claims['id']
+    return int(account_id) if isinstance(account_id, str) else account_id
+
+
+def ensure_account(db: Session, account_id: int) -> Account:
+    """Fetch an account by id, raising 404 if it does not exist."""
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found",
+        )
+    return account

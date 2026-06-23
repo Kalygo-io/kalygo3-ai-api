@@ -3,7 +3,7 @@ Update email event endpoint.
 Only event_metadata is mutable — event_type, provider, and timestamps are immutable.
 """
 from fastapi import APIRouter, HTTPException, status, Request
-from src.deps import db_dependency, auth_dependency
+from src.deps import db_dependency, auth_dependency, account_id_from_claims
 from src.db.models import EmailEvent
 
 from .models import UpdateEmailEventRequest, EmailEventResponse
@@ -27,7 +27,7 @@ async def update_email_event(
     (e.g. attaching a bounce subtype received from a delayed webhook).
     """
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
+        account_id = account_id_from_claims(auth)
 
         event = db.query(EmailEvent).filter(
             EmailEvent.id == event_id,

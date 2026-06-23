@@ -3,8 +3,8 @@ List deals endpoint (account-scoped, server-side paginated).
 """
 from fastapi import APIRouter, HTTPException, status, Request, Query
 from sqlalchemy.orm import joinedload
-from src.deps import db_dependency, auth_dependency
-from src.db.models import Deal, Account
+from src.deps import db_dependency, auth_dependency, account_id_from_claims, ensure_account
+from src.db.models import Deal
 
 from .models import DealListResponse
 from src.utils.errors import handle_db_error
@@ -33,11 +33,8 @@ async def list_deals(
     ({deals, total, limit, offset, has_more}).
     """
     try:
-        account_id = int(auth['id']) if isinstance(auth['id'], str) else auth['id']
-        account = db.query(Account).filter(Account.id == account_id).first()
-
-        if not account:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        account_id = account_id_from_claims(auth)
+        account = ensure_account(db, account_id)
 
         # Eager-load the contact so DealResponse.contact_name doesn't N+1.
         query = (
