@@ -113,19 +113,6 @@ class UsageCredits(Base):
     def __repr__(self):
         return f'<UsageCredits {self.account_id}: ${self.amount}>'
 
-class CredentialType(str, Enum):
-    """
-    Types of credentials that can be stored.
-    This determines the expected structure of encrypted_data.
-    """
-    API_KEY = "api_key"
-    DB_CONNECTION = "db_connection"
-    OAUTH = "oauth"
-    SSH_KEY = "ssh_key"
-    CERTIFICATE = "certificate"
-    AWS_ACCESS_KEY_PAIR = "aws_access_key_pair"
-
-
 class Credential(Base):
     """
     Stores encrypted credentials for third-party services.

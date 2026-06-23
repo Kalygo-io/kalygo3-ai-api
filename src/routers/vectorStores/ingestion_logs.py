@@ -8,7 +8,6 @@ from typing import Optional, List
 from datetime import datetime
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import VectorDbIngestionLog, Account, OperationType, OperationStatus
-from sqlalchemy import and_, or_
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 

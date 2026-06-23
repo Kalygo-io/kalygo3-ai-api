@@ -9,7 +9,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
 from src.deps import db_dependency, auth_dependency
-from src.db.models import Company, CompanyContact, Contact, Account
+from src.db.models import Company, CompanyContact, Contact
 
 from .models import AddCompanyToContactRequest, ContactCompanyResponse
 from src.routers.companies.models import CompanySummaryResponse

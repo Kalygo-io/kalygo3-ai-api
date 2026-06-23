@@ -107,8 +107,7 @@ async def get_current_user_or_api_key(
                 }
     except (JWTError, KeyError, ValueError) as e:
         logger.warning("[AUTH-UNIFIED] JWT decode failed: %s", e)
-        pass
-    
+
     api_key = None
     
     auth_header = request.headers.get("Authorization", "")

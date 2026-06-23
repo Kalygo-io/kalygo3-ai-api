@@ -167,7 +167,7 @@ app.include_router(
 )
 
 app.include_router(
-    similaritySearch.router,  # pyright: ignore[reportUndefinedVariable]
+    similaritySearch.router,
     prefix="/api/similarity-search",
     tags=['Similarity Search'],
 )

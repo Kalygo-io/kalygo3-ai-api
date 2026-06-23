@@ -4,7 +4,6 @@ JSON Schema validation utilities for the Kalygo platform.
 import json
 from pathlib import Path
 from typing import Dict, Any
-import jsonschema
 from jsonschema import ValidationError, Draft202012Validator, RefResolver
 
 

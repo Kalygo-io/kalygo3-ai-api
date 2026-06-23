@@ -1,7 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, func, Double
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String
 from .database import Base
-import datetime
 
 class Waitlist(Base):
     __tablename__ = 'waitlist'

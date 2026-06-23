@@ -224,6 +224,18 @@
           "type": "integer",
           "description": "Total number of chunks in the document",
           "minimum": 1
+        },
+        "storage_provider": {
+          "type": "string",
+          "description": "Object storage provider holding the original source document (e.g., 'gcs')"
+        },
+        "storage_bucket": {
+          "type": "string",
+          "description": "Storage bucket containing the original source document"
+        },
+        "storage_path": {
+          "type": "string",
+          "description": "Path / object key of the original source document within the bucket"
         }
       },
       "patternProperties": {
@@ -289,6 +301,18 @@
         "last_edited_at": {
           "type": "string",
           "description": "Last edit timestamp from CSV (optional)"
+        },
+        "storage_provider": {
+          "type": "string",
+          "description": "Object storage provider holding the original source document (e.g., 'gcs')"
+        },
+        "storage_bucket": {
+          "type": "string",
+          "description": "Storage bucket containing the original source document"
+        },
+        "storage_path": {
+          "type": "string",
+          "description": "Path / object key of the original source document within the bucket"
         }
       },
       "additionalProperties": false

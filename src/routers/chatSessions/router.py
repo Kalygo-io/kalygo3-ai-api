@@ -60,18 +60,6 @@ class ChatSessionWithMessagesResponse(BaseModel):
         from_attributes = True
         alias_generator = to_camel
 
-class ChatMessageCreateRequest(BaseModel):
-    message: dict
-
-class ChatMessageDetailResponse(BaseModel):
-    id: int
-    message: dict
-    session_id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 # CRUD Operations for ChatSession
 
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
@@ -213,11 +201,6 @@ async def get_session(
         messages = db.query(ChatMessage).filter(
             ChatMessage.chat_session_id == session.id
         ).order_by(ChatMessage.created_at.asc()).all()
-
-        # Convert message fields to camelCase for each message
-        def to_camel(s: str) -> str:
-            parts = s.split('_')
-            return parts[0] + ''.join(p.title() for p in parts[1:])
 
         def _normalize_content(content) -> str:
             """Coerce Anthropic-style content block lists to a plain string."""

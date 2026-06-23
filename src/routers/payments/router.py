@@ -1,10 +1,9 @@
 import logging
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
-from typing import Optional
 from src.deps import db_dependency, jwt_dependency
 from src.db.models import Account
-from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, create_payment_method_from_card, detach_payment_method
+from src.clients.stripe_client import get_payment_methods, attach_payment_method, create_stripe_customer, detach_payment_method
 import stripe
 
 from src.utils.errors import handle_db_error
@@ -16,14 +15,6 @@ router = APIRouter()
 
 class AddPaymentMethodRequest(BaseModel):
     payment_method_id: str
-
-class CreatePaymentMethodRequest(BaseModel):
-    card_number: str
-    exp_month: int
-    exp_year: int
-    cvv: str
-    cardholder_name: Optional[str] = None
-    billing_zip: Optional[str] = None
 
 @router.get("/payment-methods")
 @limiter.limit("30/minute")

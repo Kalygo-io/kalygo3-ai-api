@@ -87,12 +87,6 @@ def _build_storage_client(service_account_json: Dict[str, Any]) -> storage.Clien
     return storage.Client(credentials=credentials, project=project)
 
 
-def get_account_bucket_name(db: Session, account_id: int) -> str:
-    """Return the configured bucket name for an account (raises if missing)."""
-    _, bucket_name = _resolve_account_gcs_config(db, account_id)
-    return bucket_name
-
-
 def upload_bytes(
     db: Session,
     account_id: int,

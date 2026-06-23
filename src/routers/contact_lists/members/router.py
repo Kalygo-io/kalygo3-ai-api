@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
 from src.deps import db_dependency, auth_dependency
-from src.db.models import ContactList, ContactListMember, Contact, Account
+from src.db.models import ContactList, ContactListMember, Contact
 
 from src.routers.contact_lists.models import (
     ContactListMemberResponse,

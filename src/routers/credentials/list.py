@@ -1,7 +1,6 @@
 """
 List credentials endpoint.
 """
-import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency
@@ -9,8 +8,6 @@ from src.db.models import Credential, Account
 from .models import CredentialResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
