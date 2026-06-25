@@ -3,7 +3,7 @@ import hashlib
 import random
 import uuid
 from fastapi import APIRouter, HTTPException, status, Header, Response, BackgroundTasks, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from jose import jwt
 import os
 from src.db.models import Account, UsageCredits
@@ -22,8 +22,17 @@ router = APIRouter()
 SECRET_KEY = os.getenv("AUTH_SECRET_KEY")
 ALGORITHM = os.getenv("AUTH_ALGORITHM")
 
+def _canonical_email(v: str) -> str:
+    """Canonical email form used for storage and lookups (lowercase + trimmed)."""
+    return v.strip().lower()
+
 class RequestPasswordResetBody(BaseModel):
     email: str
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        return _canonical_email(v)
 
 class PasswordResetBody(BaseModel):
     accountId: int
@@ -36,9 +45,19 @@ class CurrentUserResponse(BaseModel):
 class RequestCodeBody(BaseModel):
     email: str
 
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        return _canonical_email(v)
+
 class VerifyCodeBody(BaseModel):
     email: str
     code: str
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        return _canonical_email(v)
 
 OTP_TTL_MINUTES = 10
 

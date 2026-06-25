@@ -1,7 +1,7 @@
 """
 Pydantic request/response models for access groups.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -19,6 +19,13 @@ class UpdateAccessGroupRequest(BaseModel):
 class AddMemberRequest(BaseModel):
     """Add a member by email address."""
     email: str = Field(..., min_length=1)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        # Match how accounts are stored (lowercased + trimmed) so member
+        # lookups don't silently miss on case/whitespace differences.
+        return v.strip().lower()
 
 
 # ── Responses ─────────────────────────────────────────────────────────
@@ -40,6 +47,16 @@ class AccessGroupMemberResponse(BaseModel):
     account_id: int
     email: str
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GroupAgentResponse(BaseModel):
+    """An agent that has been granted to the group."""
+    agent_id: int
+    agent_name: str
+    granted_at: datetime
 
     class Config:
         from_attributes = True
