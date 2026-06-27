@@ -2,7 +2,7 @@
 Pydantic models for the vectorStores router.
 """
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 
 # ── Index models ──────────────────────────────────────────────────────────────
@@ -50,3 +50,25 @@ class DeleteVectorsResponse(BaseModel):
     vectors_deleted: Optional[int] = None
     log_id: Optional[str] = None
     message: Optional[str] = None
+
+
+# ── Namespace files (per-file vector counts) ─────────────────────────────────
+
+class NamespaceFile(BaseModel):
+    filename: str
+    vector_count: int
+
+
+class NamespaceFilesResponse(BaseModel):
+    index_name: str
+    namespace: str
+    # Authoritative namespace total from describe_index_stats.
+    total_vectors: int
+    # How many vectors we actually read to build the breakdown.
+    scanned_vectors: int
+    # True if the namespace was larger than the scan cap (breakdown is partial
+    # or sourced from the ingestion log instead of a live scan).
+    truncated: bool
+    # 'pinecone' (live scan) or 'ingestion_log' (approximate fallback).
+    source: str
+    files: List[NamespaceFile]
