@@ -1,33 +1,31 @@
 import logging
-from datetime import datetime
-from src.services import fetch_embedding
-from pinecone import Pinecone
-import os
+
+from src.db.database import SessionLocal
 from src.db.models import Logins
-import hashlib
 
 logger = logging.getLogger(__name__)
 
 
-async def record_login(account_id: int, account_email: str, ip_address: str, db, token: str | None = None):
-    created_at = datetime.now()
-    log = f"{ip_address} {created_at}"
+def record_login(account_id: int, ip_address: str) -> None:
+    """
+    Persist a login event for an account.
 
-    embedding = await fetch_embedding(token, log)
+    Runs as a FastAPI background task (after the response is sent), so it must
+    NOT reuse the request's DB session — that session is already closed by the
+    time this runs. It opens and closes its own short-lived session instead.
 
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    index = pc.Index(os.getenv("PINECONE_ALL_MINILM_L6_V2_INDEX"))
-
-    db.add(Logins(account_id=account_id, ip_address=ip_address))
-    db.commit()
-
-    index.upsert(
-        vectors=[
-            {
-                "id": hashlib.sha1(log.encode('utf-8')).hexdigest(),
-                "values": embedding,
-                "metadata": {"email": account_email, "ip_address": ip_address, "created_at": created_at}
-            },
-        ],
-        namespace='logins'
-    )
+    Failures are logged and swallowed: recording a login is best-effort and
+    must never surface as an error to a user who has already authenticated.
+    """
+    db = None
+    try:
+        db = SessionLocal()
+        db.add(Logins(account_id=account_id, ip_address=ip_address))
+        db.commit()
+    except Exception:
+        if db is not None:
+            db.rollback()
+        logger.exception("Failed to record login for account_id=%s", account_id)
+    finally:
+        if db is not None:
+            db.close()

@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator
 from jose import jwt
 import os
 from src.db.models import Account, UsageCredits
-from src.routers.auth.background_tasks import record_login
+from src.routers.auth.background_tasks.record_login import record_login
 from src.routers.auth.background_tasks.send_reset_password_link_email_ses import send_reset_password_link_email_ses
 from src.routers.auth.background_tasks.send_password_has_been_reset_email_ses import send_password_has_been_reset_email_ses
 from src.routers.auth.background_tasks.send_login_code_email_ses import send_login_code_email_ses
@@ -224,7 +224,7 @@ async def verify_login_code(body: VerifyCodeBody, db: db_dependency, request: Re
 
     ip_address = request.client.host
     token = create_access_token(account.email, account.id, timedelta(days=7))
-    background_tasks.add_task(record_login, account.id, account.email, ip_address, db, token)
+    background_tasks.add_task(record_login, account.id, ip_address)
 
     response = Response()
     return _issue_jwt_cookie(response, token)
