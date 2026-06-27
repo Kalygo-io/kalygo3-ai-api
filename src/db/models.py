@@ -49,8 +49,7 @@ class Logins(Base):
     account_id = Column(Integer, ForeignKey('accounts.id'))
     created_at = Column(DateTime(timezone=True), default=func.now())
     ip_address = Column(String, nullable=False)
-    similarity_score = Column(Double, default=False)
-    
+
     account = relationship('Account', back_populates='logins')
     
     def __repr__(self):

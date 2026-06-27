@@ -22,7 +22,6 @@ def get_logins(db: db_dependency, jwt: jwt_dependency, request: Request, cursor:
             'account_id': r.account_id,
             'ip_address': r.ip_address,
             'created_at': r.created_at,
-            'similarity_score': r.similarity_score
         } for r in results]
 
         return {
