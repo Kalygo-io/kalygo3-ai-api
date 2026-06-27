@@ -33,20 +33,21 @@ async def get_access_group(
 
         # Owner or member?
         is_owner = group.owner_account_id == account_id
-        is_member = False
+        member_row = None
         if not is_owner:
-            is_member = (
+            member_row = (
                 db.query(AccessGroupMember)
                 .filter(
                     AccessGroupMember.access_group_id == group_id,
                     AccessGroupMember.account_id == account_id,
                 )
                 .first()
-                is not None
             )
 
-        if not is_owner and not is_member:
+        if not is_owner and member_row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
+
+        my_role = "owner" if is_owner else member_row.role
 
         member_count = (
             db.query(sa_func.count(AccessGroupMember.id))
@@ -61,6 +62,7 @@ async def get_access_group(
             created_at=group.created_at,
             updated_at=group.updated_at,
             member_count=member_count,
+            my_role=my_role,
         )
     except HTTPException:
         raise

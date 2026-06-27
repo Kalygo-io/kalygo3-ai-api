@@ -350,12 +350,16 @@ class AccessGroupMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
     account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    # 'admin' members can co-manage the group (add/remove members, rename, manage grants);
+    # 'member' is a plain member. The group owner is tracked separately on AccessGroup and
+    # is never an access_group_members row.
+    role = Column(String(50), nullable=False, server_default='member')
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
+
     __table_args__ = (
         UniqueConstraint('access_group_id', 'account_id', name='uq_access_group_members_group_account'),
     )
-    
+
     group = relationship('AccessGroup', back_populates='members')
     account = relationship('Account', back_populates='group_memberships')
     

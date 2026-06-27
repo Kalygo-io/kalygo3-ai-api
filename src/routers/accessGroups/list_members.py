@@ -60,6 +60,7 @@ async def list_members(
                 id=member.id,
                 account_id=member.account_id,
                 email=email,
+                role=member.role,
                 created_at=member.created_at,
             )
             for member, email in rows

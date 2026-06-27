@@ -4,6 +4,7 @@ Remove member from access group endpoint (owner only).
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
+from src.services.access_group_roles import is_group_manager, is_group_owner, ADMIN_ROLE
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -22,12 +23,11 @@ async def remove_member(
     try:
         account_id = account_id_from_claims(jwt)
 
-        group = db.query(AccessGroup).filter(
-            AccessGroup.id == group_id,
-            AccessGroup.owner_account_id == account_id,
-        ).first()
+        group = db.query(AccessGroup).filter(AccessGroup.id == group_id).first()
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
+        if not is_group_manager(db, group, account_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to manage this group")
 
         member = db.query(AccessGroupMember).filter(
             AccessGroupMember.access_group_id == group_id,
@@ -35,6 +35,10 @@ async def remove_member(
         ).first()
         if not member:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found in this group")
+
+        # Removing an admin is owner-only (admins can only remove regular members).
+        if member.role == ADMIN_ROLE and not is_group_owner(group, account_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the group owner can remove an admin")
 
         db.delete(member)
         db.commit()

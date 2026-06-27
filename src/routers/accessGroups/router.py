@@ -11,6 +11,7 @@ from .add_member import router as add_member_router
 from .remove_member import router as remove_member_router
 from .list_members import router as list_members_router
 from .list_group_agents import router as list_group_agents_router
+from .update_member_role import router as update_member_role_router
 
 router = APIRouter()
 
@@ -23,3 +24,4 @@ router.include_router(add_member_router)
 router.include_router(remove_member_router)
 router.include_router(list_members_router)
 router.include_router(list_group_agents_router)
+router.include_router(update_member_role_router)

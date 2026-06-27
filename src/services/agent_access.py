@@ -2,7 +2,18 @@
 Centralized agent access control.
 
 Single source of truth for "can this account access this agent?"
-Used by ai-api routes and completion-api. If rules change, update here only.
+
+CANONICAL FILE. This module is mirrored byte-for-byte into kalygo3-agent-api
+(src/services/agent_access.py). The ai-api copy is canonical; the agent-api copy
+is kept in sync by the repo-root scripts (schema-files.sh / check-schemas.sh /
+sync-schemas.sh). Edit the ai-api copy, then run ./sync-schemas.sh. Do not edit
+the two copies independently.
+
+Access rule:
+  An account can access an agent if EITHER
+    1. it owns the agent (agent.account_id == account_id), OR
+    2. it is a member of at least one access group that has been granted
+       access to the agent.
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import exists, and_
@@ -13,10 +24,8 @@ def can_access_agent(db: Session, account_id: int, agent_id: int) -> bool:
     """
     Return True if the account can view/use the agent.
 
-    Access rule:
-      1. Account owns the agent, OR
-      2. Account is a member of at least one access group that has been
-         granted access to the agent.
+    At most two fast, index-friendly queries: a PK lookup for ownership, then
+    (if not owner) a single indexed EXISTS for a group grant + membership.
     """
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -58,25 +67,27 @@ def get_accessible_agent_ids(db: Session, account_id: int) -> set:
     return {r[0] for r in rows}
 
 
-def load_agent_with_access_check(db: Session, account_id: int, agent_id: int):
+def load_agent_with_access_check(
+    db: Session,
+    account_id: int,
+    agent_id: int,
+) -> "Agent | None":
     """
-    Load an agent only if the account is allowed to access it.
+    Load and return the agent if *account_id* has access, else None.
 
-    Returns the Agent instance when the account owns it or has been granted
-    access via an access group (see ``can_access_agent``); returns None when the
-    agent does not exist or access is denied. This keeps the access decision and
-    the load in a single call so callers cannot accidentally use an agent they
-    were not authorized to see.
+    Convenience wrapper so the completion flow can get the Agent object and do
+    the access check in one call without running the agent lookup twice. Applies
+    the exact same rule as can_access_agent.
     """
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
-    if not agent:
+    if agent is None:
         return None
 
-    # Owner always has access
+    # Owner short-circuit
     if agent.account_id == account_id:
         return agent
 
-    # Check group-based access (single indexed query)
+    # Group grant check (single indexed query)
     grant_exists = db.query(
         exists().where(
             and_(

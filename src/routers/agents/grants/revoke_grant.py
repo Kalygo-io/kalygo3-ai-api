@@ -3,7 +3,8 @@ Revoke an access group's permission to use an agent (agent owner only).
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Agent, AgentAccessGrant
+from src.db.models import Agent, AccessGroup, AgentAccessGrant
+from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -18,17 +19,24 @@ async def revoke_grant(
     jwt: jwt_dependency,
     request: Request,
 ):
-    """Revoke an access group's permission to use this agent. Agent owner only."""
+    """
+    Revoke an access group's permission to use this agent.
+
+    Allowed for the agent owner OR a manager (owner/admin) of the group — either
+    side of the grant can remove it.
+    """
     try:
         account_id = account_id_from_claims(jwt)
 
-        # Verify agent ownership
-        agent = db.query(Agent).filter(
-            Agent.id == agent_id,
-            Agent.account_id == account_id,
-        ).first()
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+        # Authorization: agent owner, or owner/admin of the group the agent is granted to.
+        if agent.account_id != account_id:
+            group = db.query(AccessGroup).filter(AccessGroup.id == access_group_id).first()
+            if not group or not is_group_manager(db, group, account_id):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to revoke this grant")
 
         grant = db.query(AgentAccessGrant).filter(
             AgentAccessGrant.agent_id == agent_id,

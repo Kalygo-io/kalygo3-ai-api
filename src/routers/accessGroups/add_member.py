@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember, Account
 from .models import AddMemberRequest, AccessGroupMemberResponse
+from src.services.access_group_roles import is_group_manager, MEMBER_ROLE
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -30,12 +31,11 @@ async def add_member(
     try:
         account_id = account_id_from_claims(jwt)
 
-        group = db.query(AccessGroup).filter(
-            AccessGroup.id == group_id,
-            AccessGroup.owner_account_id == account_id,
-        ).first()
+        group = db.query(AccessGroup).filter(AccessGroup.id == group_id).first()
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
+        if not is_group_manager(db, group, account_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to manage this group")
 
         # Resolve target account by email
         target_account = db.query(Account).filter(Account.email == body.email).first()
@@ -53,6 +53,7 @@ async def add_member(
         member = AccessGroupMember(
             access_group_id=group_id,
             account_id=target_account.id,
+            role=MEMBER_ROLE,
         )
         db.add(member)
         db.commit()
@@ -62,6 +63,7 @@ async def add_member(
             id=member.id,
             account_id=target_account.id,
             email=target_account.email,
+            role=member.role,
             created_at=member.created_at,
         )
     except HTTPException:

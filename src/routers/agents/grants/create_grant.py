@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Agent, AccessGroup, AgentAccessGrant
 from .models import CreateGrantRequest, AgentAccessGrantResponse
+from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -36,13 +37,14 @@ async def create_grant(
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        # Verify access group exists and caller owns it (v1 restriction)
-        group = db.query(AccessGroup).filter(
-            AccessGroup.id == body.accessGroupId,
-            AccessGroup.owner_account_id == account_id,
-        ).first()
+        # Verify the access group exists and the caller can manage it (owner or admin).
+        # The caller must still own the agent (checked above) — you can only grant your
+        # own agents, but you may grant them to any group you own or co-administer.
+        group = db.query(AccessGroup).filter(AccessGroup.id == body.accessGroupId).first()
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
+        if not is_group_manager(db, group, account_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to manage this group")
 
         # Check for duplicate grant
         existing = db.query(AgentAccessGrant).filter(

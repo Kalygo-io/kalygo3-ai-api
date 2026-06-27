@@ -54,6 +54,13 @@ async def list_access_groups(
             .all()
         ) if groups else {}
 
+        # The caller's role in each group they belong to (for my_role gating).
+        my_member_roles = dict(
+            db.query(AccessGroupMember.access_group_id, AccessGroupMember.role)
+            .filter(AccessGroupMember.account_id == account_id)
+            .all()
+        )
+
         return [
             AccessGroupResponse(
                 id=g.id,
@@ -62,6 +69,11 @@ async def list_access_groups(
                 created_at=g.created_at,
                 updated_at=g.updated_at,
                 member_count=counts.get(g.id, 0),
+                my_role=(
+                    "owner"
+                    if g.owner_account_id == account_id
+                    else my_member_roles.get(g.id, "member")
+                ),
             )
             for g in groups
         ]

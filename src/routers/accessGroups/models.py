@@ -2,7 +2,7 @@
 Pydantic request/response models for access groups.
 """
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 
@@ -28,6 +28,11 @@ class AddMemberRequest(BaseModel):
         return v.strip().lower()
 
 
+class UpdateMemberRoleRequest(BaseModel):
+    """Promote/demote a member. Owner only."""
+    role: Literal["admin", "member"]
+
+
 # ── Responses ─────────────────────────────────────────────────────────
 
 class AccessGroupResponse(BaseModel):
@@ -37,6 +42,9 @@ class AccessGroupResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     member_count: Optional[int] = None
+    # The viewer's relationship to this group: 'owner' | 'admin' | 'member'.
+    # Lets the UI gate management controls without exposing account ids.
+    my_role: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +53,7 @@ class AccessGroupMemberResponse(BaseModel):
     id: int
     account_id: int
     email: str
+    role: str  # 'admin' | 'member'
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
