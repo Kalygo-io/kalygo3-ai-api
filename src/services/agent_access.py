@@ -56,3 +56,35 @@ def get_accessible_agent_ids(db: Session, account_id: int) -> set:
         .all()
     )
     return {r[0] for r in rows}
+
+
+def load_agent_with_access_check(db: Session, account_id: int, agent_id: int):
+    """
+    Load an agent only if the account is allowed to access it.
+
+    Returns the Agent instance when the account owns it or has been granted
+    access via an access group (see ``can_access_agent``); returns None when the
+    agent does not exist or access is denied. This keeps the access decision and
+    the load in a single call so callers cannot accidentally use an agent they
+    were not authorized to see.
+    """
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        return None
+
+    # Owner always has access
+    if agent.account_id == account_id:
+        return agent
+
+    # Check group-based access (single indexed query)
+    grant_exists = db.query(
+        exists().where(
+            and_(
+                AgentAccessGrant.agent_id == agent_id,
+                AgentAccessGrant.access_group_id == AccessGroupMember.access_group_id,
+                AccessGroupMember.account_id == account_id,
+            )
+        )
+    ).scalar()
+
+    return agent if grant_exists else None

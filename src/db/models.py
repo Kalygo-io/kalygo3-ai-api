@@ -17,6 +17,8 @@ class Account(Base):
     newsletter_subscribed = Column(Boolean, default=False, nullable=False)
     login_otp = Column(String, nullable=True)
     login_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     logins = relationship('Logins', back_populates='account')
     chat_sessions = relationship('ChatSession', back_populates='account')
