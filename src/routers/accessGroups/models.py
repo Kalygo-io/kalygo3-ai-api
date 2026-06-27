@@ -1,7 +1,7 @@
 """
 Pydantic request/response models for access groups.
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -38,8 +38,7 @@ class AccessGroupResponse(BaseModel):
     updated_at: datetime
     member_count: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AccessGroupMemberResponse(BaseModel):
@@ -48,8 +47,7 @@ class AccessGroupMemberResponse(BaseModel):
     email: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GroupAgentResponse(BaseModel):
@@ -58,5 +56,4 @@ class GroupAgentResponse(BaseModel):
     agent_name: str
     granted_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

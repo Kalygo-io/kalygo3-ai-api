@@ -1,7 +1,7 @@
 """
 Pydantic models for the companies router.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -36,8 +36,7 @@ class CompanyContactResponse(BaseModel):
     added_at: datetime
     contact: ContactSummaryResponse
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompanySummaryResponse(BaseModel):
@@ -54,8 +53,7 @@ class CompanySummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompanyResponse(BaseModel):
@@ -72,8 +70,7 @@ class CompanyResponse(BaseModel):
     updated_at: datetime
     contacts: List[CompanyContactResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompanyListResponse(BaseModel):

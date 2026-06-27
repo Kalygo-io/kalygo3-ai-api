@@ -1,7 +1,7 @@
 """
 Pydantic request/response models for agent access grants.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 
@@ -16,5 +16,4 @@ class AgentAccessGrantResponse(BaseModel):
     access_group_name: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

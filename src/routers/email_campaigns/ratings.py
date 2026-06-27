@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func as sql_func
 
 from src.deps import db_dependency, auth_dependency
@@ -31,8 +31,7 @@ class RatingResponse(BaseModel):
     rating: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RatingSummaryResponse(BaseModel):

@@ -1,7 +1,7 @@
 """
 Pydantic models for the contacts router.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -50,8 +50,7 @@ class ContactEventResponse(BaseModel):
     occurred_at: datetime
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContactResponse(BaseModel):
@@ -74,8 +73,7 @@ class ContactResponse(BaseModel):
     updated_at: datetime
     events: List[ContactEventResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContactSummaryResponse(BaseModel):
@@ -98,8 +96,7 @@ class ContactSummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContactListResponse(BaseModel):
@@ -159,5 +156,4 @@ class CareerTimelineResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

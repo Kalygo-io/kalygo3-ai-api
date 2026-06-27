@@ -6,7 +6,7 @@ remove the companies a contact is associated with.
 Kept in its own module (not contacts/models.py) to avoid a circular import:
 companies.models already imports from contacts.models.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -28,5 +28,4 @@ class ContactCompanyResponse(BaseModel):
     added_at: datetime
     company: CompanySummaryResponse
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

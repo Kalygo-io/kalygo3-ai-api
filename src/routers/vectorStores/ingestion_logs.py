@@ -3,7 +3,7 @@ Ingestion Logs router for reading VectorDbIngestionLog entries.
 Provides endpoints to query and filter vector database operation logs.
 """
 from fastapi import APIRouter, HTTPException, status, Request, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
@@ -32,8 +32,7 @@ class IngestionLogResponse(BaseModel):
     error_code: Optional[str] = None
     batch_number: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class IngestionLogsListResponse(BaseModel):
     """Response model for paginated ingestion logs list."""

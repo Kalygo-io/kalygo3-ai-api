@@ -1,7 +1,7 @@
 """
 Pydantic models for the email_events router.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
@@ -46,8 +46,7 @@ class EmailEventResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailEventStatsResponse(BaseModel):

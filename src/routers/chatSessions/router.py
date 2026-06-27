@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import ChatSession, ChatMessage, Contact
 from src.services.agent_access import can_access_agent
@@ -56,9 +56,7 @@ class ChatSessionWithMessagesResponse(BaseModel):
     contactId: Optional[int] = None
     messages: List[ChatMessageResponse] = []
 
-    class Config:
-        from_attributes = True
-        alias_generator = to_camel
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel)
 
 # CRUD Operations for ChatSession
 

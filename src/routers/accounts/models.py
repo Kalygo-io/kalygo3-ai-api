@@ -1,7 +1,7 @@
 """
 Shared Pydantic models for the accounts router.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 
@@ -12,8 +12,7 @@ class AccountResponse(BaseModel):
     newsletter_subscribed: bool
     stripe_customer_id: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateAccountRequest(BaseModel):
@@ -21,5 +20,4 @@ class UpdateAccountRequest(BaseModel):
     email: Optional[str] = None
     newsletter_subscribed: Optional[bool] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
