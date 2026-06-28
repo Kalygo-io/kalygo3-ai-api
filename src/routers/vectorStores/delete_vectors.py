@@ -10,6 +10,7 @@ from pinecone import Pinecone
 
 from .helpers import get_pinecone_api_key
 from .models import DeleteVectorsResponse
+from src.services.vector_store_access import authorize_vector_store
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -25,6 +26,7 @@ async def delete_vectors_in_namespace(
     db: db_dependency,
     jwt: jwt_dependency,
     request: Request,
+    owner_account_id: int | None = None,
 ):
     """
     Delete **all** vectors in a specific namespace of a Pinecone index.
@@ -33,7 +35,9 @@ async def delete_vectors_in_namespace(
     vector DB ingestion log with ``operation_type='DELETE'``.
     """
     try:
-        account_id = account_id_from_claims(jwt)
+        caller_account_id = account_id_from_claims(jwt)
+        # Deleting vectors is a write — resolve the KB owner and require write access.
+        account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=True)
         account = ensure_account(db, account_id)
 
         # Get Pinecone API key for this account
@@ -111,7 +115,7 @@ async def delete_vectors_in_namespace(
         # Attempt to log the failed operation
         try:
             ingestion_log = VectorDbIngestionLog(
-                account_id=account_id_from_claims(jwt),
+                account_id=account_id,
                 provider="pinecone",
                 index_name=index_name,
                 namespace=namespace,

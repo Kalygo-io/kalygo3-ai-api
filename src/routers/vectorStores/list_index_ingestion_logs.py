@@ -26,6 +26,7 @@ async def list_index_ingestion_logs(
     end_date: Optional[datetime] = Query(None, description="Filter logs created before this date (ISO format)"),
     limit: int = Query(50, ge=1, le=500, description="Number of logs to return"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
+    owner_account_id: Optional[int] = Query(None, description="Owner of a shared knowledge base whose logs to read"),
 ):
     """
     List ingestion logs for a specific index.
@@ -33,7 +34,7 @@ async def list_index_ingestion_logs(
     """
     # Import here to avoid circular imports
     from .ingestion_logs import list_ingestion_logs
-    
+
     return await list_ingestion_logs(
         db=db,
         jwt=jwt,
@@ -47,5 +48,6 @@ async def list_index_ingestion_logs(
         start_date=start_date,
         end_date=end_date,
         limit=limit,
-        offset=offset
+        offset=offset,
+        owner_account_id=owner_account_id,
     )

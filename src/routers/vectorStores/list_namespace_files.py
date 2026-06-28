@@ -27,6 +27,7 @@ from pinecone import Pinecone
 
 from src.db.models import VectorDbIngestionLog
 from src.deps import account_id_from_claims, db_dependency, ensure_account, jwt_dependency
+from src.services.vector_store_access import authorize_vector_store
 from src.rate_limit import limiter
 from src.utils.errors import handle_db_error
 from .helpers import get_pinecone_api_key
@@ -320,10 +321,13 @@ async def list_namespace_files(
     db: db_dependency,
     jwt: jwt_dependency,
     request: Request,
+    owner_account_id: int | None = None,
 ):
     """List the files in a namespace with per-file vector counts."""
     try:
-        account_id = account_id_from_claims(jwt)
+        caller_account_id = account_id_from_claims(jwt)
+        # Resolve the KB owner (self, or the owner of a shared KB). Read access.
+        account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=False)
         ensure_account(db, account_id)
         api_key = get_pinecone_api_key(db, account_id)
         pc = Pinecone(api_key=api_key)

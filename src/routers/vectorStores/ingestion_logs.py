@@ -8,6 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import VectorDbIngestionLog, OperationType, OperationStatus
+from src.services.vector_store_access import authorize_vector_store
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -61,6 +62,7 @@ async def list_ingestion_logs(
     # Pagination
     limit: int = Query(50, ge=1, le=500, description="Number of logs to return"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
+    owner_account_id: Optional[int] = Query(None, description="Owner of a shared knowledge base whose logs to read (requires index_name and a grant)"),
 ):
     """
     List ingestion logs for the authenticated user with optional filtering.
@@ -77,9 +79,23 @@ async def list_ingestion_logs(
     Results are paginated and ordered by created_at descending (newest first).
     """
     try:
-        account_id = account_id_from_claims(jwt)
+        caller_account_id = account_id_from_claims(jwt)
+        if owner_account_id is not None and owner_account_id != caller_account_id:
+            # Reading a shared knowledge base's logs. Only allowed for a specific
+            # index the caller has been granted (authorize verifies the grant), and
+            # the query below is pinned to that index so nothing else leaks.
+            if not index_name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="index_name is required when reading a shared knowledge base's logs",
+                )
+            account_id = authorize_vector_store(
+                db, caller_account_id, index_name, owner_account_id, require_write=False
+            )
+        else:
+            account_id = caller_account_id
         account = ensure_account(db, account_id)
-        
+
         # Start with base query filtered by account_id
         query = db.query(VectorDbIngestionLog).filter(
             VectorDbIngestionLog.account_id == account_id

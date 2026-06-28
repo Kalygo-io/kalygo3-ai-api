@@ -13,8 +13,11 @@ from .delete_file_vectors import router as delete_file_vectors_router
 from .list_index_ingestion_logs import router as list_index_ingestion_logs_router
 from .ingestion_logs import router as ingestion_logs_router
 from .upload import router as upload_router
+from .grants.router import router as grants_router
 
 router = APIRouter()
+
+router.include_router(grants_router)
 
 router.include_router(list_indexes_router)
 router.include_router(create_index_router)

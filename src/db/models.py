@@ -335,7 +335,8 @@ class AccessGroup(Base):
     owner = relationship('Account', back_populates='access_groups')
     members = relationship('AccessGroupMember', back_populates='group', cascade='all, delete-orphan')
     agent_grants = relationship('AgentAccessGrant', back_populates='access_group', cascade='all, delete-orphan')
-    
+    vector_store_grants = relationship('VectorStoreAccessGrant', back_populates='access_group', cascade='all, delete-orphan')
+
     def __repr__(self):
         return f'<AccessGroup {self.id}: {self.name}>'
 
@@ -385,9 +386,42 @@ class AgentAccessGrant(Base):
     
     agent = relationship('Agent', back_populates='access_grants')
     access_group = relationship('AccessGroup', back_populates='agent_grants')
-    
+
     def __repr__(self):
         return f'<AgentAccessGrant agent={self.agent_id} group={self.access_group_id}>'
+
+
+class VectorStoreAccessGrant(Base):
+    """
+    Grants an access group permission to a knowledge base.
+
+    A knowledge base has no row of its own — it is a free-form Pinecone index
+    reachable only by the owner's Pinecone API key — so the grant is keyed by the
+    index's natural identity (owner_account_id + index_name) rather than a FK to a
+    row. Access derived from a grant always runs against the OWNER's Pinecone key,
+    GCS bucket, and ingestion log.
+
+    Permission level comes from the member's role in the granted access group:
+      - any member  -> read (view index, namespaces, files, logs)
+      - owner/admin -> write (create namespace, ingest, delete vectors)
+    Only the index owner can create/revoke grants.
+    """
+    __tablename__ = 'vector_store_access_grants'
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    index_name = Column(String, nullable=False, index=True)
+    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('owner_account_id', 'index_name', 'access_group_id', name='uq_vector_store_access_grants_owner_index_group'),
+    )
+
+    access_group = relationship('AccessGroup', back_populates='vector_store_grants')
+
+    def __repr__(self):
+        return f'<VectorStoreAccessGrant owner={self.owner_account_id} index={self.index_name} group={self.access_group_id}>'
 
 
 class Company(Base):

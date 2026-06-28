@@ -9,6 +9,7 @@ from pinecone import Pinecone
 
 from .helpers import get_pinecone_api_key
 from .models import CreateNamespaceRequest, NamespaceResponse
+from src.services.vector_store_access import authorize_vector_store
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -23,7 +24,8 @@ async def create_namespace(
     request_body: CreateNamespaceRequest,
     db: db_dependency,
     jwt: jwt_dependency,
-    request: Request
+    request: Request,
+    owner_account_id: int | None = None,
 ):
     """
     Create a new namespace within a specific Pinecone index.
@@ -35,9 +37,12 @@ async def create_namespace(
     try:
         logger.info("Creating namespace '%s' for index '%s'", request_body.namespace, index_name)
 
-        account_id = account_id_from_claims(jwt)
+        caller_account_id = account_id_from_claims(jwt)
+        # Resolve the knowledge base's owner (self, or the owner of a shared KB the
+        # caller may write to). Ingesting/editing requires write access.
+        account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=True)
         account = ensure_account(db, account_id)
-        
+
         # Get Pinecone API key
         api_key = get_pinecone_api_key(db, account_id)
         

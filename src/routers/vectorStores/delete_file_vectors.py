@@ -19,6 +19,7 @@ from src.utils.errors import handle_db_error
 from .helpers import get_pinecone_api_key
 from .list_namespace_files import SCAN_CAP, collect_ids_for_filename
 from .models import DeleteFileVectorsResponse
+from src.services.vector_store_access import authorize_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ async def delete_file_vectors_in_namespace(
     jwt: jwt_dependency,
     request: Request,
     filename: str = Query(..., description="Source filename whose vectors to delete"),
+    owner_account_id: int | None = None,
 ):
     """
     Delete every vector in ``namespace`` whose source filename is ``filename``.
@@ -50,7 +52,9 @@ async def delete_file_vectors_in_namespace(
     whole-namespace reset.
     """
     try:
-        account_id = account_id_from_claims(jwt)
+        caller_account_id = account_id_from_claims(jwt)
+        # Deleting a file's vectors is a write — resolve the KB owner, require write.
+        account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=True)
         ensure_account(db, account_id)
 
         api_key = get_pinecone_api_key(db, account_id)
@@ -155,7 +159,7 @@ async def delete_file_vectors_in_namespace(
 
         try:
             ingestion_log = VectorDbIngestionLog(
-                account_id=account_id_from_claims(jwt),
+                account_id=account_id,
                 provider="pinecone",
                 index_name=index_name,
                 namespace=namespace,
