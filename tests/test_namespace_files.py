@@ -105,11 +105,12 @@ async def test_live_scan_groups_by_filename(authed_client, monkeypatch):
     assert body["total_vectors"] == 4
     assert body["scanned_vectors"] == 4
     assert body["truncated"] is False
-    # Sorted by count desc, then filename asc.
+    # Sorted by count desc, then filename asc. The fake vectors carry no
+    # upload metadata, so uploaded_at/uploaded_by are None.
     assert body["files"] == [
-        {"filename": "a.md", "vector_count": 2},
-        {"filename": NO_FILENAME, "vector_count": 1},
-        {"filename": "b.csv", "vector_count": 1},
+        {"filename": "a.md", "vector_count": 2, "uploaded_at": None, "uploaded_by": None},
+        {"filename": NO_FILENAME, "vector_count": 1, "uploaded_at": None, "uploaded_by": None},
+        {"filename": "b.csv", "vector_count": 1, "uploaded_at": None, "uploaded_by": None},
     ]
 
 
@@ -147,4 +148,11 @@ async def test_falls_back_to_ingestion_log_on_scan_error(
     assert resp.status_code == 200
     body = resp.json()
     assert body["source"] == "ingestion_log"
-    assert body["files"] == [{"filename": "report.csv", "vector_count": 3}]
+    assert len(body["files"]) == 1
+    f = body["files"][0]
+    assert f["filename"] == "report.csv"
+    assert f["vector_count"] == 3
+    # uploaded_at is derived from the log row's created_at (epoch-ms string);
+    # the log has no uploader info, so uploaded_by is None.
+    assert isinstance(f["uploaded_at"], str)
+    assert f["uploaded_by"] is None

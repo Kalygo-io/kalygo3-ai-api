@@ -57,6 +57,25 @@ class DeleteVectorsResponse(BaseModel):
 class NamespaceFile(BaseModel):
     filename: str
     vector_count: int
+    # Epoch-ms string of the most recent vector for this file (from metadata),
+    # or the ingestion-log created_at on the approximate fallback path. Optional
+    # for backward compatibility / when the source vectors carry no timestamp.
+    uploaded_at: Optional[str] = None
+    # Uploader (user_email, falling back to user_id) from the most recent vector.
+    # Unavailable on the ingestion-log fallback path.
+    uploaded_by: Optional[str] = None
+
+
+# ── Delete a single file's vectors ───────────────────────────────────────────
+
+class DeleteFileVectorsResponse(BaseModel):
+    success: bool
+    index_name: str
+    namespace: str
+    filename: str
+    vectors_deleted: int
+    log_id: Optional[str] = None
+    message: Optional[str] = None
 
 
 class NamespaceFilesResponse(BaseModel):

@@ -58,6 +58,33 @@ def filename_of(metadata: Optional[Dict[str, Any]]) -> str:
     return name if name else NO_FILENAME
 
 
+def _upload_at_of(metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The vector's upload timestamp (epoch-ms string), or None."""
+    if not metadata:
+        return None
+    ts = metadata.get("upload_timestamp")
+    return str(ts) if ts not in (None, "") else None
+
+
+def _upload_by_of(metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The vector's uploader: user_email, falling back to user_id, or None."""
+    if not metadata:
+        return None
+    return metadata.get("user_email") or metadata.get("user_id") or None
+
+
+def _ts_newer(candidate: Optional[str], current: Optional[str]) -> bool:
+    """True if `candidate` is a newer epoch-ms timestamp than `current`."""
+    if candidate is None:
+        return False
+    if current is None:
+        return True
+    try:
+        return int(candidate) > int(current)
+    except (TypeError, ValueError):
+        return candidate > current
+
+
 def aggregate_filename_counts(metadatas: Iterable[Optional[Dict[str, Any]]]) -> Dict[str, int]:
     """Count vectors per filename. Pure function — unit-tested directly."""
     counts: Dict[str, int] = defaultdict(int)
@@ -66,9 +93,32 @@ def aggregate_filename_counts(metadatas: Iterable[Optional[Dict[str, Any]]]) -> 
     return dict(counts)
 
 
-def _counts_to_files(counts: Dict[str, int]) -> list:
+def _accumulate(aggs: Dict[str, dict], meta: Optional[Dict[str, Any]]) -> None:
+    """Fold one vector's metadata into the per-file aggregate (count + newest
+    uploaded_at/uploaded_by)."""
+    key = filename_of(meta)
+    agg = aggs.get(key)
+    if agg is None:
+        agg = {"count": 0, "uploaded_at": None, "uploaded_by": None}
+        aggs[key] = agg
+    agg["count"] += 1
+    ts = _upload_at_of(meta)
+    if _ts_newer(ts, agg["uploaded_at"]):
+        agg["uploaded_at"] = ts
+        agg["uploaded_by"] = _upload_by_of(meta)
+
+
+def _aggs_to_files(aggs: Dict[str, dict]) -> list:
     """Sort by vector_count desc, then filename asc, into response models."""
-    files = [NamespaceFile(filename=k, vector_count=v) for k, v in counts.items()]
+    files = [
+        NamespaceFile(
+            filename=k,
+            vector_count=v["count"],
+            uploaded_at=v.get("uploaded_at"),
+            uploaded_by=v.get("uploaded_by"),
+        )
+        for k, v in aggs.items()
+    ]
     files.sort(key=lambda f: (-f.vector_count, f.filename))
     return files
 
@@ -107,11 +157,12 @@ def _metadatas_for_ids(index, namespace: str, ids: list) -> list:
 
 def scan_namespace_file_counts(index, namespace: str, cap: int = SCAN_CAP):
     """
-    Enumerate the namespace and count vectors per filename.
+    Enumerate the namespace and aggregate vectors per filename.
 
-    Returns (counts, scanned, truncated). Stops once ``cap`` vectors are read.
+    Returns (aggs, scanned, truncated) where ``aggs`` maps filename ->
+    {count, uploaded_at, uploaded_by}. Stops once ``cap`` vectors are read.
     """
-    counts: Dict[str, int] = defaultdict(int)
+    aggs: Dict[str, dict] = {}
     scanned = 0
     truncated = False
     buffer: list = []
@@ -132,21 +183,74 @@ def scan_namespace_file_counts(index, namespace: str, cap: int = SCAN_CAP):
             batch = buffer[:FETCH_BATCH]
             del buffer[:FETCH_BATCH]
             for meta in _metadatas_for_ids(index, namespace, batch):
-                counts[filename_of(meta)] += 1
+                _accumulate(aggs, meta)
                 scanned += 1
             if scanned >= cap:
-                return counts, scanned, True
+                return aggs, scanned, True
 
-    return counts, scanned, truncated
+    return aggs, scanned, truncated
 
 
-def files_from_ingestion_log(db, account_id: int, index_name: str, namespace: str) -> Dict[str, int]:
+def collect_ids_for_filename(
+    index, namespace: str, target_filename: str, cap: int = SCAN_CAP
+) -> tuple:
     """
-    Approximate per-file counts from the Postgres ingestion log.
+    Enumerate the namespace and collect the vector ids whose source filename
+    matches ``target_filename`` (use the NO_FILENAME sentinel to target vectors
+    with no filename metadata).
+
+    Returns (ids, truncated). ``truncated`` is True if the cap was hit before the
+    namespace was fully enumerated (the id list may then be incomplete).
+    """
+    ids: list = []
+    scanned = 0
+    buffer: list = []
+    token = None
+    done = False
+
+    while not done:
+        page = index.list_paginated(
+            namespace=namespace, limit=LIST_PAGE, pagination_token=token
+        )
+        page_vectors = getattr(page, "vectors", None) or []
+        buffer.extend(v.id for v in page_vectors)
+        token = getattr(getattr(page, "pagination", None), "next", None)
+        done = not token
+
+        while len(buffer) >= FETCH_BATCH or (done and buffer):
+            batch = buffer[:FETCH_BATCH]
+            del buffer[:FETCH_BATCH]
+            fetched = index.fetch(ids=batch, namespace=namespace)
+            vectors = getattr(fetched, "vectors", None)
+            if vectors is None and isinstance(fetched, dict):
+                vectors = fetched.get("vectors")
+            vectors = vectors or {}
+            for vid, vec in vectors.items():
+                meta = getattr(vec, "metadata", None)
+                if meta is None and isinstance(vec, dict):
+                    meta = vec.get("metadata")
+                if filename_of(meta) == target_filename:
+                    ids.append(vid)
+                scanned += 1
+            if scanned >= cap:
+                return ids, True
+
+    return ids, False
+
+
+def files_from_ingestion_log(db, account_id: int, index_name: str, namespace: str) -> Dict[str, dict]:
+    """
+    Approximate per-file aggregates from the Postgres ingestion log.
 
     Sums ``vectors_added`` per filename for INGEST rows since the most recent
-    successful whole-namespace DELETE (which resets the namespace). Used only as a
-    fallback for oversized namespaces or Pinecone read failures.
+    successful WHOLE-NAMESPACE DELETE (``filenames IS NULL``, which resets the
+    namespace), then subtracts any per-file DELETEs. Per-file deletes
+    (``filenames`` set) are NOT treated as reset points. Used only as a fallback
+    for oversized namespaces or Pinecone read failures.
+
+    Returns filename -> {count, uploaded_at, uploaded_by}. ``uploaded_at`` is the
+    most recent INGEST ``created_at`` (epoch-ms string); ``uploaded_by`` is
+    unavailable from the log and left None.
     """
     base = db.query(VectorDbIngestionLog).filter(
         VectorDbIngestionLog.account_id == account_id,
@@ -154,36 +258,55 @@ def files_from_ingestion_log(db, account_id: int, index_name: str, namespace: st
         VectorDbIngestionLog.namespace == namespace,
     )
 
+    # Only a whole-namespace delete (no filenames) resets the baseline.
     last_delete = (
         base.filter(
             VectorDbIngestionLog.operation_type == "DELETE",
             VectorDbIngestionLog.status == "SUCCESS",
+            VectorDbIngestionLog.filenames.is_(None),
         )
         .order_by(VectorDbIngestionLog.created_at.desc())
         .first()
     )
 
-    ingests = base.filter(VectorDbIngestionLog.operation_type == "INGEST")
+    rows = base.filter(
+        VectorDbIngestionLog.operation_type.in_(("INGEST", "DELETE")),
+        VectorDbIngestionLog.status == "SUCCESS",
+    )
     if last_delete is not None:
-        ingests = ingests.filter(
-            VectorDbIngestionLog.created_at > last_delete.created_at
-        )
+        rows = rows.filter(VectorDbIngestionLog.created_at > last_delete.created_at)
 
-    counts: Dict[str, int] = defaultdict(int)
-    for row in ingests.all():
-        added = row.vectors_added or 0
+    aggs: Dict[str, dict] = {}
+
+    def _bump(name: str, added: int, deleted: int, created_at) -> None:
+        agg = aggs.get(name)
+        if agg is None:
+            agg = {"count": 0, "uploaded_at": None, "uploaded_by": None}
+            aggs[name] = agg
+        agg["count"] += added - deleted
+        if added > 0 and created_at is not None:
+            ts = str(int(created_at.timestamp() * 1000))
+            if _ts_newer(ts, agg["uploaded_at"]):
+                agg["uploaded_at"] = ts
+
+    for row in rows.all():
         names = row.filenames or []
         if not names:
-            continue
+            continue  # whole-namespace delete (baseline) — skip
+        added = row.vectors_added or 0
+        deleted = row.vectors_deleted or 0
         if len(names) == 1:
-            counts[names[0]] += added
+            _bump(names[0], added, deleted, row.created_at)
         else:
-            # Rare: a single ingest event covering multiple files. We can't split
+            # Rare: a single event covering multiple files. We can't split
             # exactly, so apportion evenly (this path is already approximate).
-            share = added // len(names)
+            add_share = added // len(names)
+            del_share = deleted // len(names)
             for n in names:
-                counts[n] += share
-    return dict(counts)
+                _bump(n, add_share, del_share, row.created_at)
+
+    # Drop files whose net count fell to zero or below (fully deleted).
+    return {k: v for k, v in aggs.items() if v["count"] > 0}
 
 
 @router.get(
@@ -237,7 +360,7 @@ async def list_namespace_files(
 
         # Oversized namespace → skip the slow scan, use the approximate fallback.
         if total > SCAN_CAP:
-            counts = files_from_ingestion_log(db, account_id, index_name, namespace)
+            aggs = files_from_ingestion_log(db, account_id, index_name, namespace)
             resp = NamespaceFilesResponse(
                 index_name=index_name,
                 namespace=namespace,
@@ -245,20 +368,20 @@ async def list_namespace_files(
                 scanned_vectors=0,
                 truncated=True,
                 source="ingestion_log",
-                files=_counts_to_files(counts),
+                files=_aggs_to_files(aggs),
             )
             _cache_put(cache_key, resp)
             return resp
 
         try:
-            counts, scanned, truncated = scan_namespace_file_counts(index, namespace)
+            aggs, scanned, truncated = scan_namespace_file_counts(index, namespace)
             source = "pinecone"
         except Exception as scan_err:
             logger.warning(
                 "[LIST NAMESPACE FILES] live scan failed, falling back to log: %s",
                 scan_err,
             )
-            counts = files_from_ingestion_log(db, account_id, index_name, namespace)
+            aggs = files_from_ingestion_log(db, account_id, index_name, namespace)
             scanned, truncated, source = 0, False, "ingestion_log"
 
         resp = NamespaceFilesResponse(
@@ -268,7 +391,7 @@ async def list_namespace_files(
             scanned_vectors=scanned,
             truncated=truncated,
             source=source,
-            files=_counts_to_files(counts),
+            files=_aggs_to_files(aggs),
         )
         _cache_put(cache_key, resp)
         return resp
