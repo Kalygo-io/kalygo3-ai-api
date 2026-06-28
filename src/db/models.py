@@ -555,6 +555,52 @@ class VectorStore(Base):
         return f'<VectorStore owner={self.owner_account_id} index={self.index_name}>'
 
 
+class AccessGrant(Base):
+    """
+    Unified access grant: a PRINCIPAL is granted a ROLE on a RESOURCE.
+
+    Single source of truth for sharing, replacing the per-resource grant tables
+    (AgentAccessGrant / VectorStoreAccessGrant / CredentialAccessGrant). One model
+    means one resolver (services/access.py) and one audit query.
+
+    - principal_type/principal_id: 'account' (an individual) or 'group' (an access
+      group). Individuals and groups are both first-class; expansion to accounts
+      lives only in access.members_of.
+    - resource_type/resource_id: 'agent' | 'vector_store' | 'credential' + row id.
+    - role: 'read' | 'write' | 'use'. Interpreted per resource type — vector_store
+      uses read/write; agent and credential use 'use'. (For credentials 'use' means
+      use server-side, never view the plaintext.)
+
+    Polymorphic by (type, id) columns rather than FKs so uniqueness/audit stay
+    simple; resource/principal deletion is cleaned up app-side via
+    access.revoke_grants_for_resource / revoke_grants_for_principal.
+    """
+    __tablename__ = 'access_grants'
+
+    id = Column(Integer, primary_key=True, index=True)
+    principal_type = Column(String(20), nullable=False)   # 'account' | 'group'
+    principal_id = Column(Integer, nullable=False)
+    resource_type = Column(String(20), nullable=False)    # 'agent' | 'vector_store' | 'credential'
+    resource_id = Column(Integer, nullable=False)
+    role = Column(String(20), nullable=False, server_default='read')  # 'read' | 'write' | 'use'
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('principal_type', 'principal_id', 'resource_type', 'resource_id',
+                         name='uq_access_grant_principal_resource'),
+        CheckConstraint("principal_type IN ('account','group')", name='ck_access_grant_principal_type'),
+        CheckConstraint("resource_type IN ('agent','vector_store','credential')", name='ck_access_grant_resource_type'),
+        CheckConstraint("role IN ('read','write','use')", name='ck_access_grant_role'),
+        Index('ix_access_grants_resource', 'resource_type', 'resource_id'),
+        Index('ix_access_grants_principal', 'principal_type', 'principal_id'),
+    )
+
+    def __repr__(self):
+        return (f'<AccessGrant {self.principal_type}={self.principal_id} '
+                f'{self.role} {self.resource_type}={self.resource_id}>')
+
+
 class Company(Base):
     """
     Stores CRM company (organization) records.

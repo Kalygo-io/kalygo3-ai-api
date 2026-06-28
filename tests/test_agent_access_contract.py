@@ -14,7 +14,7 @@ from src.db.models import (
     Agent,
     AccessGroup,
     AccessGroupMember,
-    AgentAccessGrant,
+    AccessGrant,
 )
 from src.services.agent_access import (
     can_access_agent,
@@ -43,7 +43,15 @@ def seed(db):
     db.add(AccessGroup(id=GROUP_UNGRANTED, name="Ungranted", owner_account_id=OWNER))
     db.add(AccessGroupMember(access_group_id=GROUP_GRANTED, account_id=MEMBER))
     db.add(AccessGroupMember(access_group_id=GROUP_UNGRANTED, account_id=MEMBER_NOGRANT))
-    db.add(AgentAccessGrant(agent_id=AGENT_ID, access_group_id=GROUP_GRANTED))
+    # Grant is now a polymorphic AccessGrant row: GROUP_GRANTED (a group
+    # principal) is granted 'use' on the agent resource.
+    db.add(AccessGrant(
+        principal_type='group',
+        principal_id=GROUP_GRANTED,
+        resource_type='agent',
+        resource_id=AGENT_ID,
+        role='use',
+    ))
     db.flush()
     return db
 

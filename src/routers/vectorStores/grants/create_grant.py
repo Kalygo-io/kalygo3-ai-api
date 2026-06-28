@@ -1,11 +1,16 @@
 """
-Grant an access group access to a knowledge base (index owner only).
+Grant a group or individual access to a knowledge base (index owner only).
+
+Writes a unified AccessGrant (resource_type='vector_store', role 'read'|'write')
+keyed by the VectorStore row id.
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import AccessGroup, VectorStoreAccessGrant
+from src.db.models import AccessGrant
+from src.services import access
+from src.services.access_admin import resolve_principal, upsert_grant
+from ..helpers import get_or_create_vector_store
 from .models import CreateVectorStoreGrantRequest, VectorStoreAccessGrantResponse
-from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -21,12 +26,11 @@ async def create_grant(
     request: Request,
 ):
     """
-    Grant an access group access to one of your knowledge bases.
+    Share one of your knowledge bases with a group or individual.
 
-    The grant always names the caller as the index owner — you can only share an
-    index reachable by your own Pinecone key. The caller must own or co-administer
-    the target access group. Shared members get read access; group admins get
-    write (ingest/edit).
+    You can only share an index reachable by your own Pinecone key (you are the
+    owner). role 'read' = view; 'write' = ingest/edit. For a group target you must
+    own or co-administer the group.
     """
     try:
         account_id = account_id_from_claims(jwt)
@@ -34,35 +38,44 @@ async def create_grant(
         if not index_name:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="index_name is required")
 
-        group = db.query(AccessGroup).filter(AccessGroup.id == body.accessGroupId).first()
-        if not group:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
-        if not is_group_manager(db, group, account_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to manage this group")
-
-        existing = db.query(VectorStoreAccessGrant).filter(
-            VectorStoreAccessGrant.owner_account_id == account_id,
-            VectorStoreAccessGrant.index_name == index_name,
-            VectorStoreAccessGrant.access_group_id == body.accessGroupId,
-        ).first()
-        if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Grant already exists for this group")
-
-        grant = VectorStoreAccessGrant(
-            owner_account_id=account_id,
-            index_name=index_name,
+        principal_type, principal_id, label = resolve_principal(
+            db,
+            caller_account_id=account_id,
             access_group_id=body.accessGroupId,
+            grantee_email=body.granteeEmail,
         )
-        db.add(grant)
+
+        store = get_or_create_vector_store(db, account_id, index_name)
+
+        existing = db.query(AccessGrant).filter(
+            AccessGrant.principal_type == principal_type,
+            AccessGrant.principal_id == principal_id,
+            AccessGrant.resource_type == access.VECTOR_STORE,
+            AccessGrant.resource_id == store.id,
+        ).first()
+        if existing and existing.role == body.role:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Grant already exists for this principal")
+
+        grant = upsert_grant(
+            db,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            resource_type=access.VECTOR_STORE,
+            resource_id=store.id,
+            role=body.role,
+        )
         db.commit()
         db.refresh(grant)
 
         return VectorStoreAccessGrantResponse(
             id=grant.id,
-            owner_account_id=grant.owner_account_id,
-            index_name=grant.index_name,
-            access_group_id=grant.access_group_id,
-            access_group_name=group.name,
+            owner_account_id=account_id,
+            index_name=index_name,
+            access_group_id=principal_id if principal_type == access.GROUP else None,
+            grantee_account_id=principal_id if principal_type == access.ACCOUNT else None,
+            label=label,
+            target_type="group" if principal_type == access.GROUP else "individual",
+            role=grant.role,
             created_at=grant.created_at,
         )
     except HTTPException:

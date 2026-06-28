@@ -12,12 +12,13 @@ from sqlalchemy import or_
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import (
     Credential,
-    CredentialAccessGrant,
+    AccessGrant,
     CredentialDefault,
     AccessGroup,
     AccessGroupMember,
     Account,
 )
+from src.services import access
 from src.services.credential_access import get_accessible_credential_ids
 from .models import CredentialResponse
 from src.utils.errors import handle_db_error
@@ -109,12 +110,14 @@ def _build_shared_labels(db, account_id: int, shared_ids: set) -> dict:
 
     # Individual shares to this account: label with the owner's email.
     direct_rows = (
-        db.query(CredentialAccessGrant.credential_id, Account.email)
-        .join(Credential, Credential.id == CredentialAccessGrant.credential_id)
+        db.query(AccessGrant.resource_id, Account.email)
+        .join(Credential, Credential.id == AccessGrant.resource_id)
         .join(Account, Account.id == Credential.account_id)
         .filter(
-            CredentialAccessGrant.grantee_account_id == account_id,
-            CredentialAccessGrant.credential_id.in_(shared_ids),
+            AccessGrant.resource_type == access.CREDENTIAL,
+            AccessGrant.principal_type == access.ACCOUNT,
+            AccessGrant.principal_id == account_id,
+            AccessGrant.resource_id.in_(shared_ids),
         )
         .all()
     )
@@ -123,12 +126,14 @@ def _build_shared_labels(db, account_id: int, shared_ids: set) -> dict:
 
     # Group shares the caller reaches via membership: label with the group name.
     group_rows = (
-        db.query(CredentialAccessGrant.credential_id, AccessGroup.name)
-        .join(AccessGroup, AccessGroup.id == CredentialAccessGrant.access_group_id)
+        db.query(AccessGrant.resource_id, AccessGroup.name)
+        .join(AccessGroup, AccessGroup.id == AccessGrant.principal_id)
         .join(AccessGroupMember, AccessGroupMember.access_group_id == AccessGroup.id)
         .filter(
+            AccessGrant.resource_type == access.CREDENTIAL,
+            AccessGrant.principal_type == access.GROUP,
             AccessGroupMember.account_id == account_id,
-            CredentialAccessGrant.credential_id.in_(shared_ids),
+            AccessGrant.resource_id.in_(shared_ids),
         )
         .all()
     )

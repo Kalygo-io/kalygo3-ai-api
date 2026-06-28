@@ -40,6 +40,7 @@ from .routers import (
     similaritySearch,
     contacts,
 )
+from .routers import access as access_audit
 from .routers import contact_lists
 from .routers import companies
 from .routers import files
@@ -166,6 +167,7 @@ _ROUTERS = [
     (accounts.router, "/api/accounts", ["Accounts"]),
     (prompts.router, "/api/prompts", ["Prompts"]),
     (accessGroups.router, "/api/access-groups", ["Access Groups"]),
+    (access_audit.router, "/api/access", ["Access Audit"]),
     (contacts.router, "/api/contacts", ["Contacts"]),
     (contact_lists.router, "/api/contact-lists", ["Contact Lists"]),
     (companies.router, "/api/companies", ["Companies"]),

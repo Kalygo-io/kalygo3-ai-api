@@ -1,11 +1,14 @@
 """
 Grant an access group permission to use an agent (agent owner only).
+
+Writes a unified AccessGrant (resource_type='agent', role='use').
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Agent, AccessGroup, AgentAccessGrant
+from src.db.models import Agent, AccessGrant
+from src.services import access
+from src.services.access_admin import resolve_principal, upsert_grant
 from .models import CreateGrantRequest, AgentAccessGrantResponse
-from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -20,16 +23,10 @@ async def create_grant(
     jwt: jwt_dependency,
     request: Request,
 ):
-    """
-    Grant an access group permission to use this agent.
-
-    Only the agent owner can create grants.  For v1 the caller must also
-    own the access group.
-    """
+    """Grant an access group permission to use this agent. Agent owner + group manager."""
     try:
         account_id = account_id_from_claims(jwt)
 
-        # Verify agent ownership
         agent = db.query(Agent).filter(
             Agent.id == agent_id,
             Agent.account_id == account_id,
@@ -37,36 +34,39 @@ async def create_grant(
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        # Verify the access group exists and the caller can manage it (owner or admin).
-        # The caller must still own the agent (checked above) — you can only grant your
-        # own agents, but you may grant them to any group you own or co-administer.
-        group = db.query(AccessGroup).filter(AccessGroup.id == body.accessGroupId).first()
-        if not group:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
-        if not is_group_manager(db, group, account_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to manage this group")
+        # Group-only sharing for agents (today's contract); enforces is_group_manager.
+        principal_type, principal_id, label = resolve_principal(
+            db,
+            caller_account_id=account_id,
+            access_group_id=body.accessGroupId,
+            grantee_email=None,
+        )
 
-        # Check for duplicate grant
-        existing = db.query(AgentAccessGrant).filter(
-            AgentAccessGrant.agent_id == agent_id,
-            AgentAccessGrant.access_group_id == body.accessGroupId,
+        existing = db.query(AccessGrant).filter(
+            AccessGrant.principal_type == principal_type,
+            AccessGrant.principal_id == principal_id,
+            AccessGrant.resource_type == access.AGENT,
+            AccessGrant.resource_id == agent_id,
         ).first()
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Grant already exists for this group")
 
-        grant = AgentAccessGrant(
-            agent_id=agent_id,
-            access_group_id=body.accessGroupId,
+        grant = upsert_grant(
+            db,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            resource_type=access.AGENT,
+            resource_id=agent_id,
+            role="use",
         )
-        db.add(grant)
         db.commit()
         db.refresh(grant)
 
         return AgentAccessGrantResponse(
             id=grant.id,
-            agent_id=grant.agent_id,
-            access_group_id=grant.access_group_id,
-            access_group_name=group.name,
+            agent_id=agent_id,
+            access_group_id=principal_id,
+            access_group_name=label,
             created_at=grant.created_at,
         )
     except HTTPException:

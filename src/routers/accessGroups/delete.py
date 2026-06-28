@@ -6,6 +6,7 @@ Cascading FKs will remove members and agent grants automatically.
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
+from src.services import access
 from src.services.credential_access import prune_unusable_defaults_for_account
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -42,8 +43,12 @@ async def delete_access_group(
             .all()
         ]
 
+        # Remove all grants held BY this group (polymorphic grants have no FK
+        # cascade), then delete the group, then prune members' now-orphaned
+        # defaults (pruning re-checks access against the post-revoke state).
+        access.revoke_grants_for_principal(db, access.GROUP, group_id)
         db.delete(group)
-        db.flush()  # apply the cascade so credential access re-checks reflect it
+        db.flush()
 
         for member_id in member_ids:
             prune_unusable_defaults_for_account(db, member_id)

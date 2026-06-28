@@ -1,9 +1,13 @@
 """
-Revoke an access group's permission to use an agent (agent owner only).
+Revoke an access group's permission to use an agent.
+
+Allowed for the agent owner OR a manager of the granted group. Operates on the
+unified AccessGrant table (resource_type='agent').
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Agent, AccessGroup, AgentAccessGrant
+from src.db.models import Agent, AccessGroup, AccessGrant
+from src.services import access
 from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -19,12 +23,7 @@ async def revoke_grant(
     jwt: jwt_dependency,
     request: Request,
 ):
-    """
-    Revoke an access group's permission to use this agent.
-
-    Allowed for the agent owner OR a manager (owner/admin) of the group — either
-    side of the grant can remove it.
-    """
+    """Revoke a group's access to this agent. Agent owner or group manager."""
     try:
         account_id = account_id_from_claims(jwt)
 
@@ -32,15 +31,16 @@ async def revoke_grant(
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        # Authorization: agent owner, or owner/admin of the group the agent is granted to.
         if agent.account_id != account_id:
             group = db.query(AccessGroup).filter(AccessGroup.id == access_group_id).first()
             if not group or not is_group_manager(db, group, account_id):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to revoke this grant")
 
-        grant = db.query(AgentAccessGrant).filter(
-            AgentAccessGrant.agent_id == agent_id,
-            AgentAccessGrant.access_group_id == access_group_id,
+        grant = db.query(AccessGrant).filter(
+            AccessGrant.principal_type == access.GROUP,
+            AccessGrant.principal_id == access_group_id,
+            AccessGrant.resource_type == access.AGENT,
+            AccessGrant.resource_id == agent_id,
         ).first()
         if not grant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")

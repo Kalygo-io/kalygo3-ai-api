@@ -4,6 +4,7 @@ Delete credential endpoint.
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import Credential
+from src.services import access
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -33,6 +34,11 @@ async def delete_credential(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Credential not found"
             )
+
+        # Remove any sharing grants on this credential (polymorphic grants have no
+        # FK cascade). Per-account default rows clear via the credential_defaults
+        # FK ON DELETE CASCADE.
+        access.revoke_grants_for_resource(db, access.CREDENTIAL, credential_id)
 
         db.delete(credential)
         db.commit()

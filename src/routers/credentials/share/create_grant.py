@@ -1,10 +1,13 @@
 """
 Share a credential with an access group or an individual (credential owner only).
+
+Writes a unified AccessGrant (resource_type='credential', role='use').
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Credential, AccessGroup, Account, CredentialAccessGrant
-from src.services.access_group_roles import is_group_manager
+from src.db.models import Credential, AccessGrant
+from src.services import access
+from src.services.access_admin import resolve_principal, upsert_grant
 from .models import CreateCredentialGrantRequest, CredentialGrantResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -21,17 +24,10 @@ async def create_credential_grant(
     jwt: jwt_dependency,
     request: Request,
 ):
-    """
-    Share a credential with an access group OR an individual account.
-
-    Only the credential OWNER may share. For a group target the owner must also
-    be a manager (owner/admin) of that group — matching the agent-grant rule.
-    Recipients may USE the credential but never receive its plaintext.
-    """
+    """Share a credential with a group OR an individual. Owner only. Use-not-view."""
     try:
         account_id = account_id_from_claims(jwt)
 
-        # Only the owner can share.
         credential = db.query(Credential).filter(
             Credential.id == credential_id,
             Credential.account_id == account_id,
@@ -39,68 +35,41 @@ async def create_credential_grant(
         if not credential:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
 
-        if body.accessGroupId is not None:
-            # ── Group target ──────────────────────────────────────────────────
-            group = db.query(AccessGroup).filter(AccessGroup.id == body.accessGroupId).first()
-            if not group:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
-            if not is_group_manager(db, group, account_id):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to share with this group")
+        principal_type, principal_id, label = resolve_principal(
+            db,
+            caller_account_id=account_id,
+            access_group_id=body.accessGroupId,
+            grantee_email=body.granteeEmail,
+        )
 
-            existing = db.query(CredentialAccessGrant).filter(
-                CredentialAccessGrant.credential_id == credential_id,
-                CredentialAccessGrant.access_group_id == body.accessGroupId,
-            ).first()
-            if existing:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Credential is already shared with this group")
-
-            grant = CredentialAccessGrant(
-                credential_id=credential_id,
-                access_group_id=body.accessGroupId,
-            )
-            db.add(grant)
-            db.commit()
-            db.refresh(grant)
-
-            return CredentialGrantResponse(
-                id=grant.id,
-                credential_id=grant.credential_id,
-                access_group_id=grant.access_group_id,
-                grantee_account_id=None,
-                label=group.name,
-                target_type="group",
-                created_at=grant.created_at,
-            )
-
-        # ── Individual target ─────────────────────────────────────────────────
-        target = db.query(Account).filter(Account.email == body.granteeEmail).first()
-        if not target:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found for the given email")
-        if target.id == account_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You already own this credential")
-
-        existing = db.query(CredentialAccessGrant).filter(
-            CredentialAccessGrant.credential_id == credential_id,
-            CredentialAccessGrant.grantee_account_id == target.id,
+        # Reject duplicate (a grant already exists for this principal on this credential).
+        existing = db.query(AccessGrant).filter(
+            AccessGrant.principal_type == principal_type,
+            AccessGrant.principal_id == principal_id,
+            AccessGrant.resource_type == access.CREDENTIAL,
+            AccessGrant.resource_id == credential_id,
         ).first()
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Credential is already shared with this account")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Credential is already shared with this principal")
 
-        grant = CredentialAccessGrant(
-            credential_id=credential_id,
-            grantee_account_id=target.id,
+        grant = upsert_grant(
+            db,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            resource_type=access.CREDENTIAL,
+            resource_id=credential_id,
+            role="use",
         )
-        db.add(grant)
         db.commit()
         db.refresh(grant)
 
         return CredentialGrantResponse(
             id=grant.id,
-            credential_id=grant.credential_id,
-            access_group_id=None,
-            grantee_account_id=grant.grantee_account_id,
-            label=target.email,
-            target_type="individual",
+            credential_id=credential_id,
+            access_group_id=principal_id if principal_type == access.GROUP else None,
+            grantee_account_id=principal_id if principal_type == access.ACCOUNT else None,
+            label=label,
+            target_type="group" if principal_type == access.GROUP else "individual",
             created_at=grant.created_at,
         )
     except HTTPException:

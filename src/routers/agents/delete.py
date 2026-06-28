@@ -4,6 +4,7 @@ Delete agent endpoint.
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import Agent
+from src.services import access
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -37,10 +38,13 @@ async def delete_agent(
                 detail="Agent not found"
             )
         
+        # Remove sharing grants on this agent (polymorphic grants have no FK cascade).
+        access.revoke_grants_for_resource(db, access.AGENT, agent_id)
+
         # Delete the agent
         db.delete(agent)
         db.commit()
-        
+
         return None
         
     except HTTPException:

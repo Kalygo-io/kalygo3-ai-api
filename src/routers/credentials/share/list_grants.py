@@ -4,7 +4,9 @@ List the access grants on a credential (credential owner only).
 from typing import List
 from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Credential, AccessGroup, Account, CredentialAccessGrant
+from src.db.models import Credential
+from src.services import access
+from src.services.access_admin import list_resource_grants, grant_label
 from .models import CredentialGrantResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -31,27 +33,18 @@ async def list_credential_grants(
         if not credential:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
 
-        # Join out group names and grantee emails for display labels.
-        rows = (
-            db.query(CredentialAccessGrant, AccessGroup.name, Account.email)
-            .outerjoin(AccessGroup, AccessGroup.id == CredentialAccessGrant.access_group_id)
-            .outerjoin(Account, Account.id == CredentialAccessGrant.grantee_account_id)
-            .filter(CredentialAccessGrant.credential_id == credential_id)
-            .order_by(CredentialAccessGrant.created_at.desc())
-            .all()
-        )
-
+        grants = list_resource_grants(db, access.CREDENTIAL, credential_id)
         return [
             CredentialGrantResponse(
-                id=grant.id,
-                credential_id=grant.credential_id,
-                access_group_id=grant.access_group_id,
-                grantee_account_id=grant.grantee_account_id,
-                label=(group_name if grant.access_group_id else grantee_email) or "(unknown)",
-                target_type="group" if grant.access_group_id else "individual",
-                created_at=grant.created_at,
+                id=g.id,
+                credential_id=credential_id,
+                access_group_id=g.principal_id if g.principal_type == access.GROUP else None,
+                grantee_account_id=g.principal_id if g.principal_type == access.ACCOUNT else None,
+                label=grant_label(db, g),
+                target_type="group" if g.principal_type == access.GROUP else "individual",
+                created_at=g.created_at,
             )
-            for grant, group_name, grantee_email in rows
+            for g in grants
         ]
     except HTTPException:
         raise

@@ -4,7 +4,8 @@ List agents granted to an access group (owner or member).
 from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import AccessGroup, AccessGroupMember, AgentAccessGrant, Agent
+from src.db.models import AccessGroup, AccessGroupMember, AccessGrant, Agent
+from src.services import access
 from .models import GroupAgentResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -48,16 +49,20 @@ async def list_group_agents(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access group not found")
 
         rows = (
-            db.query(AgentAccessGrant, Agent.name)
-            .join(Agent, Agent.id == AgentAccessGrant.agent_id)
-            .filter(AgentAccessGrant.access_group_id == group_id)
-            .order_by(AgentAccessGrant.created_at.desc())
+            db.query(AccessGrant, Agent.name)
+            .join(Agent, Agent.id == AccessGrant.resource_id)
+            .filter(
+                AccessGrant.resource_type == access.AGENT,
+                AccessGrant.principal_type == access.GROUP,
+                AccessGrant.principal_id == group_id,
+            )
+            .order_by(AccessGrant.created_at.desc())
             .all()
         )
 
         return [
             GroupAgentResponse(
-                agent_id=grant.agent_id,
+                agent_id=grant.resource_id,
                 agent_name=name,
                 granted_at=grant.created_at,
             )

@@ -2,11 +2,33 @@
 Shared helpers for the vectorStores router.
 """
 from fastapi import HTTPException, status
+from src.db.models import VectorStore
 from src.db.service_name import ServiceName
 from src.routers.credentials.encryption import get_credential_value
 from src.services.credential_access import resolve_default_credential
 from src.services.vector_store_credentials import resolve_index_pinecone_credential
 from src.utils.errors import handle_db_error
+
+
+def get_or_create_vector_store(db, owner_account_id: int, index_name: str) -> VectorStore:
+    """
+    Return the VectorStore row for (owner, index), creating it (with no explicit
+    credential bindings → default fallback) if missing. Lets sharing/audit work
+    for indexes created before the VectorStore table existed. Caller commits.
+    """
+    store = (
+        db.query(VectorStore)
+        .filter(
+            VectorStore.owner_account_id == owner_account_id,
+            VectorStore.index_name == index_name,
+        )
+        .first()
+    )
+    if store is None:
+        store = VectorStore(owner_account_id=owner_account_id, index_name=index_name)
+        db.add(store)
+        db.flush()  # assign id for grant references in the same transaction
+    return store
 
 
 def _pinecone_key_from_credential(credential) -> str:

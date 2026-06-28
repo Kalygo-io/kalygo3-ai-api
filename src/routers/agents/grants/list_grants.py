@@ -1,10 +1,11 @@
 """
-List access grants for an agent (agent owner only).
+List access grants for an agent (agent owner only). Reads unified AccessGrant.
 """
 from fastapi import APIRouter, HTTPException, status, Request
 from typing import List
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
-from src.db.models import Agent, AccessGroup, AgentAccessGrant
+from src.db.models import Agent, AccessGroup, AccessGrant
+from src.services import access
 from .models import AgentAccessGrantResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -19,11 +20,10 @@ async def list_grants(
     jwt: jwt_dependency,
     request: Request,
 ):
-    """List all access groups that have been granted access to this agent. Agent owner only."""
+    """List access groups granted this agent. Agent owner only."""
     try:
         account_id = account_id_from_claims(jwt)
 
-        # Verify agent ownership
         agent = db.query(Agent).filter(
             Agent.id == agent_id,
             Agent.account_id == account_id,
@@ -32,18 +32,22 @@ async def list_grants(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
         rows = (
-            db.query(AgentAccessGrant, AccessGroup.name)
-            .join(AccessGroup, AccessGroup.id == AgentAccessGrant.access_group_id)
-            .filter(AgentAccessGrant.agent_id == agent_id)
-            .order_by(AgentAccessGrant.created_at.desc())
+            db.query(AccessGrant, AccessGroup.name)
+            .join(AccessGroup, AccessGroup.id == AccessGrant.principal_id)
+            .filter(
+                AccessGrant.resource_type == access.AGENT,
+                AccessGrant.resource_id == agent_id,
+                AccessGrant.principal_type == access.GROUP,
+            )
+            .order_by(AccessGrant.created_at.desc())
             .all()
         )
 
         return [
             AgentAccessGrantResponse(
                 id=grant.id,
-                agent_id=grant.agent_id,
-                access_group_id=grant.access_group_id,
+                agent_id=agent_id,
+                access_group_id=grant.principal_id,
                 access_group_name=group_name,
                 created_at=grant.created_at,
             )
