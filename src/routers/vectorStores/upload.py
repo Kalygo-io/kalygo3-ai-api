@@ -168,7 +168,10 @@ async def upload_pdf_faq(
         if not decoded_jwt:
             raise HTTPException(status_code=401, detail="Authentication required")
 
-        account_id = int(decoded_jwt['id']) if isinstance(decoded_jwt['id'], str) else decoded_jwt['id']
+        caller_account_id = int(decoded_jwt['id']) if isinstance(decoded_jwt['id'], str) else decoded_jwt['id']
+        # Ingesting into a shared knowledge base requires write (admin) access; for
+        # your own KB this returns you unchanged. GCS/Pinecone/log writes use the owner.
+        account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=True)
 
         # Validate account exists
         account = ensure_account(db, account_id)
