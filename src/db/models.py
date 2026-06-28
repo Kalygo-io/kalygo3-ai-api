@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, Date, func, Double, Float, Numeric, Enum, Text, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UUID, JSON, DateTime, Date, func, Double, Float, Numeric, Enum, Text, Boolean, UniqueConstraint, CheckConstraint, Index, text
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
@@ -144,10 +144,99 @@ class Credential(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     account = relationship('Account', back_populates='credentials')
-    
+    # Sharing grants (to access groups and/or individuals). Cascade removes the
+    # grants when the credential is deleted.
+    access_grants = relationship('CredentialAccessGrant', back_populates='credential', cascade='all, delete-orphan')
+
     def __repr__(self):
         name = self.credential_name or self.credential_type
         return f'<Credential {name} ({self.auth_type}) for account {self.account_id}>'
+
+
+class CredentialAccessGrant(Base):
+    """
+    Shares a credential with EITHER an access group OR an individual account.
+
+    Mirrors the AgentAccessGrant / VectorStoreAccessGrant sharing pattern, but a
+    single row targets exactly one of:
+      - an access group  (access_group_id set, grantee_account_id NULL), or
+      - an individual    (grantee_account_id set, access_group_id NULL)
+    enforced by the check constraint below. Only the credential owner can create
+    or revoke grants. Recipients may USE the credential (the server decrypts it
+    on their behalf) but never receive the plaintext — the /full endpoints stay
+    owner-only.
+    """
+    __tablename__ = 'credential_access_grants'
+
+    id = Column(Integer, primary_key=True, index=True)
+    credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='CASCADE'), nullable=False, index=True)
+    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=True, index=True)
+    grantee_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+
+    __table_args__ = (
+        # Exactly one target: a group grant XOR an individual grant.
+        CheckConstraint(
+            '(access_group_id IS NOT NULL)::int + (grantee_account_id IS NOT NULL)::int = 1',
+            name='ck_credential_grant_exactly_one_target',
+        ),
+        # No duplicate share to the same group / same individual.
+        Index(
+            'uq_credential_grant_group',
+            'credential_id', 'access_group_id',
+            unique=True,
+            postgresql_where=text('access_group_id IS NOT NULL'),
+        ),
+        Index(
+            'uq_credential_grant_account',
+            'credential_id', 'grantee_account_id',
+            unique=True,
+            postgresql_where=text('grantee_account_id IS NOT NULL'),
+        ),
+    )
+
+    credential = relationship('Credential', back_populates='access_grants')
+    access_group = relationship('AccessGroup')
+    grantee = relationship('Account', foreign_keys=[grantee_account_id])
+
+    def __repr__(self):
+        target = f'group={self.access_group_id}' if self.access_group_id else f'account={self.grantee_account_id}'
+        return f'<CredentialAccessGrant credential={self.credential_id} {target}>'
+
+
+class CredentialDefault(Base):
+    """
+    A per-account, per-credential-type default selection.
+
+    "Default" is NOT a flag on the credential itself: a shared credential can be
+    one account's default while its owner keeps a different default. Each account
+    has at most one default per credential_type (ServiceName), chosen from any
+    credential it can use (owned OR shared with it).
+
+    The credential_id FK cascades on delete, so deleting a credential
+    automatically clears anyone's default that pointed at it. Defaults that lose
+    their backing access (credential unshared, member removed from a group) are
+    pruned explicitly via credential_access.prune_unusable_defaults_for_account.
+    """
+    __tablename__ = 'credential_defaults'
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    # Reuse the existing PG enum created for credentials.credential_type.
+    credential_type = Column(Enum(ServiceName, name='credential_type_enum', create_type=False), nullable=False, index=True)
+    credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('account_id', 'credential_type', name='uq_credential_default_account_type'),
+    )
+
+    account = relationship('Account', foreign_keys=[account_id])
+    credential = relationship('Credential', foreign_keys=[credential_id])
+
+    def __repr__(self):
+        return f'<CredentialDefault account={self.account_id} type={self.credential_type} -> credential={self.credential_id}>'
 
 
 class ApiKeyStatus(str, Enum):
@@ -422,6 +511,48 @@ class VectorStoreAccessGrant(Base):
 
     def __repr__(self):
         return f'<VectorStoreAccessGrant owner={self.owner_account_id} index={self.index_name} group={self.access_group_id}>'
+
+
+class VectorStore(Base):
+    """
+    A knowledge base (Pinecone index) owned by an account, with EXPLICIT
+    credential bindings.
+
+    Previously a knowledge base had no row of its own — it was just
+    (owner_account_id, index_name) and its Pinecone/GCS credentials were resolved
+    from the owner's account defaults at runtime. This row gives those credentials
+    an explicit home so they don't drift when the owner changes a default:
+
+      - pinecone_credential_id: which Pinecone key reaches this index.
+      - gcs_credential_id: which GCS credential/bucket holds this index's source
+        files (for storage at ingest and signed-URL retrieval).
+
+    Both FKs are NULLABLE and ON DELETE SET NULL: a null binding (e.g. a row
+    backfilled for a pre-existing index, or one whose bound credential was
+    deleted) falls back to the owner's default for that type — see
+    services/vector_store_credentials.py. New stores should set them explicitly.
+    """
+    __tablename__ = 'vector_stores'
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
+    index_name = Column(String, nullable=False, index=True)
+    display_name = Column(String(255), nullable=True)
+    pinecone_credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='SET NULL'), nullable=True, index=True)
+    gcs_credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='SET NULL'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('owner_account_id', 'index_name', name='uq_vector_store_owner_index'),
+    )
+
+    owner = relationship('Account', foreign_keys=[owner_account_id])
+    pinecone_credential = relationship('Credential', foreign_keys=[pinecone_credential_id])
+    gcs_credential = relationship('Credential', foreign_keys=[gcs_credential_id])
+
+    def __repr__(self):
+        return f'<VectorStore owner={self.owner_account_id} index={self.index_name}>'
 
 
 class Company(Base):

@@ -16,7 +16,7 @@ from src.db.models import VectorDbIngestionLog
 from src.deps import account_id_from_claims, db_dependency, ensure_account, jwt_dependency
 from src.rate_limit import limiter
 from src.utils.errors import handle_db_error
-from .helpers import get_pinecone_api_key
+from .helpers import get_pinecone_api_key_for_index
 from .list_namespace_files import SCAN_CAP, collect_ids_for_filename
 from .models import DeleteFileVectorsResponse
 from src.services.vector_store_access import authorize_vector_store
@@ -57,7 +57,7 @@ async def delete_file_vectors_in_namespace(
         account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=True)
         ensure_account(db, account_id)
 
-        api_key = get_pinecone_api_key(db, account_id)
+        api_key = get_pinecone_api_key_for_index(db, account_id, index_name)
         pc = Pinecone(api_key=api_key)
 
         try:

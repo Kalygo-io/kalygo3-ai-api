@@ -14,6 +14,12 @@ class CreateIndexRequest(BaseModel):
     pods: Optional[int] = 1
     replicas: Optional[int] = 1
     pod_type: Optional[str] = "s1.x1"  # Default pod type
+    # Explicit credential bindings for this knowledge base. The picker pre-fills
+    # these with the account defaults; the chosen ids are frozen onto the
+    # VectorStore row so they don't drift if defaults change later. When omitted,
+    # the account's current default for each type is used (and persisted).
+    pinecone_credential_id: Optional[int] = None
+    gcs_credential_id: Optional[int] = None
 
 
 class IndexResponse(BaseModel):

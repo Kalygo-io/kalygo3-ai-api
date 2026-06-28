@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from pinecone import Pinecone
 
-from .helpers import get_pinecone_api_key
+from .helpers import get_pinecone_api_key_for_index
 from .models import CreateNamespaceRequest, NamespaceResponse
 from src.services.vector_store_access import authorize_vector_store
 from src.utils.errors import handle_db_error
@@ -44,7 +44,7 @@ async def create_namespace(
         account = ensure_account(db, account_id)
 
         # Get Pinecone API key
-        api_key = get_pinecone_api_key(db, account_id)
+        api_key = get_pinecone_api_key_for_index(db, account_id, index_name)
         
         # Initialize Pinecone client
         pc = Pinecone(api_key=api_key)

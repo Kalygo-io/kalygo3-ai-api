@@ -8,7 +8,7 @@ from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensu
 from src.db.models import VectorDbIngestionLog
 from pinecone import Pinecone
 
-from .helpers import get_pinecone_api_key
+from .helpers import get_pinecone_api_key_for_index
 from .models import DeleteVectorsResponse
 from src.services.vector_store_access import authorize_vector_store
 from src.utils.errors import handle_db_error
@@ -41,7 +41,7 @@ async def delete_vectors_in_namespace(
         account = ensure_account(db, account_id)
 
         # Get Pinecone API key for this account
-        api_key = get_pinecone_api_key(db, account_id)
+        api_key = get_pinecone_api_key_for_index(db, account_id, index_name)
 
         # Initialise Pinecone client and connect to the index
         pc = Pinecone(api_key=api_key)

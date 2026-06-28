@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
 from src.services.access_group_roles import is_group_manager, is_group_owner, ADMIN_ROLE
+from src.services.credential_access import prune_unusable_defaults_for_account
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -41,6 +42,12 @@ async def remove_member(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the group owner can remove an admin")
 
         db.delete(member)
+        db.flush()  # apply removal so credential access re-checks reflect it
+
+        # Losing group membership may strip the only path to a shared credential
+        # the member had marked as default — clear any now-orphaned defaults.
+        prune_unusable_defaults_for_account(db, member_account_id)
+
         db.commit()
         return None
     except HTTPException:

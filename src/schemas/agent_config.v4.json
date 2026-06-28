@@ -81,6 +81,11 @@
           "type": "string",
           "minLength": 1,
           "description": "The model identifier. Examples: 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet-20241022', 'llama3.2'."
+        },
+        "credentialId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Explicit id of the stored credential (of this provider's type) used to fund turn completions. When set, this exact credential is used (no drift if account defaults change later). When omitted, the funding account's default credential for the provider type is resolved at runtime. The picker pre-selects the account default but persists the chosen id here."
         }
       }
     },

@@ -61,10 +61,12 @@ class VectorStoresUploadService:
 
             file_content = await file.read()
 
-            # Store in the account's own bucket via per-account credentials.
-            ref = account_gcs_service.upload_bytes(
+            # Store in the bucket bound to this knowledge base (falls back to the
+            # owner's default GCS credential when the index has no explicit bind).
+            ref = account_gcs_service.upload_bytes_for_index(
                 db,
                 account_id,
+                index_name,
                 file_bytes=file_content,
                 gcs_file_path=gcs_file_path,
                 content_type=file.content_type,

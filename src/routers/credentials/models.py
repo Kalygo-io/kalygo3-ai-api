@@ -28,6 +28,14 @@ class CredentialResponse(BaseModel):
     created_at: str
     updated_at: str
     credential_metadata: Optional[Dict[str, Any]] = None
+    # Sharing/default fields, relative to the requesting account. Optional so the
+    # create/update responses (which only ever return owned credentials) can omit
+    # them; the list endpoint always populates them.
+    is_owner: bool = True
+    is_default: bool = False
+    # For credentials shared WITH the caller: how it reached them
+    # (e.g. "Shared by alice@x.com" or a group name). None for owned credentials.
+    shared_label: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

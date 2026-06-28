@@ -16,7 +16,8 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from src.deps import db_dependency, auth_dependency
-from src.db.models import PendingToolApproval, Credential, EmailEvent, EmailTemplate
+from src.db.models import PendingToolApproval, EmailEvent, EmailTemplate
+from src.services.credential_access import load_credential_for_use
 from src.routers.credentials.encryption import decrypt_credential_data
 from .models import ApproveToolApprovalResponse
 from .email_html import inject_tracking_pixel, strip_html_tags
@@ -278,10 +279,8 @@ async def approve_tool_approval(
     if not credential_id:
         raise HTTPException(status_code=422, detail="Approval payload is missing credential_id")
 
-    credential = db.query(Credential).filter(
-        Credential.id == credential_id,
-        Credential.account_id == account_id,
-    ).first()
+    # Usage access: owned or shared with the account (plaintext never leaves the server).
+    credential = load_credential_for_use(db, account_id, credential_id)
 
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")

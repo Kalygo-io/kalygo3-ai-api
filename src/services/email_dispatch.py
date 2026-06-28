@@ -384,15 +384,16 @@ _REQUIRED_SES_FIELDS = ["aws_access_key_id", "aws_secret_access_key", "aws_regio
 
 
 def load_ses_credential(db: Session, account_id: int, credential_id: int) -> Dict[str, Any]:
-    """Load, decrypt, and validate an SES credential. Raises :class:`CredentialError`."""
-    from src.db.models import Credential
-    from src.routers.credentials.encryption import decrypt_credential_data
+    """Load, decrypt, and validate an SES credential. Raises :class:`CredentialError`.
 
-    credential = (
-        db.query(Credential)
-        .filter(Credential.id == credential_id, Credential.account_id == account_id)
-        .first()
-    )
+    Authorizes by *usage* access (owned or shared with the account) so a shared
+    SES credential can be sent through — without ever returning its plaintext to
+    the caller.
+    """
+    from src.routers.credentials.encryption import decrypt_credential_data
+    from src.services.credential_access import load_credential_for_use
+
+    credential = load_credential_for_use(db, account_id, credential_id)
     if not credential:
         raise CredentialError("Credential not found", status_code=404)
 

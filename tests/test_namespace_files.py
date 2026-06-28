@@ -76,7 +76,7 @@ def _patch_pinecone(monkeypatch, fake_index):
             return fake_index
 
     monkeypatch.setattr(nf, "Pinecone", _FakePinecone)
-    monkeypatch.setattr(nf, "get_pinecone_api_key", lambda *a, **k: "fake-key")
+    monkeypatch.setattr(nf, "get_pinecone_api_key_for_index", lambda *a, **k: "fake-key")
 
 
 @pytest.fixture(autouse=True)

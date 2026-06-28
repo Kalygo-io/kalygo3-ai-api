@@ -30,7 +30,7 @@ from src.deps import account_id_from_claims, db_dependency, ensure_account, jwt_
 from src.services.vector_store_access import authorize_vector_store
 from src.rate_limit import limiter
 from src.utils.errors import handle_db_error
-from .helpers import get_pinecone_api_key
+from .helpers import get_pinecone_api_key_for_index
 from .models import NamespaceFile, NamespaceFilesResponse
 
 logger = logging.getLogger(__name__)
@@ -329,7 +329,7 @@ async def list_namespace_files(
         # Resolve the KB owner (self, or the owner of a shared KB). Read access.
         account_id = authorize_vector_store(db, caller_account_id, index_name, owner_account_id, require_write=False)
         ensure_account(db, account_id)
-        api_key = get_pinecone_api_key(db, account_id)
+        api_key = get_pinecone_api_key_for_index(db, account_id, index_name)
         pc = Pinecone(api_key=api_key)
 
         try:
