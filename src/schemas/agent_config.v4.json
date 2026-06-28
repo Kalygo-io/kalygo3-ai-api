@@ -40,6 +40,11 @@
           "minLength": 1,
           "description": "Optional ElevenLabs voice ID used to anthropomorphize the agent through voice when using the ElevenLabs API for text-to-speech (e.g. in TTS Chat or Multi-Agent TTS Chat). If omitted, a default voice or browser TTS may be used."
         },
+        "shareOwnerCredentials": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, members who access this agent via an access group run it on the OWNER's stored credentials (for both LLM turn completions and tools) instead of their own. When false or omitted, each member uses their own credentials. Has no effect for the owner, who always uses their own credentials."
+        },
         "tools": {
           "type": "array",
           "minItems": 0,
