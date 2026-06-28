@@ -36,10 +36,16 @@ class VectorStoresUploadService:
         db: Session,
         account_id: int,
         batch_number: Optional[str] = None,
-        comment: Optional[str] = None
+        comment: Optional[str] = None,
+        extra_message_fields: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Upload file to the account's GCS bucket and publish a message to Pub/Sub.
+
+        `extra_message_fields` are merged into the published Pub/Sub message. The
+        PDF-to-FAQ flow uses this to carry the reviewed Q&A pairs (so the ingest
+        cloud function builds vectors from them) alongside the original PDF that
+        is the stored/referenced source.
 
         Raises account_gcs_service.AccountGcsCredentialMissing when the account
         has no GCS credential configured (callers map this to HTTP 400).
@@ -86,6 +92,9 @@ class VectorStoresUploadService:
                 "module": "vector_stores",
                 "comment": comment
             }
+
+            if extra_message_fields:
+                message_data.update(extra_message_fields)
 
             publisher_client = PubSubClient.get_publisher_client()
             topic_path = publisher_client.topic_path(self.project_id, self.pubsub_topic_name)
