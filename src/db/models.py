@@ -144,64 +144,12 @@ class Credential(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
     account = relationship('Account', back_populates='credentials')
-    # Sharing grants (to access groups and/or individuals). Cascade removes the
-    # grants when the credential is deleted.
-    access_grants = relationship('CredentialAccessGrant', back_populates='credential', cascade='all, delete-orphan')
+    # Sharing is recorded in the unified access_grants table (resource_type
+    # 'credential'); see services/access.py. No per-resource relationship.
 
     def __repr__(self):
         name = self.credential_name or self.credential_type
         return f'<Credential {name} ({self.auth_type}) for account {self.account_id}>'
-
-
-class CredentialAccessGrant(Base):
-    """
-    Shares a credential with EITHER an access group OR an individual account.
-
-    Mirrors the AgentAccessGrant / VectorStoreAccessGrant sharing pattern, but a
-    single row targets exactly one of:
-      - an access group  (access_group_id set, grantee_account_id NULL), or
-      - an individual    (grantee_account_id set, access_group_id NULL)
-    enforced by the check constraint below. Only the credential owner can create
-    or revoke grants. Recipients may USE the credential (the server decrypts it
-    on their behalf) but never receive the plaintext — the /full endpoints stay
-    owner-only.
-    """
-    __tablename__ = 'credential_access_grants'
-
-    id = Column(Integer, primary_key=True, index=True)
-    credential_id = Column(Integer, ForeignKey('credentials.id', ondelete='CASCADE'), nullable=False, index=True)
-    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=True, index=True)
-    grantee_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-
-    __table_args__ = (
-        # Exactly one target: a group grant XOR an individual grant.
-        CheckConstraint(
-            '(access_group_id IS NOT NULL)::int + (grantee_account_id IS NOT NULL)::int = 1',
-            name='ck_credential_grant_exactly_one_target',
-        ),
-        # No duplicate share to the same group / same individual.
-        Index(
-            'uq_credential_grant_group',
-            'credential_id', 'access_group_id',
-            unique=True,
-            postgresql_where=text('access_group_id IS NOT NULL'),
-        ),
-        Index(
-            'uq_credential_grant_account',
-            'credential_id', 'grantee_account_id',
-            unique=True,
-            postgresql_where=text('grantee_account_id IS NOT NULL'),
-        ),
-    )
-
-    credential = relationship('Credential', back_populates='access_grants')
-    access_group = relationship('AccessGroup')
-    grantee = relationship('Account', foreign_keys=[grantee_account_id])
-
-    def __repr__(self):
-        target = f'group={self.access_group_id}' if self.access_group_id else f'account={self.grantee_account_id}'
-        return f'<CredentialAccessGrant credential={self.credential_id} {target}>'
 
 
 class CredentialDefault(Base):
@@ -353,8 +301,8 @@ class Agent(Base):
     config = Column(JSON, nullable=True)  # JSONB in PostgreSQL, JSON in SQLAlchemy
     
     chat_sessions = relationship('ChatSession', back_populates='agent', cascade='all, delete-orphan')
-    access_grants = relationship('AgentAccessGrant', back_populates='agent', cascade='all, delete-orphan')
-    
+    # Sharing is recorded in access_grants (resource_type 'agent'); see services/access.py.
+
     def __repr__(self):
         return f'<Agent {self.id}: {self.name}>'
 
@@ -423,8 +371,8 @@ class AccessGroup(Base):
     
     owner = relationship('Account', back_populates='access_groups')
     members = relationship('AccessGroupMember', back_populates='group', cascade='all, delete-orphan')
-    agent_grants = relationship('AgentAccessGrant', back_populates='access_group', cascade='all, delete-orphan')
-    vector_store_grants = relationship('VectorStoreAccessGrant', back_populates='access_group', cascade='all, delete-orphan')
+    # Grants TO this group live in access_grants (principal_type 'group'); see
+    # services/access.py. Removed on group delete via access.revoke_grants_for_principal.
 
     def __repr__(self):
         return f'<AccessGroup {self.id}: {self.name}>'
@@ -455,62 +403,6 @@ class AccessGroupMember(Base):
     
     def __repr__(self):
         return f'<AccessGroupMember group={self.access_group_id} account={self.account_id}>'
-
-
-class AgentAccessGrant(Base):
-    """
-    Grants an access group permission to use a specific agent.
-    Only the agent owner can create/revoke grants.
-    """
-    __tablename__ = 'agent_access_grants'
-    
-    id = Column(Integer, primary_key=True, index=True)
-    agent_id = Column(Integer, ForeignKey('agents.id', ondelete='CASCADE'), nullable=False, index=True)
-    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    
-    __table_args__ = (
-        UniqueConstraint('agent_id', 'access_group_id', name='uq_agent_access_grants_agent_group'),
-    )
-    
-    agent = relationship('Agent', back_populates='access_grants')
-    access_group = relationship('AccessGroup', back_populates='agent_grants')
-
-    def __repr__(self):
-        return f'<AgentAccessGrant agent={self.agent_id} group={self.access_group_id}>'
-
-
-class VectorStoreAccessGrant(Base):
-    """
-    Grants an access group permission to a knowledge base.
-
-    A knowledge base has no row of its own — it is a free-form Pinecone index
-    reachable only by the owner's Pinecone API key — so the grant is keyed by the
-    index's natural identity (owner_account_id + index_name) rather than a FK to a
-    row. Access derived from a grant always runs against the OWNER's Pinecone key,
-    GCS bucket, and ingestion log.
-
-    Permission level comes from the member's role in the granted access group:
-      - any member  -> read (view index, namespaces, files, logs)
-      - owner/admin -> write (create namespace, ingest, delete vectors)
-    Only the index owner can create/revoke grants.
-    """
-    __tablename__ = 'vector_store_access_grants'
-
-    id = Column(Integer, primary_key=True, index=True)
-    owner_account_id = Column(Integer, ForeignKey('accounts.id', ondelete='CASCADE'), nullable=False, index=True)
-    index_name = Column(String, nullable=False, index=True)
-    access_group_id = Column(Integer, ForeignKey('access_groups.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint('owner_account_id', 'index_name', 'access_group_id', name='uq_vector_store_access_grants_owner_index_group'),
-    )
-
-    access_group = relationship('AccessGroup', back_populates='vector_store_grants')
-
-    def __repr__(self):
-        return f'<VectorStoreAccessGrant owner={self.owner_account_id} index={self.index_name} group={self.access_group_id}>'
 
 
 class VectorStore(Base):
