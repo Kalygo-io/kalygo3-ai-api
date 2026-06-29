@@ -51,6 +51,7 @@ from .routers import email_templates
 from .routers import email_campaigns
 from .routers import emails
 from .routers import tracking
+from .routers import feedback
 
 app = FastAPI(
     docs_url="/api/docs",
@@ -179,6 +180,7 @@ _ROUTERS = [
     (email_campaigns.router, "/api/email-campaigns", ["Email Campaigns"]),
     (emails.router, "/api/emails", ["Emails"]),
     (tracking.router, "/t", ["Tracking"]),
+    (feedback.router, "/api/feedback", ["Feedback"]),
 ]
 
 for _router, _prefix, _tags in _ROUTERS:
