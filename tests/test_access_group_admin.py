@@ -134,7 +134,9 @@ async def test_owner_can_promote_then_demote(client, seed):
 async def test_admin_can_grant_and_revoke_own_agent(client, seed):
     grant = await client.post(f"/api/agents/{ADMIN_AGENT}/access-grants", json={"accessGroupId": GROUP}, headers=ADMIN_H)
     assert grant.status_code == 201
-    revoke = await client.delete(f"/api/agents/{ADMIN_AGENT}/access-grants/{GROUP}", headers=ADMIN_H)
+    # Revoke is by the grant's own id (unified AccessGrant PK), not the group id.
+    grant_id = grant.json()["id"]
+    revoke = await client.delete(f"/api/agents/{ADMIN_AGENT}/access-grants/{grant_id}", headers=ADMIN_H)
     assert revoke.status_code == 204
 
 

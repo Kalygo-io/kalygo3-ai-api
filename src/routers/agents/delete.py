@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import Agent
 from src.services import access
+from src.services.access_admin import revoke_resource_grants_logged
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -38,8 +39,11 @@ async def delete_agent(
                 detail="Agent not found"
             )
         
-        # Remove sharing grants on this agent (polymorphic grants have no FK cascade).
-        access.revoke_grants_for_resource(db, access.AGENT, agent_id)
+        # Remove sharing grants on this agent (polymorphic grants have no FK
+        # cascade), logging a revoke event for each before the agent is gone.
+        revoke_resource_grants_logged(
+            db, resource_type=access.AGENT, resource_id=agent_id, actor_account_id=account_id
+        )
 
         # Delete the agent
         db.delete(agent)

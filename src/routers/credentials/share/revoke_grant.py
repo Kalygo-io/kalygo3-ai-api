@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Credential, AccessGrant, AccessGroupMember
 from src.services import access
+from src.services.access_admin import record_access_event
 from src.services.credential_access import prune_unusable_defaults_for_account
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -54,6 +55,16 @@ async def revoke_credential_grant(
                 .all()
             ]
 
+        record_access_event(
+            db,
+            event_type="revoke",
+            actor_account_id=account_id,
+            resource_type=access.CREDENTIAL,
+            resource_id=credential_id,
+            principal_type=grant.principal_type,
+            principal_id=grant.principal_id,
+            role=grant.role,
+        )
         db.delete(grant)
         db.flush()
         for acct_id in affected:

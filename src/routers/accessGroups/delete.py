@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGroupMember
 from src.services import access
+from src.services.access_admin import revoke_principal_grants_logged
 from src.services.credential_access import prune_unusable_defaults_for_account
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -44,9 +45,12 @@ async def delete_access_group(
         ]
 
         # Remove all grants held BY this group (polymorphic grants have no FK
-        # cascade), then delete the group, then prune members' now-orphaned
-        # defaults (pruning re-checks access against the post-revoke state).
-        access.revoke_grants_for_principal(db, access.GROUP, group_id)
+        # cascade), logging a revoke event for each before the group is gone; then
+        # delete the group, then prune members' now-orphaned defaults (pruning
+        # re-checks access against the post-revoke state).
+        revoke_principal_grants_logged(
+            db, principal_type=access.GROUP, principal_id=group_id, actor_account_id=account_id
+        )
         db.delete(group)
         db.flush()
 

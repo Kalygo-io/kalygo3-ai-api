@@ -493,6 +493,48 @@ class AccessGrant(Base):
                 f'{self.role} {self.resource_type}={self.resource_id}>')
 
 
+class AccessGrantEvent(Base):
+    """
+    Append-only audit log of access-grant changes: who granted/revoked/changed
+    access to what, and when. Distinct from access_grants (the live state) — this
+    survives revocation (which deletes the grant row) and role changes.
+
+    Human-readable context is SNAPSHOTTED at event time (actor_email,
+    principal_label, resource_label) so the log stays readable even after the
+    actor/principal/resource is renamed or deleted. For that reason the id columns
+    intentionally have NO foreign keys — the log is independent and immutable.
+    """
+    __tablename__ = 'access_grant_events'
+
+    id = Column(Integer, primary_key=True, index=True)
+    # 'create' | 'revoke' | 'role_change'
+    event_type = Column(String(20), nullable=False, index=True)
+
+    resource_type = Column(String(20), nullable=False)   # agent | vector_store | credential
+    resource_id = Column(Integer, nullable=False)
+    resource_label = Column(String(512), nullable=True)  # snapshot
+
+    principal_type = Column(String(20), nullable=False)  # account | group
+    principal_id = Column(Integer, nullable=False)
+    principal_label = Column(String(512), nullable=True)  # snapshot (group name / email)
+
+    role = Column(String(20), nullable=True)             # role involved (new role for role_change)
+
+    actor_account_id = Column(Integer, nullable=True, index=True)   # who performed the change
+    actor_email = Column(String(320), nullable=True)               # snapshot
+
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("event_type IN ('create','revoke','role_change')", name='ck_access_grant_event_type'),
+        Index('ix_access_grant_events_resource', 'resource_type', 'resource_id'),
+    )
+
+    def __repr__(self):
+        return (f'<AccessGrantEvent {self.event_type} actor={self.actor_account_id} '
+                f'{self.principal_type}={self.principal_id} -> {self.resource_type}={self.resource_id}>')
+
+
 class Company(Base):
     """
     Stores CRM company (organization) records.

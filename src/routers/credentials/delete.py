@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
 from src.db.models import Credential
 from src.services import access
+from src.services.access_admin import revoke_resource_grants_logged
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -36,9 +37,11 @@ async def delete_credential(
             )
 
         # Remove any sharing grants on this credential (polymorphic grants have no
-        # FK cascade). Per-account default rows clear via the credential_defaults
-        # FK ON DELETE CASCADE.
-        access.revoke_grants_for_resource(db, access.CREDENTIAL, credential_id)
+        # FK cascade), logging a revoke event for each. Per-account default rows
+        # clear via the credential_defaults FK ON DELETE CASCADE.
+        revoke_resource_grants_logged(
+            db, resource_type=access.CREDENTIAL, resource_id=credential_id, actor_account_id=account_id
+        )
 
         db.delete(credential)
         db.commit()

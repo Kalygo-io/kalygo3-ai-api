@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Credential, AccessGrant
 from src.services import access
-from src.services.access_admin import resolve_principal, upsert_grant
+from src.services.access_admin import resolve_principal, upsert_grant, record_access_event
 from .models import CreateCredentialGrantRequest, CredentialGrantResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -58,6 +58,16 @@ async def create_credential_grant(
             principal_id=principal_id,
             resource_type=access.CREDENTIAL,
             resource_id=credential_id,
+            role="use",
+        )
+        record_access_event(
+            db,
+            event_type="create",
+            actor_account_id=account_id,
+            resource_type=access.CREDENTIAL,
+            resource_id=credential_id,
+            principal_type=principal_type,
+            principal_id=principal_id,
             role="use",
         )
         db.commit()

@@ -11,9 +11,11 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 
+from datetime import datetime
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims, ensure_account
-from src.db.models import Agent, VectorStore, Credential
+from src.db.models import Agent, VectorStore, Credential, AccessGrant, AccessGrantEvent
 from src.services import access
+from src.services.access_admin import grant_label
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
 
@@ -50,6 +52,20 @@ class ReverseAuditItem(BaseModel):
     label: str
     role: str
     via: str
+
+
+class SharedGrant(BaseModel):
+    grant_id: int
+    label: str          # group name or grantee email
+    target_type: str    # 'group' | 'individual'
+    role: str
+
+
+class SharedResource(BaseModel):
+    resource_type: str
+    resource_id: int
+    label: str
+    shared_with: List[SharedGrant]
 
 
 def _require_owner(db, account_id: int, resource_type: str, resource_id: int):
@@ -148,6 +164,134 @@ async def my_access_report(
         raise
     except Exception as e:
         raise handle_db_error(e, "[ACCESS REPORT]")
+
+
+@router.get("/shared-by-me", response_model=List[SharedResource])
+@limiter.limit("30/minute")
+async def shared_by_me(
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+):
+    """Every resource the caller OWNS that is shared, with whom, and at what role."""
+    try:
+        account_id = account_id_from_claims(jwt)
+        ensure_account(db, account_id)
+
+        # Map each owned resource (type, id) -> label.
+        owned: dict = {}
+        for aid, name in db.query(Agent.id, Agent.name).filter(Agent.account_id == account_id).all():
+            owned[(access.AGENT, aid)] = name
+        for vid, idx in db.query(VectorStore.id, VectorStore.index_name).filter(VectorStore.owner_account_id == account_id).all():
+            owned[(access.VECTOR_STORE, vid)] = idx
+        for cid, cname, ctype in db.query(Credential.id, Credential.credential_name, Credential.credential_type).filter(Credential.account_id == account_id).all():
+            owned[(access.CREDENTIAL, cid)] = cname or str(ctype)
+        if not owned:
+            return []
+
+        # Pull all grants on those resources in one pass, grouped by resource.
+        by_resource: dict = {}
+        grants = (
+            db.query(AccessGrant)
+            .filter(AccessGrant.resource_type.in_([access.AGENT, access.VECTOR_STORE, access.CREDENTIAL]))
+            .all()
+        )
+        for g in grants:
+            key = (g.resource_type, g.resource_id)
+            if key not in owned:
+                continue
+            by_resource.setdefault(key, []).append(
+                SharedGrant(
+                    grant_id=g.id,
+                    label=grant_label(db, g),
+                    target_type="group" if g.principal_type == access.GROUP else "individual",
+                    role=g.role,
+                )
+            )
+
+        return [
+            SharedResource(
+                resource_type=rtype,
+                resource_id=rid,
+                label=owned[(rtype, rid)],
+                shared_with=shares,
+            )
+            for (rtype, rid), shares in by_resource.items()
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_db_error(e, "[SHARED BY ME]")
+
+
+class AccessEvent(BaseModel):
+    id: int
+    event_type: str          # 'create' | 'revoke' | 'role_change'
+    resource_type: str
+    resource_id: int
+    resource_label: Optional[str] = None
+    principal_type: str
+    principal_label: Optional[str] = None
+    role: Optional[str] = None
+    actor_email: Optional[str] = None
+    created_at: datetime
+
+
+@router.get("/activity", response_model=List[AccessEvent])
+@limiter.limit("30/minute")
+async def access_activity(
+    db: db_dependency,
+    jwt: jwt_dependency,
+    request: Request,
+    limit: int = 200,
+):
+    """Append-only audit log of access changes on resources the caller OWNS.
+
+    Shows who granted/revoked/changed access (and when) to your agents, knowledge
+    bases, and credentials — including revokes, which the live grant tables can't.
+    """
+    try:
+        account_id = account_id_from_claims(jwt)
+        ensure_account(db, account_id)
+        limit = max(1, min(limit, 500))
+
+        # Resource keys the caller owns.
+        owned = set()
+        owned |= {(access.AGENT, r[0]) for r in db.query(Agent.id).filter(Agent.account_id == account_id).all()}
+        owned |= {(access.VECTOR_STORE, r[0]) for r in db.query(VectorStore.id).filter(VectorStore.owner_account_id == account_id).all()}
+        owned |= {(access.CREDENTIAL, r[0]) for r in db.query(Credential.id).filter(Credential.account_id == account_id).all()}
+        if not owned:
+            return []
+
+        # Pull recent events and keep those on owned resources. (Volume is low;
+        # ordering by recency + capping keeps it cheap without a composite filter.)
+        rows = (
+            db.query(AccessGrantEvent)
+            .order_by(AccessGrantEvent.created_at.desc())
+            .limit(2000)
+            .all()
+        )
+        out = [
+            AccessEvent(
+                id=e.id,
+                event_type=e.event_type,
+                resource_type=e.resource_type,
+                resource_id=e.resource_id,
+                resource_label=e.resource_label,
+                principal_type=e.principal_type,
+                principal_label=e.principal_label,
+                role=e.role,
+                actor_email=e.actor_email,
+                created_at=e.created_at,
+            )
+            for e in rows
+            if (e.resource_type, e.resource_id) in owned
+        ]
+        return out[:limit]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_db_error(e, "[ACCESS ACTIVITY]")
 
 
 def _resource_label(db, resource_type: str, resource_id: int) -> str:

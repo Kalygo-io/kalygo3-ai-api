@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import Agent, AccessGrant
 from src.services import access
-from src.services.access_admin import resolve_principal, upsert_grant
+from src.services.access_admin import resolve_principal, upsert_grant, record_access_event
 from .models import CreateGrantRequest, AgentAccessGrantResponse
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -34,12 +34,12 @@ async def create_grant(
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        # Group-only sharing for agents (today's contract); enforces is_group_manager.
+        # Share with a group OR an individual; group targets enforce is_group_manager.
         principal_type, principal_id, label = resolve_principal(
             db,
             caller_account_id=account_id,
             access_group_id=body.accessGroupId,
-            grantee_email=None,
+            grantee_email=body.granteeEmail,
         )
 
         existing = db.query(AccessGrant).filter(
@@ -49,7 +49,7 @@ async def create_grant(
             AccessGrant.resource_id == agent_id,
         ).first()
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Grant already exists for this group")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Agent is already shared with this principal")
 
         grant = upsert_grant(
             db,
@@ -59,14 +59,26 @@ async def create_grant(
             resource_id=agent_id,
             role="use",
         )
+        record_access_event(
+            db,
+            event_type="create",
+            actor_account_id=account_id,
+            resource_type=access.AGENT,
+            resource_id=agent_id,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            role="use",
+        )
         db.commit()
         db.refresh(grant)
 
         return AgentAccessGrantResponse(
             id=grant.id,
             agent_id=agent_id,
-            access_group_id=principal_id,
-            access_group_name=label,
+            access_group_id=principal_id if principal_type == access.GROUP else None,
+            grantee_account_id=principal_id if principal_type == access.ACCOUNT else None,
+            label=label,
+            target_type="group" if principal_type == access.GROUP else "individual",
             created_at=grant.created_at,
         )
     except HTTPException:

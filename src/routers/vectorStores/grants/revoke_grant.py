@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status, Request
 from src.deps import db_dependency, jwt_dependency, account_id_from_claims
 from src.db.models import AccessGroup, AccessGrant, VectorStore
 from src.services import access
+from src.services.access_admin import record_access_event
 from src.services.access_group_roles import is_group_manager
 from src.utils.errors import handle_db_error
 from src.rate_limit import limiter
@@ -44,6 +45,16 @@ async def revoke_grant(
             if not allowed:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to revoke this grant")
 
+        record_access_event(
+            db,
+            event_type="revoke",
+            actor_account_id=account_id,
+            resource_type=access.VECTOR_STORE,
+            resource_id=grant.resource_id,
+            principal_type=grant.principal_type,
+            principal_id=grant.principal_id,
+            role=grant.role,
+        )
         db.delete(grant)
         db.commit()
         return None
